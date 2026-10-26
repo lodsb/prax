@@ -24,6 +24,7 @@ ORDER = (
     "rules",
     "paths",
     "geo",
+    "events",
 )
 
 from .communities import (  # noqa: F401
@@ -116,6 +117,18 @@ from .edges import (  # noqa: F401
     retire_run,
     run_edges,
     select_for_extraction,
+)
+from .events import (  # noqa: F401
+    EVENT_GAP_HOURS,
+    EVENT_MIN_PHOTOS,
+    EVENT_PLACE_SHARE,
+    EVENT_STATES,
+    decide_event,
+    event_candidates_page,
+    find_event_candidates,
+    photo_groups,
+    replace_event_candidates,
+    undo_event,
 )
 from .geo import (  # noqa: F401
     PLACE_PRODUCER,

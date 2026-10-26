@@ -473,6 +473,11 @@ table.checks code { white-space: normal; word-break: break-word; }
 .decide-row.done .decide-pair { opacity: .5; }
 .decide-held { margin: 0 0 .4rem; color: var(--accent); font-size: .92em; }
 .decide-row.held { border-left: 3px solid var(--accent); padding-left: .6rem; }
+.event-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: .4rem; margin: .3rem 0 .5rem; }
+.event-thumbs img { display: block; width: 100%; height: 5rem; object-fit: cover; background: var(--panel); border-radius: 2px; }
+.event-form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.event-form input { flex: 1 1 16rem; min-width: 0; }
+.decide-row.done .event-thumbs { opacity: .5; }
 .decide-pair { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: flex-start; }
 .decide-side { flex: 1 1 14rem; min-width: 0; }
 .decide-arrow { align-self: center; font-size: .84rem; }

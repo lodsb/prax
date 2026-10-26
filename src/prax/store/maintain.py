@@ -69,6 +69,7 @@ from .graph import (
     document_node,
     find_conflicts,
     find_edges,
+    find_event_candidates,
     forget_resolved_reviews,
     in_english_text,
     languages_by_entity,
@@ -111,6 +112,7 @@ PASSES = (
     "conflicts",
     "communities",
     "histories",
+    "events",
 )
 # a pass only when named: the nightly has no reason to
 ON_REQUEST = ("rechunk", "rejudge", "vectors")
@@ -1324,6 +1326,13 @@ def _places(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"documents": len(docs), "placed": placed, "not_in_text": missing}
 
 
+def _events(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """Groups of photos taken close together, found again as candidates
+    for the Review page's events tab (``store.find_event_candidates``):
+    no model, and what a person decided is kept."""
+    return find_event_candidates(con)
+
+
 _RUN = {
     "acronyms": _acronyms,
     "fields": _fields,
@@ -1349,6 +1358,7 @@ _RUN = {
     "histories": _histories,
     "rules": _rules,
     "conflicts": _conflicts,
+    "events": _events,
 }
 
 

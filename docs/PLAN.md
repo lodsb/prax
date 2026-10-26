@@ -1006,9 +1006,17 @@ not done.
             of a GPS position (`prax.graph.gazetteer`), the photo dated
             in the world by when it was taken, a picture's node named by
             its file and number. And the clean-up rules `unreadable` and
-            `clips`. Left for AR: events from photos grouped by time and
-            place, `depicts` from XMP and from faces (AT), the folders'
-            names as cues.
+            `clips`.
+      - [x] (2026-10-26) **Events from photos**: groups of photos with
+            no gap of a day and one country (`store.photo_groups`), a
+            candidate each, named on the Review page's "events" tab (a
+            folder's name or the place and months to start from), each
+            photo `recorded_at` the event (core 6) and the event
+            `located_in` its place, producer human; "not one" kept,
+            undo by its run; the nightly `events` pass. Left for AR:
+            `depicts` from XMP and from faces (AT); a photo added later
+            inside a decided event joining it; who attended an event,
+            once photos depict people.
       - [ ] **A media view**, the user's idea of 2026-10-23: the
             referenced photos and recordings as a library of their own
             (by folder, by taken date once AR reads EXIF, by album),

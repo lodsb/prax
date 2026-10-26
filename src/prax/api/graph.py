@@ -654,3 +654,56 @@ def graph_unmerge_entity(req: UnmergeEntityReq, request: Request) -> dict[str, A
         return store.unmerge_entity(_con(request), req.entity)
     except (ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/graph/events")
+def graph_events(
+    request: Request, state: str = "open", offset: int = 0, limit: int = 20
+) -> dict[str, Any]:
+    """Groups of photos taken close together, for a person to name as an
+    event or set aside (``store.event_candidates_page``)."""
+    try:
+        return store.event_candidates_page(
+            _con(request),
+            state=state,
+            offset=max(0, offset),
+            limit=max(1, min(limit, 100)),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/graph/events/find")
+def graph_events_find(request: Request) -> dict[str, Any]:
+    """The groups found again now, as the nightly's ``events`` pass does."""
+    return store.find_event_candidates(_con(request))
+
+
+class EventReq(BaseModel):
+    event: bool
+    name: str | None = None
+
+
+@router.post("/graph/events/{candidate_id}")
+def graph_event_decide(
+    candidate_id: int, req: EventReq, request: Request
+) -> dict[str, Any]:
+    """A person's answer: an event called ``name``, or not one
+    (``store.decide_event``)."""
+    try:
+        return store.decide_event(
+            _con(request), candidate_id, event=req.event, name=req.name
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/graph/events/{candidate_id}/undo")
+def graph_event_undo(candidate_id: int, request: Request) -> dict[str, Any]:
+    """A decision taken back: its facts ended, the group open again."""
+    try:
+        return store.undo_event(_con(request), candidate_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc

@@ -6515,6 +6515,54 @@ only now.
 
 Tests: `tests/test_geocode.py` (7).
 
+### Events from photos, the same day
+
+The user's word on the plan above: "lets do it then". 12,983 photos have
+a taken date, so time is what most of them can be grouped by. Measured
+read-only first:
+
+| gap that splits a group | groups of 8 or more | photos in them | longest |
+|---|---|---|---|
+| 3 h | 214 | 10,449 | 1 day |
+| 12 h | 193 | 10,801 | 5 days |
+| 24 h | 165 | 11,184 | 20 days |
+| 36 h | 169 | 11,453 | 20 days |
+
+Twelve hours split a trip into its days, because the night between two
+days' photos is often longer than that. The rule is 24 hours, and a
+change of country between two placed photos splits too
+(`EVENT_GAP_HOURS`, `EVENT_MIN_PHOTOS` 8, `store.photo_groups`). Of the
+251 folders the photos lie in, 189 are icloudpd's date folders, which
+say nothing a date does not. A folder's name counts as a cue only when
+it has a letter in it.
+
+**Core 6**, `recorded_at` (document -> event, `schema:recordedAt`).
+Migration 51 moves the stamps and adds `event_candidates` and
+`event_candidate_photos`.
+
+A group is a candidate until a person decides on the Review page's new
+"events" tab (`GET /graph/events`, `POST /graph/events/{id}`, `…/undo`,
+`…/find`). It shows a group's days, its count, its place, its folder and
+eight thumbnails, and a name to start from: the folder most of its
+photos lie in, else its place and months. 25 of the 165 would have
+shared a suggestion ("May 2018"), and taking it would have joined two
+events, so those name their days instead. A shared folder name joins
+on purpose (6 do).
+
+"An event" writes each photo `recorded_at` the event, and the event
+`located_in` the town (or country) 60% of its placed photos were taken
+in, dated from its first day to its last. The producer is `human`, the
+run is the decision's, and each fact's source is its photo.
+`store.undo_event` ends the run. A decided group is kept: the nightly's
+new `events` pass (`prax maintain`) replaces only the open candidates
+and leaves out a group half of whose photos a person decided.
+
+Dry run on the live store: 165 groups, 11,174 photos; suggested by a
+folder 34, by a place 61, by the month alone 70; median 15 photos a
+group, the largest 2,352.
+
+Tests: `tests/test_events.py` (4).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

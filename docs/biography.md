@@ -166,6 +166,9 @@ lab's micrographs and a museum's scans are pictures too.
   nearest town of GeoNames within 30 km, and the photo is `taken_in` it
   (core 5), dated by when it was taken; the town is `located_in` its
   region and country.
+- **Events** from the photos themselves: a run of photos with no gap of
+  a day, in one country, is a candidate a person names on the Review
+  page (2026-10-26, core 6's `recorded_at`).
 - **Tags, albums and the people in it** from XMP. digiKam, Lightroom and
   others write face regions with a person's name (the MWG regions
   schema). Those become `depicts` edges with no face recognition at all.

@@ -393,6 +393,32 @@ function splitRow(it) {
       <button type="button" data-act="apart" data-ids="${ids.join(",")}">several things</button>
       <span class="decide-out muted"></span></div></article>`;
 }
+// A group of photos taken close together (GET /graph/events): its days,
+// how many, where and from which folder, a strip of its thumbnails, and
+// the name it would be given, which a person may change before saying
+// it is an event. A decided one shows its name and the undo.
+function eventDays(first, last) {
+  const a = (first || "").slice(0, 10), b = (last || "").slice(0, 10);
+  return a === b ? a : `${a} – ${b}`;
+}
+function eventRow(it) {
+  const cues = it.cues || {};
+  const bits = [eventDays(it.first, it.last), `${it.photos.toLocaleString()} photos`,
+    cues.where ? esc(cues.where) : (cues.placed ? "" : "no position in them"),
+    cues.folder ? `folder “${esc(cues.folder)}”` : ""].filter(Boolean);
+  const thumbs = (it.sample || []).map((d) =>
+    `<a href="#doc/${d}"><img loading="lazy" src="/doc/${d}/thumb" alt=""></a>`).join("");
+  const acts = it.state === "open"
+    ? `<form class="event-form"><input name="name" value="${esc(it.suggestion)}" aria-label="the event's name" maxlength="120">
+        <button type="submit">an event</button>
+        <button type="button" class="secondary" data-event-not>not one</button>
+        <span class="decide-out muted"></span></form>`
+    : `<div class="decide-acts"><span>${it.state === "event" ? `an event: <b>${esc(it.name)}</b>` : "not an event"}</span>
+        <button type="button" class="secondary" data-event-undo>undo</button>
+        <span class="decide-out muted"></span></div>`;
+  return `<article class="decide-row event-row" data-candidate="${it.id}">
+    <p class="muted">${bits.join(" · ")}</p><div class="event-thumbs">${thumbs}</div>${acts}</article>`;
+}
 // A document the personal-document rules suspect: what it is, where it
 // came from, and the cues (the owner's name is only ever "name").
 function suspectRow(it) {
@@ -905,5 +931,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

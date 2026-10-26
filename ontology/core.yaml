@@ -47,8 +47,11 @@
 # `located_in` takes a place on the left, a town in its region and a
 # region in its country. Only additions again: migration 50 moves the
 # stamps as 39 did.
+# core v6 (2026-10-26, the same stage): `recorded_at` (document → event),
+# a photo in the event a person grouped it into on the Review page.
+# Only an addition: migration 51 moves the stamps.
 module: core
-version: 5
+version: 6
 
 entity_types:
   person:
@@ -166,6 +169,14 @@ relation_types:
     description: >-
       where a photo, a video or a recording was made, read from its GPS
       position by prax itself; never from what a text says
+  recorded_at:
+    kind: event
+    same_as: schema:recordedAt
+    domain: [document]
+    range: [event]
+    description: >-
+      the event a photo, a video or a recording was made at, as a person
+      grouped it; never from what a text says
   links_to:
     kind: eternal
     same_as: dcterms:references
@@ -217,6 +228,7 @@ relation_aliases:
   shot_in: taken_in
   recorded_in: taken_in
   location_created: taken_in
+  recorded_during: recorded_at
   affiliated: affiliated_with
   created_by: developed_by
   built_by: developed_by

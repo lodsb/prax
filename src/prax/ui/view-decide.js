@@ -18,6 +18,8 @@ const DECIDE_LISTS = {
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   genre: { title: "genre", view: (p) => viewGenres(p),
     about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about; the level in bold comes with them. Tick a level alone when nothing under it fits. A subject may be left out. \"to check\" holds a model's labels, the least sure first: save them as they are, or change the ticks first. \"decided a domain\" is the part of it a domain rule placed by those labels, where a wrong one costs the most. The documents come from each source in turn. About 150 is the aim." },
+  events: { title: "events", view: (p) => viewEvents(p),
+    about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -206,5 +208,62 @@ async function viewGenres(p) {
       send({ genres, subjects });
     });
     form.querySelector("[data-genre-skip]").addEventListener("click", () => send({ skip: true }));
+  });
+}
+
+async function viewEvents(p) {
+  const list = DECIDE_LISTS.events;
+  const state = ["event", "not"].includes(p.state) ? p.state : "open";
+  const limit = 20;
+  const offset = Number(p.offset || 0);
+  const link = (s, label) => s === state ? `<b>${label}</b>` : `<a href="#review?${new URLSearchParams({ list: "events", state: s })}">${label}</a>`;
+  view.innerHTML = `${decideTabs("events")}<p class="muted">${esc(list.about)}</p>
+    <p>${link("open", "to decide")} · ${link("event", "events")} · ${link("not", "not events")} <span id="event-count" class="muted"></span>
+      · <a href="#" id="events-find">look again</a></p>
+    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  const box = document.getElementById("decide-list");
+  document.getElementById("events-find").addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    ev.target.textContent = "looking…";
+    try { await post("/graph/events/find", {}); } catch (err) { showError(box, err); return; }
+    viewEvents(p);
+  });
+  let res;
+  try { res = await api("/graph/events", { state, offset, limit }); } catch (err) { showError(box, err); return; }
+  const c = res.counts;
+  document.getElementById("event-count").textContent = ` — ${c.open} to decide, ${c.event} events, ${c.not} not`;
+  const page = (o) => `#review?${new URLSearchParams({ list: "events", state, offset: o })}`;
+  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  box.innerHTML = res.items.length
+    ? res.items.map(eventRow).join("") + pager
+    : `<p class="muted">${state === "open" ? "Nothing to decide: no group of photos waits (the events pass of prax maintain finds them, or look again)." : "None yet."}</p>`;
+  box.querySelectorAll(".event-row").forEach((row) => {
+    const id = row.dataset.candidate;
+    const out = row.querySelector(".decide-out");
+    const send = async (path, body, done) => {
+      row.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        const r = await post(path, body);
+        out.textContent = done(r);
+        row.classList.add("done");
+      } catch (err) {
+        out.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+        row.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      }
+    };
+    const form = row.querySelector(".event-form");
+    if (form) {
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = form.querySelector("input[name=name]").value.trim();
+        if (!name) { out.textContent = "give it a name"; return; }
+        send(`/graph/events/${id}`, { event: true, name }, (r) => `an event: ${r.name} (${r.facts} facts)`);
+      });
+      form.querySelector("[data-event-not]").addEventListener("click", () =>
+        send(`/graph/events/${id}`, { event: false }, () => "not an event"));
+    }
+    const undo = row.querySelector("[data-event-undo]");
+    if (undo) undo.addEventListener("click", () => send(`/graph/events/${id}/undo`, {}, (r) => `open again${r.ended ? `, ${r.ended} facts ended` : ""}`));
   });
 }
