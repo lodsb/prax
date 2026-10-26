@@ -118,8 +118,11 @@ def test_a_live_photos_clip_is_a_place_of_its_own_and_not_a_document(
     photo = _on_share(share, "icloud/IMG_0002.HEIC", b"heic " * 50)
     clip = _on_share(share, "icloud/IMG_0002.MOV", b"mov " * 50)
     film = _on_share(share, "icloud/IMG_0003.MOV", b"a film " * 50)
-    out = _reference(client, "nas", photo, clip, film)
-    assert out["created"] == 2 and out["clips"] == 1
+    # icloudpd's name for an HEVC clip
+    shot = _on_share(share, "icloud/IMG_0004.HEIC", b"heic four " * 50)
+    hevc = _on_share(share, "icloud/IMG_0004_HEVC.MOV", b"mov four " * 50)
+    out = _reference(client, "nas", photo, clip, film, shot, hevc)
+    assert out["created"] == 3 and out["clips"] == 2
     assert store.places_of(con, digest=str(clip["sha256"]))["copies"] == 1
     assert (
         con.execute(

@@ -68,7 +68,7 @@ revisit threshold, under "Decision thresholds" below.
    A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
-   genres, readings, reads), `graph` (edges, decisions, labels, languages, lookups,
+   genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
    context, views, communities, traversal, rules, paths), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's

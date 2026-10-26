@@ -991,6 +991,15 @@ not done.
             set aside from the "personal?" list and counted there; the
             document page's "offline for now" with "try again", and no
             broken picture while offline.
+      - [x] (2026-10-26) **The photos step**, ahead of AR's photo stage
+            because the first crawl of the NAS was waiting: EXIF (taken,
+            camera, lens, GPS) into `meta.photo` and `meta.taken`, a
+            thumbnail and a preview filed in the archive, served at
+            `/doc/N/thumb` and `/doc/N/preview` and shown on the page
+            with the share offline; handed out only while the original
+            is reachable. Left for AR: XMP (tags, albums, face regions),
+            the GPS position as a place entity, the perceptual hash, and
+            a video's poster frame.
       - [ ] **A media view**, the user's idea of 2026-10-23: the
             referenced photos and recordings as a library of their own
             (by folder, by taken date once AR reads EXIF, by album),

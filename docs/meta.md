@@ -74,6 +74,8 @@ writer, and add its row here.
 | `references` | `dict[str, Any]` | the references pass: entries, links |
 | `private` | `dict[str, Any]` | the rules' cues for "personal?" (stage V) |
 | `sensitivity` | `dict[str, Any]` | a person's or a rule's decision: state, by |
+| `photo` | `dict[str, Any]` | v, by, at, camera, lens, gps, size, thumb, preview |
+| `taken` | `dict[str, Any]` | when it was taken: date, precision, by |
 
 ## What it is: the domains, the genres (stage Z)
 

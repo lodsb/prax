@@ -39,6 +39,7 @@ CORE_STEPS = (
     "resolve",
     "adjudicate",
     "genres",
+    "photos",
 )
 STEPS = CORE_STEPS + tuple(_packs.step_homes())
 
@@ -67,6 +68,9 @@ WATCHED_STEPS = (
     # genres within a pass, so the nightly rules can place it, and a new
     # labeller run relabels its predecessor's documents a batch at a time
     "genres",
+    # a picture's EXIF and its thumbnail and preview (2026-10-26, the
+    # user's word: "up front definitely"): no model, read through the door
+    "photos",
 ) + _packs.watched()
 
 # the rest: named on the command line, and the paid ones want --spend
@@ -105,6 +109,7 @@ _HOMES = {
     "resolve": "graph",
     "adjudicate": "graph",
     "embed": "embed",
+    "photos": "photos",
     **_packs.step_homes(),  # a pack's: the module's full name
 }
 

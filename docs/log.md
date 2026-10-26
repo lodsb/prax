@@ -6411,6 +6411,56 @@ Tests: two more in `tests/test_referenced_originals.py`; the one on the
 private paths runs with `private.referenced` off, so it still shows the
 path rule alone.
 
+## 2026-10-26: the photos step, before the first crawl of the NAS
+
+The user's phone library is on the NAS now (icloudpd in a venv on the
+FreeBSD host, 16,292 files, 82 GB under `media/pics`, a dry run of the
+sender clean), and the user wanted the EXIF and the copies "up front
+definitely". The step came ahead of the rest of AR's photo stage.
+
+`prax.steps.photos` is a watched step with no model. The door hands out
+pictures with no reading of `photos.VERSION` whose original it reaches
+(`store.photos_due`), so an unmounted share costs no file stat per
+photo and its pictures wait. The worker reads each original through the
+door with Pillow and `pillow-heif` (`prax.parsers.photos`) and posts the
+facts and two JPEGs, 320 and 1,600 pixels on the long side, upright and
+without EXIF: the GPS position is kept in `meta.photo`, behind the wall,
+and never in a copy. The door files them (`store.apply_photo`, the new
+part `documents.photos`) and serves them at `/doc/N/thumb` and
+`/doc/N/preview`. The page shows the preview, which is also how a HEIC
+shows in a browser other than Safari: the original's `<img>` drew
+nothing there.
+
+`pillow-heif` 1.8.1 was installed with the door and the worker stopped
+(the lesson of 2026-10-23); `onnxruntime-directml` stayed as it was. The
+worker read the library's three held pictures within its first pass:
+a thumbnail of 12 KB and a preview of 60 KB for a 2,047-pixel JPEG.
+Estimated for the NAS: some 320 KB a photo, about 5 GB in the archive
+for 16,000 against 82 GB of originals.
+
+The first real crawl followed within minutes (the dry run's journal
+held every hash, so it took three): 16,292 places, 14,498 documents
+(13,877 pictures, 599 videos, 22 recordings), every one suspected; 1,166
+groups of identical files (2,334 places); 626 files a place only
+(`.attr`, files without a suffix, `Thumbs.db`, a few archives). Three
+things it showed, fixed the same night:
+
+- icloudpd names a Live Photo's clip `IMG_1234_HEVC.MOV` beside
+  `IMG_1234.HEIC`, and 25 clips became video documents.
+  `live_photo_clip` now also matches the name without a downloader's
+  tag (`_LIVE_CLIP_TAGS`). The other 359 `.mov` files have no picture
+  beside them (median 40 MB): films.
+- One batch of ten a pass read about ten photos a minute, some twenty
+  hours for the library. The worker's pass now asks for batch after
+  batch for `RUN_SECONDS` (90).
+- 39 files of an old Nokia's card, named `foto(~21.jpg` and the like,
+  are not pictures at all (their bytes are no image format). The step
+  marks each unreadable, and its page draws nothing rather than a
+  broken picture.
+
+Tests: `tests/test_photos.py` (8), and the Live Photo test with
+icloudpd's naming.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

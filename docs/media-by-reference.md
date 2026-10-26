@@ -250,13 +250,11 @@ PDFs held (the question at the end).
   puts a folder's pictures before its clips, so the picture's place is
   there when the clip is looked at. A clip in the next batch from its
   picture is still found, as that place was posted first.
-- **Not read yet**: a recording's tags and a photo's EXIF, preview and
-  thumbnail. A referenced file is found by its file name and the
-  folders it lies in, which its search field holds (`document_field`:
-  "audio recording" or "video", and the folder path), until a reading
-  adds more. The tags need a reader that opens the file through the
-  door; it belongs with stage 4 for recordings and with AR's photo
-  stage for pictures.
+- **Not read yet**: a recording's tags. A referenced file is found by
+  its file name and the folders it lies in, which its search field
+  holds (`document_field`: "audio recording" or "video", and the folder
+  path), until a reading adds more. A photo's EXIF, preview and
+  thumbnail are read by the photos step since 2026-10-26 (below).
 
 Three things a referenced document is kept out of. It is not a waiting
 capture (`CAPTURE_SOURCES`), so the parse step never hands it to a
@@ -291,6 +289,34 @@ call, so heal does not walk a share of 20,000 photos over the network.
 
 The Admin page's duplicates list is not built yet; `GET
 /places/duplicates` answers it.
+
+**The photos step** (2026-10-26, `prax.steps.photos`, watched: no
+model). The door hands out every picture with no reading of
+`photos.VERSION` whose original it reaches now (`store.photos_due`): a
+held one, or a referenced one on a mounted root; a root whose directory
+is absent is passed over without a file opened. The worker fetches the
+original through `/doc/N/original` and reads it with Pillow and
+`pillow-heif` (`prax.parsers.photos`; a worker without `pillow-heif`
+does not take the step, since every HEIC would fail). It posts the EXIF
+facts and two JPEG copies, a thumbnail of `THUMB_PX` (320) and a preview
+of `PREVIEW_PX` (1,600) on the long side, turned by the orientation tag
+and carrying no EXIF. The door files both in the archive by their own
+hash (`store.apply_photo`) and writes `meta.photo` (camera, lens, GPS,
+the size as shown, the copies' hashes, `v`, `by`) and `meta.taken`
+(date to the second with its UTC offset when the camera wrote one,
+`by: exif`; a person's date is kept). The search field gains the month
+it was taken in and the camera ("taken 2019 05 may 2019-05-03 Apple
+iPhone 12"). A picture the reader cannot open is `meta.photo.error` at
+that version and is not asked again; a fetch that failed is released
+and handed out again. `GET /doc/N/thumb` and `/doc/N/preview` serve the
+copies, guarded like the document (`store.photo_copy`), for the
+administrator's token. The document page shows the preview where there
+is one, so a HEIC shows in every browser and a photo shows with its
+share offline.
+
+The copies are in the archive, so a backup holds every photo at screen
+size: some 320 KB a photo, 5 GB for 16,000. A backup that leaves the
+house holds private pictures, and is encrypted for it.
 
 The document page of a referenced original whose share is not mounted
 says "offline for now" with its places and a "try again" link, which

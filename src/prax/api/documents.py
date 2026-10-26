@@ -215,6 +215,36 @@ def original(doc_id: int, request: Request) -> FileResponse:
     return FileResponse(info["path"], media_type=info["mime"], headers=headers)
 
 
+@router.get("/doc/{doc_id}/thumb")
+def photo_thumb(doc_id: int, request: Request) -> FileResponse:
+    """A picture's thumbnail (``photos.THUMB_PX`` on its long side, JPEG):
+    filed by the photos step, so it is there when the share is not."""
+    return _photo_copy(request, doc_id, "thumb")
+
+
+@router.get("/doc/{doc_id}/preview")
+def photo_preview(doc_id: int, request: Request) -> FileResponse:
+    """A picture's preview (``photos.PREVIEW_PX``, JPEG): what its page
+    shows, a HEIC included, which no browser but Safari draws."""
+    return _photo_copy(request, doc_id, "preview")
+
+
+def _photo_copy(request: Request, doc_id: int, which: str) -> FileResponse:
+    path = store.photo_copy(_con(request), doc_id, which)
+    if path is None:
+        raise HTTPException(404, f"no {which}: not read by the photos step yet")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={
+            # the copy's file is named by its hash, but the route is the
+            # document's: a later reading files another copy
+            "Cache-Control": "private, max-age=86400",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 # what a browser renders without running anything: the PDF viewer and the
 # raster image types. Everything else served out of the archive is sandboxed.
 INERT_TYPES = frozenset(

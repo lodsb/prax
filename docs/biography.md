@@ -184,7 +184,10 @@ a smaller copy:
 - a preview, about 1,600 pixels on the long side (some 300 KB as JPEG
   or WebP), and a thumbnail of about 320 (some 20 KB). Both are derived
   artifacts, filed by their own hash like a scanned page's crop
-  (`figures.FILED`), never in SQLite (invariant 2);
+  (`figures.FILED`), never in SQLite (invariant 2). Built on 2026-10-26
+  with the EXIF date, camera and GPS position: the photos step
+  (`docs/media-by-reference.md`). XMP, the place entity and the
+  perceptual hash are still to come;
 - what the readings found: the caption as text, so a search finds it,
   and the perceptual hash.
 

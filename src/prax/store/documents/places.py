@@ -38,6 +38,10 @@ REFERENCED = ("audio/", "video/", "image/")
 # beside it: the clip is a place, and the picture is the document
 _LIVE_CLIP = (".mov",)
 _LIVE_PICTURE = (".heic", ".heif", ".jpg", ".jpeg")
+# icloudpd names a Live Photo's HEVC clip ``IMG_1234_HEVC.MOV`` beside
+# ``IMG_1234.HEIC``: 25 of a library's clips were made documents for it
+# (2026-10-26)
+_LIVE_CLIP_TAGS = ("_HEVC",)
 # heal stats a referenced original's file at most this many times a look,
 # so a share of 20,000 photos is not walked over the network each time
 REACH_CHECKS = 2000
@@ -61,11 +65,15 @@ def referenced_private() -> bool:
 
 def live_photo_clip(con: sqlite3.Connection, root: str, path: str) -> bool:
     """Whether the file at ``path`` is a Live Photo's clip: a ``.mov``
-    with a picture of the same name in the same folder, seen at ``root``."""
+    with a picture of the same name in the same folder, seen at ``root``,
+    or of that name without a downloader's tag (``_LIVE_CLIP_TAGS``)."""
     stem, dot, suffix = path.rpartition(".")
     if not dot or "." + suffix.lower() not in _LIVE_CLIP:
         return False
-    names = [stem + s for p in _LIVE_PICTURE for s in (p, p.upper())]
+    stems = [stem] + [
+        stem[: -len(t)] for t in _LIVE_CLIP_TAGS if stem.upper().endswith(t)
+    ]
+    names = [s + e for s in stems for p in _LIVE_PICTURE for e in (p, p.upper())]
     marks = ",".join("?" * len(names))
     return (
         con.execute(

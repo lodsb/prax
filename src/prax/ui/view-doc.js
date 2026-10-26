@@ -51,6 +51,35 @@ function placesLine(doc) {
   return `<p class="reading-line muted places-line">not held, read from where it lies: ${shown}${more}${reach}</p>`;
 }
 
+// A picture on its page: the photos step's preview where there is one (a
+// HEIC, which only Safari draws, and a photo whose share is offline), else
+// the original; the original opens on a click while it can be reached
+function pictureHtml(doc, meta, isImage, offline) {
+  // a file named like a picture that the photos step could not open (an
+  // old phone's own formats under .jpg) draws nothing rather than a broken image
+  if (!isImage || (meta.photo && meta.photo.error)) return "";
+  const preview = meta.photo && meta.photo.preview;
+  if (!preview && offline) return "";
+  const img = `<img class="doc-image" src="${preview ? `/doc/${doc.id}/preview` : originalHref(doc.id)}" alt="${esc(doc.title || "")}">`;
+  return offline ? img : `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener">${img}</a>`;
+}
+
+// What a picture's EXIF said (the photos step, meta.photo and meta.taken)
+function photoLine(meta) {
+  const ph = meta.photo;
+  if (!ph) return "";
+  if (ph.error) return `<p class="reading-line muted">the photos step could not read it: ${esc(ph.error)}</p>`;
+  const taken = (meta.taken || {}).date;
+  const bits = [
+    taken ? `taken ${esc(taken.slice(0, 16).replace("T", " "))}` : "no date in it",
+    ph.camera ? esc(ph.camera) : "",
+    ph.lens ? esc(ph.lens) : "",
+    ph.width ? `${ph.width} × ${ph.height}` : "",
+    ph.gps ? `at ${Number(ph.gps.lat).toFixed(4)}, ${Number(ph.gps.lon).toFixed(4)}` : "",
+  ].filter(Boolean);
+  return `<p class="reading-line muted">${bits.join(" · ")}</p>`;
+}
+
 // The offline line's "try again": asks the door again and, once the share
 // answers, opens the page afresh with its player or picture
 function bindPlacesRetry(view, doc) {
@@ -651,7 +680,7 @@ async function viewDoc(id, p) {
         ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       </div>
     </div>
-    ${readingLine(meta.reading)}${pendingLine(doc.pending)}${placesLine(doc)}
+    ${readingLine(meta.reading)}${pendingLine(doc.pending)}${placesLine(doc)}${photoLine(meta)}
     <div id="domains-form" hidden></div>
     <div id="page-editor"></div>
   </header>
@@ -660,7 +689,7 @@ async function viewDoc(id, p) {
   ${meta.video ? playerHtml(doc, chunks, meta) : mediaHtml(doc, meta)}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
-    <div class="doc-body">${isImage && !offline ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${isImage && !doc.places ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
+    <div class="doc-body">${pictureHtml(doc, meta, isImage, offline)}${chunks.length ? "" : `<p class="muted">No text yet.${isImage && !doc.places ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
   const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks), referenceLinks(chunks));

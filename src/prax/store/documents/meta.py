@@ -553,6 +553,7 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
         ).fetchone()
         if place and "/" in place[0]:
             parts.append(place[0].rsplit("/", 1)[0].replace("/", " "))
+    parts.append(_photo_words(meta))
     creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
     if creators:
         parts.append("by " + ", ".join(creators[:6]))
@@ -577,6 +578,37 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
 
 
 SECTION_FIELD_CHARS = 3_000  # of section summaries in one document's field
+_MONTHS = (
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+)
+
+
+def _photo_words(meta: dict[str, Any]) -> str:
+    """A photo's EXIF for its field: the month it was taken in as words a
+    person types ("2019 05 may 2019-05-03"), and the camera; empty for a
+    document that is not a read photo."""
+    photo = meta.get("photo") or {}
+    taken = str((meta.get("taken") or {}).get("date") or "")
+    bits: list[str] = []
+    if len(taken) >= 7 and taken[:4].isdigit() and taken[5:7].isdigit():
+        month = int(taken[5:7])
+        if 1 <= month <= 12:
+            bits += [taken[:4], taken[5:7], _MONTHS[month - 1]]
+            bits += [taken[:10]] if len(taken) >= 10 else []
+    if photo.get("camera"):
+        bits.append(str(photo["camera"]))
+    return "taken " + " ".join(bits) if bits else ""
 
 
 def _section_lines(meta: dict[str, Any]) -> list[str]:

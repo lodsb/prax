@@ -169,6 +169,9 @@ class DocumentMeta(TypedDict, total=False):
     references: dict[str, Any]  # the references pass: entries, links
     private: dict[str, Any]  # the rules' cues for "personal?" (stage V)
     sensitivity: dict[str, Any]  # a person's or a rule's decision: state, by
+    # a picture's own facts: the photos step (store.apply_photo)
+    photo: dict[str, Any]  # v, by, at, camera, lens, gps, size, thumb, preview
+    taken: dict[str, Any]  # when it was taken: date, precision, by
     # what it is: the domains, the genres (stage Z)
     domains: list[str]  # the modules it is read against (invariant 9)
     domains_by: str  # a person, a rule, the labeller
