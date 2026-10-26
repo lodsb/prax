@@ -6461,6 +6461,60 @@ things it showed, fixed the same night:
 Tests: `tests/test_photos.py` (8), and the Live Photo test with
 icloudpd's naming.
 
+## 2026-10-26: where a photo was taken, and the first clean-up of the crawl
+
+The photos step finished overnight, its last reading at 04:13Z: 13,741
+pictures read, 139 unreadable and 16 DjVu scans not handed out, which
+are not photos. All 139 unreadable files are `.jpg` files under the
+folders named for a Nokia, of the byte format no reader knows; the 39
+of the night before was a sample. 12,983 photos have a taken date and
+1,800 a GPS position, nearly all from 2021 on.
+
+**Core 5.** `taken_in` (document -> place, `schema:locationCreated`),
+and `located_in` takes a place on the left. Only additions, so
+migration 50 moves the extraction stamps as 39 did.
+
+**A photo's node.** A document is a node by its title, and two cameras'
+`IMG_0001.JPG` would have been one entity, taken in both places. A
+picture or a recording with no text of its own is now
+`IMG_0001.JPG (#32778)` (`store.media_node_name`). A document with text
+keeps its title, so no existing entity moves.
+
+**The geocode step**, watched and with no model. The door hands out the
+positions the photos step read (`store.places_due`); no original is
+read, so the share may be offline. The worker names the nearest town of
+GeoNames' `cities1000` within 30 km (`prax.graph.gazetteer`) with its
+region and country. The three files (11 MB, CC BY 4.0) are fetched once
+into `<models dir>/geonames/`. They load in 2.3 s into some 60 MB on the
+worker, and a lookup takes 0.5 ms. GeoNames lists a city's sections as
+places of their own, and the nearest "town" to Lisbon's centre was
+Intendente and to Berlin's Mitte. Sections and abandoned places are
+left out (`LEFT_OUT`). The door writes (`store.apply_place`, the new
+graph part `geo`):
+
+- the photo `taken_in` the town, INFERRED, evidence the position and
+  the distance, world date the day it was taken;
+- the town `located_in` its region and the region in its country,
+  EXTRACTED, written once and skipped where the names are one
+  (Valletta in Valletta);
+- `meta.place`, and the town, region and country in the search field
+  and on the page ("near Aldmouth, Lower Vale, Ardenia").
+
+Every fact has the photo as its source, so the wall hides it with the
+photo. Measured read-only before the first run: all 1,800 positions
+placed, in 77 towns, 27 regions and 12 countries; median 5.1 km from
+the town's point, 7.9 at the 90th percentile.
+
+**Clean-up.** Two rules read the store rather than a path:
+`unreadable` (`meta.photo.error`) and `clips` (a video every place of
+which is a Live Photo's clip). Both show in the Admin page's clean-up
+tab, with its preview and its undo.
+
+`prax.ml.fetch.download` sent `HF_TOKEN` to any URL; it goes to the hub
+only now.
+
+Tests: `tests/test_geocode.py` (7).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

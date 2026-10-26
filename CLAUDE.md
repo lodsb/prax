@@ -69,7 +69,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
-   context, views, communities, traversal, rules, paths), `retrieval` (knobs, compounds, query, legs,
+   context, views, communities, traversal, rules, paths, geo), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
@@ -179,7 +179,8 @@ revisit threshold, under "Decision thresholds" below.
    document and organization shares (`authored_by`, `published_by`,
    `part_of`, `located_in`, `affiliated_with`, `developed_by`), and
    what one document says of another (`links_to`, `supersedes`,
-   `invalidates`; core 4, 2026-10-04). A bump that only adds what a
+   `invalidates`; core 4, 2026-10-04), and where a picture was taken
+   (`taken_in`, from its GPS position; core 5, 2026-10-26). A bump that only adds what a
    module accepts moves the extraction stamps by migration (18, 26, 39)
    instead of making every document due again.
    `research.yaml` holds papers, methods, claims and pages.
@@ -196,7 +197,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core4+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
+   (`core5+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that

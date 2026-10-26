@@ -23,6 +23,7 @@ ORDER = (
     "traversal",
     "rules",
     "paths",
+    "geo",
 )
 
 from .communities import (  # noqa: F401
@@ -106,6 +107,7 @@ from .edges import (  # noqa: F401
     hidden_by_premise,
     invalidate_edge,
     link,
+    media_node_name,
     provenance_summary,
     record_correction,
     record_ending,
@@ -114,6 +116,13 @@ from .edges import (  # noqa: F401
     retire_run,
     run_edges,
     select_for_extraction,
+)
+from .geo import (  # noqa: F401
+    PLACE_PRODUCER,
+    apply_place,
+    place_counts,
+    place_run,
+    places_due,
 )
 from .labels import (  # noqa: F401
     PERSON,

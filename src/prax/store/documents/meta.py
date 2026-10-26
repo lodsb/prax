@@ -596,7 +596,8 @@ _MONTHS = (
 
 def _photo_words(meta: dict[str, Any]) -> str:
     """A photo's EXIF for its field: the month it was taken in as words a
-    person types ("2019 05 may 2019-05-03"), and the camera; empty for a
+    person types ("2019 05 may 2019-05-03"), the town, region and country
+    its position lies in (``meta.place``) and the camera; empty for a
     document that is not a read photo."""
     photo = meta.get("photo") or {}
     taken = str((meta.get("taken") or {}).get("date") or "")
@@ -606,6 +607,10 @@ def _photo_words(meta: dict[str, Any]) -> str:
         if 1 <= month <= 12:
             bits += [taken[:4], taken[5:7], _MONTHS[month - 1]]
             bits += [taken[:10]] if len(taken) >= 10 else []
+    place = meta.get("place") or {}
+    where = [str(place[k]) for k in ("name", "region", "country") if place.get(k)]
+    if where:
+        bits += ["in"] + list(dict.fromkeys(where))
     if photo.get("camera"):
         bits.append(str(photo["camera"]))
     return "taken " + " ".join(bits) if bits else ""

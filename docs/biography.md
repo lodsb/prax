@@ -162,7 +162,10 @@ lab's micrographs and a museum's scans are pictures too.
 - **The taken date** from EXIF, as `meta.taken`. It is when the picture
   was made, not when it was published, so it is not `meta.published`.
 - **The place** from the GPS fields, as a `place` entity or the nearest
-  one prax knows.
+  one prax knows. Built on 2026-10-26: the `geocode` step names the
+  nearest town of GeoNames within 30 km, and the photo is `taken_in` it
+  (core 5), dated by when it was taken; the town is `located_in` its
+  region and country.
 - **Tags, albums and the people in it** from XMP. digiKam, Lightroom and
   others write face regions with a person's name (the MWG regions
   schema). Those become `depicts` edges with no face recognition at all.

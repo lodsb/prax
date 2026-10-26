@@ -524,7 +524,7 @@ def _repair_wire_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
 
 
 # A composed version names its modules, each with its own version
-# ("core4+research9"). A name there that is a file beside the modules
+# ("core5+research9"). A name there that is a file beside the modules
 # (genres, subjects, the lexicon) was a door reading that file as a module
 # before it knew its name: 2026-09-29, "+genres1" and "+subjects1".
 _VERSION_PART = re.compile(r"(?P<name>[a-z_]+)(?P<version>\d+)")

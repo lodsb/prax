@@ -84,7 +84,8 @@ def download(
     have = part.stat().st_size if part.exists() else 0
     headers = {"User-Agent": "prax/0.1"}
     token = os.environ.get("HF_TOKEN")
-    if token:
+    # the hub's token goes to the hub only, never to another file's host
+    if token and url.startswith(HUB + "/"):
         headers["Authorization"] = f"Bearer {token}"
     if have:
         headers["Range"] = f"bytes={have}-"

@@ -300,23 +300,37 @@ def run_edges(
 
 
 @_reading
+def media_node_name(title: str, doc_id: int) -> str:
+    """A picture's or a recording's name in the graph: its file and its
+    number (``document_node``)."""
+    return f"{title} (#{doc_id})"
+
+
 def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     """A library document as a node of the graph, ``(name, type)``: its
     title, and the type its entity already has (a page is a ``page``; else
     the document type the most edges reach it as; else the one type its
     domains let a document be, which its extraction will name it by: a
-    research document is a ``paper``; else ``document``). A
+    research document is a ``paper``; else ``document``). A picture or a
+    recording with no text of its own is named by its file and its number,
+    ``IMG_0001.JPG (#32778)``: two cameras' ``IMG_0001.JPG`` are two
+    photos, and one entity of that name would say both were taken in
+    either place (``media_node_name``). A
     document that does not exist, has no title or is hidden from this
     viewer is a KeyError, as if absent (the wall)."""
 
     row = con.execute(
-        "SELECT title, json_extract(meta, '$.domains') AS domains FROM documents"
-        " WHERE id = ?",
+        "SELECT title, mime, text_hash, json_extract(meta, '$.domains') AS domains"
+        " FROM documents WHERE id = ?",
         (doc_id,),
     ).fetchone()
     if row is None or not row["title"] or document_hidden(con, doc_id):
         raise KeyError(f"no such document: {doc_id}")
     title = str(row["title"])
+    if not row["text_hash"] and (
+        mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])
+    ):
+        return media_node_name(title, doc_id), "document"
     if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)).fetchone():
         return title, "page"
     onto = ontology.current()

@@ -65,6 +65,15 @@ function pictureHtml(doc, meta, isImage, offline) {
 }
 
 // What a picture's EXIF said (the photos step, meta.photo and meta.taken)
+// The town a picture's position lies in (the geocode step), with its
+// region and country, each said once
+function placeWords(place) {
+  if (!place || !place.name) return "";
+  const names = [...new Set([place.name, place.region, place.country].filter(Boolean))];
+  const near = place.km >= 2 ? `near ${esc(names[0])}` : `in ${esc(names[0])}`;
+  return [near, ...names.slice(1).map(esc)].join(", ");
+}
+
 function photoLine(meta) {
   const ph = meta.photo;
   if (!ph) return "";
@@ -76,6 +85,7 @@ function photoLine(meta) {
     ph.lens ? esc(ph.lens) : "",
     ph.width ? `${ph.width} × ${ph.height}` : "",
     ph.gps ? `at ${Number(ph.gps.lat).toFixed(4)}, ${Number(ph.gps.lon).toFixed(4)}` : "",
+    placeWords(meta.place),
   ].filter(Boolean);
   return `<p class="reading-line muted">${bits.join(" · ")}</p>`;
 }

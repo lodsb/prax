@@ -41,8 +41,14 @@
 # The bump only adds relations, so every reading made under core 3 is
 # valid under core 4: migration 39 moves the extraction stamps instead
 # of every document becoming due again.
+# core v5 (2026-10-26, the photo stage of AR, docs/biography.md §7): where
+# a picture or a recording was made, `taken_in` (document → place), read
+# from its GPS position by the `geocode` step and never from a text; and
+# `located_in` takes a place on the left, a town in its region and a
+# region in its country. Only additions again: migration 50 moves the
+# stamps as 39 did.
 module: core
-version: 4
+version: 5
 
 entity_types:
   person:
@@ -146,11 +152,20 @@ relation_types:
     transitive: true
     kind: state
     same_as: schema:containedInPlace
-    domain: [organization, event, person]
+    domain: [organization, event, person, place]
     range: [place]
     description: >-
       where an organization is based, an event was held or a person is
-      based, as the text states it (a city, a country)
+      based, as the text states it (a city, a country); a place within a
+      larger one (a town in its region, a region in its country)
+  taken_in:
+    kind: event
+    same_as: schema:locationCreated
+    domain: [document]
+    range: [place]
+    description: >-
+      where a photo, a video or a recording was made, read from its GPS
+      position by prax itself; never from what a text says
   links_to:
     kind: eternal
     same_as: dcterms:references
@@ -199,6 +214,9 @@ relation_aliases:
   publisher: published_by
   located_at: located_in
   based_in: located_in
+  shot_in: taken_in
+  recorded_in: taken_in
+  location_created: taken_in
   affiliated: affiliated_with
   created_by: developed_by
   built_by: developed_by

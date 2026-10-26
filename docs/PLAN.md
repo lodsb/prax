@@ -1000,6 +1000,15 @@ not done.
             is reachable. Left for AR: XMP (tags, albums, face regions),
             the GPS position as a place entity, the perceptual hash, and
             a video's poster frame.
+      - [x] (2026-10-26) **Where a photo was taken**, the first of the
+            graph for pictures: core 5's `taken_in` and `located_in` for
+            places, the `geocode` step naming the nearest GeoNames town
+            of a GPS position (`prax.graph.gazetteer`), the photo dated
+            in the world by when it was taken, a picture's node named by
+            its file and number. And the clean-up rules `unreadable` and
+            `clips`. Left for AR: events from photos grouped by time and
+            place, `depicts` from XMP and from faces (AT), the folders'
+            names as cues.
       - [ ] **A media view**, the user's idea of 2026-10-23: the
             referenced photos and recordings as a library of their own
             (by folder, by taken date once AR reads EXIF, by album),

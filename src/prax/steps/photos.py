@@ -1,5 +1,7 @@
 """The photos step: a picture's EXIF and its two smaller copies
 (``prax.parsers.photos``, ``store.apply_photo``; ``docs/biography.md`` §7).
+Beside it the geocode step: the town a picture's GPS position lies in,
+as facts of the graph (``prax.graph.gazetteer``, ``store.apply_place``).
 
 No model: the worker fetches each picture's original through the door,
 which reads a referenced one from its share, and posts what it found and
@@ -12,10 +14,13 @@ photo is never a capture.
 from __future__ import annotations
 
 import base64
+import functools
 import time
+from dataclasses import asdict
 from typing import Any
 
 from prax import store
+from prax.graph import gazetteer
 from prax.parsers import photos
 
 from . import leases
@@ -107,4 +112,75 @@ class Photos(Step):
         }
 
 
-REGISTERED = {"photos": Photos()}
+@functools.cache
+def _gazetteer() -> gazetteer.Gazetteer:
+    """Read once a worker: some 160,000 towns, a few seconds."""
+    return gazetteer.load()
+
+
+class Geocode(Step):
+    """Where a picture was taken: the door hands out the positions the
+    photos step read, the worker names the town each lies in, and the
+    door writes it as facts (``store.apply_place``). No original is read,
+    and no model runs."""
+
+    name = "geocode"
+
+    def hand_out(self, h: HandOut) -> dict[str, Any]:
+        skip = frozenset(leases.leased(self.name))
+        due = store.places_due(h.con, gazetteer.VERSION, limit=h.limit, skip=skip)
+        h.lease([d["doc_id"] for d in due])
+        return h.batch(due)
+
+    def take_in(self, t: TakeIn) -> dict[str, Any]:
+        def apply(doc_id: int, r: dict[str, Any]) -> str:
+            return store.apply_place(
+                t.con,
+                doc_id,
+                place=r.get("place"),
+                version=int(r.get("v") or gazetteer.VERSION),
+                by=str(r.get("by") or t.worker),
+            )
+
+        t.out["actions"] = t.each(apply)
+        return t.out
+
+    def run(self, p: Pass) -> str | None:
+        if not gazetteer.available():
+            return None  # offline and no files: nothing to name a place by
+        start = time.monotonic()
+        tally = {"applied": 0, "placed": 0, "nowhere": 0, "errors": 0}
+        while time.monotonic() - start < RUN_SECONDS:
+            items = p.fetch(self.name).get("items") or []
+            if not items:
+                break
+            p.note(f"{self.name}: {len(items)} positions", total=len(items), done=0)
+            places = _gazetteer()
+            results = []
+            for it in items:
+                found = places.nearest(float(it["lat"]), float(it["lon"]))
+                results.append(
+                    {
+                        "doc_id": it["doc_id"],
+                        "v": gazetteer.VERSION,
+                        "by": gazetteer.stamp(),
+                        "place": asdict(found) if found else None,
+                    }
+                )
+            rep = p.post(self.name, {"results": results})
+            acts = rep.get("actions") or {}
+            tally["applied"] += int(rep.get("applied", 0))
+            tally["placed"] += int(acts.get("placed", 0))
+            tally["nowhere"] += int(acts.get("nowhere", 0))
+            tally["errors"] += len(rep.get("errors") or [])
+            if tally["errors"] and not tally["applied"]:
+                break
+        if not any(tally.values()):
+            return None
+        return (
+            f"{tally['applied']} positions ({tally['placed']} placed,"
+            f" {tally['nowhere']} near no town)"
+        )
+
+
+REGISTERED = {"photos": Photos(), "geocode": Geocode()}

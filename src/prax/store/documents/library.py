@@ -19,6 +19,7 @@ from ..base import (
     now,
 )
 from .meta import _put_meta, _refresh_document_field, get_meta
+from .places import live_photo_clip
 from .text import _write_chunks
 
 # A document that should not be found any more (a duplicate capture, a
@@ -311,6 +312,19 @@ def _origin(row: sqlite3.Row) -> str:
     return str((meta.get("origin") or {}).get("path") or row["original_path"] or "")
 
 
+def _only_clip(con: sqlite3.Connection, row: sqlite3.Row) -> bool:
+    """Whether a document is a recording every place of which is a Live
+    Photo's clip (``live_photo_clip``): a place, not a document."""
+    if not str(row["mime"] or "").startswith("video/"):
+        return False
+    where = con.execute(
+        "SELECT p.root, p.path FROM places p JOIN documents d ON d.hash = p.sha256"
+        " WHERE d.id = ? AND p.gone IS NULL",
+        (row["id"],),
+    ).fetchall()
+    return bool(where) and all(live_photo_clip(con, w[0], w[1]) for w in where)
+
+
 def cleanup_set(
     con: sqlite3.Connection, rule: str, *, folder: str | None = None
 ) -> list[tuple[int, int | None]]:
@@ -321,8 +335,8 @@ def cleanup_set(
     if rule == "folder" and len((folder or "").strip("/")) < 3:
         raise ValueError("a folder rule needs a folder")
     rows = con.execute(
-        "SELECT id, title, original_path, text_hash, text_len, meta FROM documents"
-        " WHERE json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        "SELECT id, title, mime, original_path, text_hash, text_len, meta"
+        " FROM documents WHERE json_extract(meta, '$.retired') IS NULL ORDER BY id"
     ).fetchall()
     if rule == "same-text":
         first: dict[str, int] = {}
@@ -334,6 +348,14 @@ def cleanup_set(
             if keeper != r["id"]:
                 out.append((int(r["id"]), keeper))
         return out
+    if rule == "unreadable":
+        return [
+            (int(r["id"]), None)
+            for r in rows
+            if (json.loads(r["meta"] or "{}").get("photo") or {}).get("error")
+        ]
+    if rule == "clips":
+        return [(int(r["id"]), None) for r in rows if _only_clip(con, r)]
     if rule == "folder":
         want = (folder or "").replace("\\", "/")
         return [
