@@ -41,6 +41,7 @@ CORE_STEPS = (
     "genres",
     "photos",
     "geocode",
+    "faces",
 )
 STEPS = CORE_STEPS + tuple(_packs.step_homes())
 
@@ -75,6 +76,9 @@ WATCHED_STEPS = (
     # the town a picture's position lies in, as facts (2026-10-26): no
     # model, GeoNames' towns on the worker
     "geocode",
+    # where the faces in a picture are (2026-10-27, the user's word: AT
+    # step 1): YuNet on the worker's CPU, its preview read through the door
+    "faces",
 ) + _packs.watched()
 
 # the rest: named on the command line, and the paid ones want --spend
@@ -115,6 +119,7 @@ _HOMES = {
     "embed": "embed",
     "photos": "photos",
     "geocode": "photos",
+    "faces": "faces",
     **_packs.step_homes(),  # a pack's: the module's full name
 }
 

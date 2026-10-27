@@ -695,3 +695,8 @@ table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }
 .person-time .when { font-family: var(--font-ui); font-variant-numeric: tabular-nums; color: var(--muted); margin-right: .4rem; }
 table.people { border-collapse: collapse; width: 100%; }
 table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 0; border-bottom: 1px solid var(--line); }
+/* the faces step's boxes over a picture (view-doc.js, bindFaces) */
+.face-frame { position: relative; display: inline-block; max-width: 100%; }
+.face-frame .doc-image { display: block; margin-bottom: 0; }
+.faces-over { position: absolute; inset: 0; pointer-events: none; }
+.face-box { position: absolute; border: 2px solid var(--accent); border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .6); }

@@ -60,8 +60,20 @@ function pictureHtml(doc, meta, isImage, offline) {
   if (!isImage || (meta.photo && meta.photo.error)) return "";
   const preview = meta.photo && meta.photo.preview;
   if (!preview && offline) return "";
-  const img = `<img class="doc-image" src="${preview ? `/doc/${doc.id}/preview` : originalHref(doc.id)}" alt="${esc(doc.title || "")}">`;
+  let img = `<img class="doc-image" src="${preview ? `/doc/${doc.id}/preview` : originalHref(doc.id)}" alt="${esc(doc.title || "")}">`;
+  // the faces step's boxes over it, drawn once they are fetched (bindFaces)
+  if (preview && meta.faces && meta.faces.n) img = `<span class="face-frame">${img}<span class="faces-over"></span></span>`;
   return offline ? img : `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener">${img}</a>`;
+}
+
+// The faces of a picture as boxes over its preview (GET /doc/N/faces):
+// fractions of the upright picture, so they hold at any size it is drawn
+async function bindFaces(view, doc) {
+  const over = view.querySelector(".faces-over");
+  if (!over) return;
+  let found;
+  try { found = await api(`/doc/${doc.id}/faces`); } catch (_) { return; }
+  over.innerHTML = found.map((f) => faceBox(f)).join("");
 }
 
 // What a picture's EXIF said (the photos step, meta.photo and meta.taken)
@@ -86,6 +98,7 @@ function photoLine(meta) {
     ph.width ? `${ph.width} × ${ph.height}` : "",
     ph.gps ? `at ${Number(ph.gps.lat).toFixed(4)}, ${Number(ph.gps.lon).toFixed(4)}` : "",
     placeWords(meta.place),
+    facesWords(meta.faces),
   ].filter(Boolean);
   return `<p class="reading-line muted">${bits.join(" · ")}</p>`;
 }
@@ -705,6 +718,7 @@ async function viewDoc(id, p) {
   const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks), referenceLinks(chunks));
   DOC_VIEW.pages = pages;  // for the click handlers bound once below
   bindPlacesRetry(view, doc);
+  bindFaces(view, doc);
   const player = view.querySelector("#doc-player");
   DOC_VIEW.player = player;
   if (player) {

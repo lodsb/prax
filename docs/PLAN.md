@@ -1119,14 +1119,20 @@ not done.
             People view and `#person/N`, "their page" from the graph's
             panel. The photo half reads `depicts`, which core gets with
             step 4.
-      - [ ] **Step 1, detection.** A worker step `faces` reads each
-            picture through the door (`/doc/N/original`, so a picture on
-            an unmounted share waits). A detector finds each face's box
-            and landmarks: YuNet (OpenCV, Apache 2.0, ONNX) on
-            onnxruntime. A face is a region of the picture: a `face`
-            chunk kind with the box as its locator and the detector's
-            score in `data` (R13: a kind and a locator shape, no table).
-            The detector's name and version are stamped on it.
+      - [x] (2026-10-27) **Step 1, detection.** The watched worker
+            step `faces` reads each picture's preview through the door
+            (`/doc/N/preview`: 1,600 px, upright, there when the share is
+            not). YuNet (OpenCV Zoo, MIT, 232 KB of ONNX) on
+            onnxruntime's CPU, its input made any size, decoded as
+            OpenCV decodes it (`prax.ml.faces`). A face is a row of the
+            `faces` table (migration 53), not a chunk kind as first
+            planned: a chunk is disposable and derived from the text,
+            and a face's id must outlive a rechunk, because its vector
+            and a person's names are keyed by it. Box and landmarks as
+            fractions of the picture, the score, the width in pixels,
+            the detector's stamp; a later reading ends the earlier faces
+            (`gone_at`). `meta.faces`, `GET /doc/{id}/faces`, the boxes
+            over a picture on its page.
       - [ ] **Step 2, the vectors.** A recognition model (SFace, Apache
             2.0; 128 or 512 dimensions by model) gives each face a
             vector. It goes into an index of its own,

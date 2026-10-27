@@ -436,6 +436,18 @@ function timelineRows(t) {
       <div class="event-thumbs">${(b.sample || []).map((d) => `<a href="#doc/${d}"><img loading="lazy" src="/doc/${d}/thumb" alt=""></a>`).join("")}</div></div>`).join("")
     || `<p class="muted">no dated photos in it</p>`;
 }
+// What the faces step found in a picture (meta.faces): how many, or that
+// it looked and found none
+function facesWords(f) {
+  if (!f) return "";
+  return f.n ? `${f.n} face${f.n === 1 ? "" : "s"}` : "no face";
+}
+// A face as a box over its picture: its place in percent of the picture,
+// its score as the title
+function faceBox(f) {
+  const [x, y, w, h] = f.box.map((v) => (v * 100).toFixed(2));
+  return `<span class="face-box" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" title="face ${f.id} · ${Math.round(f.score * 100)}%"></span>`;
+}
 // The people list (view-people.js): a row a person, linked to their page.
 function peopleTable(rows) {
   return `<table class="people"><thead><tr><th>name</th><th>type</th><th>facts</th><th>photos</th></tr></thead><tbody>${rows.map((r) =>
@@ -991,5 +1003,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

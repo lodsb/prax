@@ -77,6 +77,7 @@ writer, and add its row here.
 | `photo` | `dict[str, Any]` | v, by, at, camera, lens, gps, size, thumb, preview |
 | `taken` | `dict[str, Any]` | when it was taken: date, precision, by |
 | `place` | `dict[str, Any]` | v, by, at, name, region, country, cc, km, id; or none |
+| `faces` | `dict[str, Any]` | v, by, at, n, from, width, height |
 
 ## What it is: the domains, the genres (stage Z)
 

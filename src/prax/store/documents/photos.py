@@ -12,6 +12,7 @@ published. A person's date is never replaced.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -149,3 +150,146 @@ def photo_copy(con: sqlite3.Connection, doc_id: int, which: str) -> Path | None:
         return None
     path = archive_path(str(row[0]))
     return path if path.exists() else None
+
+
+# --------------------------------------------------------------- the faces
+# Where the faces in a picture are (plan item AT step 1, the faces step,
+# ``prax.ml.faces``): read in its preview, so a picture is due once the
+# photos step has made one, whether or not its share is mounted.
+FACE_LANDMARKS = 5
+
+
+@_reading
+def faces_due(
+    con: sqlite3.Connection,
+    version: int,
+    *,
+    limit: int,
+    skip: frozenset[int] = frozenset(),
+) -> list[int]:
+    """Pictures with a preview and no faces reading of ``version`` (or a
+    later one), oldest first."""
+    rows = con.execute(
+        "SELECT id FROM documents"
+        " WHERE json_extract(meta, '$.photo.preview') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+        " AND coalesce(json_extract(meta, '$.faces.v'), 0) < ? ORDER BY id",
+        (version,),
+    )
+    out: list[int] = []
+    for (doc,) in rows:
+        if doc not in skip:
+            out.append(int(doc))
+            if len(out) >= limit:
+                break
+    return out
+
+
+@_reading
+def face_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
+    """Pictures read at ``version``, how many hold a face, the faces found,
+    and the pictures that wait."""
+    row = con.execute(
+        "SELECT"
+        " sum(coalesce(json_extract(meta, '$.faces.v'), 0) >= ?),"
+        " sum(coalesce(json_extract(meta, '$.faces.v'), 0) >= ?"
+        "     AND json_extract(meta, '$.faces.n') > 0),"
+        " sum(coalesce(json_extract(meta, '$.faces.v'), 0) < ?)"
+        " FROM documents WHERE json_extract(meta, '$.photo.preview') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL",
+        (version, version, version),
+    ).fetchone()
+    found = con.execute("SELECT count(*) FROM faces WHERE gone_at IS NULL").fetchone()
+    return {
+        "read": row[0] or 0,
+        "with_faces": row[1] or 0,
+        "faces": int(found[0]),
+        "waiting": row[2] or 0,
+    }
+
+
+def _fraction(value: Any) -> float:
+    x = float(value)
+    if not -0.01 <= x <= 1.01:  # a landmark may sit a little past the edge
+        raise ValueError(f"not a fraction of the picture: {value!r}")
+    return min(1.0, max(0.0, x))
+
+
+def _checked_face(face: dict[str, Any]) -> tuple[str, str, float, int]:
+    """A face as the worker posted it, checked: its box and landmarks as
+    JSON, its score and width in pixels. ValueError for a misshapen one."""
+    box = [_fraction(v) for v in face["box"]]
+    marks = [[_fraction(x), _fraction(y)] for x, y in face["landmarks"]]
+    if len(box) != 4 or box[2] <= 0 or box[3] <= 0:
+        raise ValueError(f"a face's box is x, y, w, h: {face['box']!r}")
+    if len(marks) != FACE_LANDMARKS:
+        raise ValueError(f"a face has {FACE_LANDMARKS} landmarks")
+    score = float(face["score"])
+    if not 0 <= score <= 1:
+        raise ValueError(f"a score is 0 to 1: {score!r}")
+    return json.dumps(box), json.dumps(marks), score, max(0, int(face["px"]))
+
+
+@_serialized
+def apply_faces(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    faces: list[dict[str, Any]],
+    version: int,
+    by: str,
+    width: int,
+    height: int,
+    source: str = "preview",
+) -> str:
+    """A picture's faces reading: the faces an earlier reading found ended
+    (``gone_at``), the new ones written, and ``meta.faces`` saying which
+    reading, of which copy at what size, and how many. Returns ``found``
+    or ``none``."""
+    checked = [_checked_face(f) for f in faces]
+    meta = get_meta(con, doc_id)
+    at = now()
+    con.execute(
+        "UPDATE faces SET gone_at = ? WHERE doc_id = ? AND gone_at IS NULL",
+        (at, doc_id),
+    )
+    con.executemany(
+        "INSERT INTO faces (doc_id, box, landmarks, score, px, detector, found_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(doc_id, box, marks, score, px, by, at) for box, marks, score, px in checked],
+    )
+    meta["faces"] = {
+        "v": version,
+        "by": by,
+        "at": at,
+        "n": len(checked),
+        "from": source,
+        "width": int(width),
+        "height": int(height),
+    }
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return "found" if checked else "none"
+
+
+@_guards("doc", list)
+@_reading
+def faces_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """The faces a picture holds now, the most certain first: each its
+    ``id``, ``box`` and ``landmarks`` (fractions of the upright picture),
+    ``score``, ``px`` and ``detector``."""
+    return [
+        {
+            "id": int(r["id"]),
+            "box": json.loads(r["box"]),
+            "landmarks": json.loads(r["landmarks"]),
+            "score": float(r["score"]),
+            "px": int(r["px"]),
+            "detector": r["detector"],
+        }
+        for r in con.execute(
+            "SELECT * FROM faces WHERE doc_id = ? AND gone_at IS NULL"
+            " ORDER BY score DESC, id",
+            (doc_id,),
+        )
+    ]

@@ -131,8 +131,13 @@ from .meta import (  # noqa: F401
     world_dates_needed,
 )
 from .photos import (  # noqa: F401
+    FACE_LANDMARKS,
     PHOTO_COPIES,
+    apply_faces,
     apply_photo,
+    face_counts,
+    faces_due,
+    faces_of,
     photo_copy,
     photo_counts,
     photo_failed,

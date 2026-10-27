@@ -229,6 +229,14 @@ def photo_preview(doc_id: int, request: Request) -> FileResponse:
     return _photo_copy(request, doc_id, "preview")
 
 
+@router.get("/doc/{doc_id}/faces")
+def photo_faces(doc_id: int, request: Request) -> list[dict[str, Any]]:
+    """The faces the faces step found in a picture: boxes and landmarks as
+    fractions of the upright picture (``store.faces_of``). Biometric, so
+    no named token's route: not in ``auth.RESTRICTED_ROUTES``."""
+    return store.faces_of(_con(request), doc_id)
+
+
 def _photo_copy(request: Request, doc_id: int, which: str) -> FileResponse:
     path = store.photo_copy(_con(request), doc_id, which)
     if path is None:

@@ -437,6 +437,16 @@ reference `docs/ask.md`.
   the UI shows, `meta.parser` naming the parser. The frames are
   figures, read by the vision pass like any. A re-index keeps the
   chunks whose text did not change, and their vectors.
+- A face is a region of its picture, not of a text, so it is a row of
+  the `faces` table (migration 53), not a chunk kind: a chunk is
+  disposable and derived from the text (invariant 2), and a face's id
+  must outlive a rechunk, because its vector and what a person says of
+  it (plan item AT) are keyed by it. The `faces` step (`prax.ml.faces`,
+  YuNet on the worker's CPU) finds them in the photos step's preview:
+  a box and five landmarks as fractions of the upright picture, and
+  the score. A later reading ends the earlier faces (`gone_at`) and
+  never deletes them. Faces are biometric: never to a paid model or an
+  API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means
   re-embedding into a new file. Another dimension means a new file and

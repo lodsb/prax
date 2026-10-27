@@ -6653,6 +6653,66 @@ the group. At 1,300 px the top bar now wraps its last link.
 Tests: `tests/test_people.py` (3), two node tests in
 `tests/ui/lib.test.js`.
 
+## 2026-10-27: AT step 1, where the faces are
+
+The user: "lets work on the AT step 1". A watched worker step, `faces`,
+finds the faces in each picture's preview and the door keeps them.
+
+**The detector.** YuNet 2023mar from OpenCV Zoo, MIT licence, 232 KB,
+fetched once from the hub at a pinned revision and refused when its
+sha256 is not the one measured (`prax.ml.faces`). The plan said Apache
+2.0; the repository's LICENSE says MIT. The file declares a 640 x 640
+input. The network is convolutions throughout, so the session is built
+with the input made any size (`onnx`, now in the `work` extra), and a
+preview is read at its own size, padded to a multiple of 32:
+
+| input | ms on the desktop CPU |
+|---|---|
+| 640 x 640 | 5 |
+| 1,600 x 1,216 | 23 |
+
+At 640 a face of 40 px in the preview would shrink to 16. The twelve
+outputs are decoded as OpenCV's `FaceDetectorYN` decodes them (score
+`sqrt(cls * obj)`, a box from the anchor's cell, five landmarks), with
+greedy suppression at an overlap of 0.3. Measured against
+`cv2.FaceDetectorYN` on 300 random previews of the live library, read
+only, counts printed: 178 faces either way, the same count in every
+picture, the nearest box's overlap 0.9997 at the median and 0.9897 at
+worst, the scores identical. 83 of the 300 hold a face. A face's width
+in the preview: 17 px at the tenth percentile, 48 at the median, 238 at
+the ninetieth; 71 of 178 are under 40 px, which is about where
+recognition stops being reliable. Step 2 decides whether those are read
+again from the original.
+
+**The preview, not the original.** The plan said `/doc/N/original`. The
+preview is upright, already in the archive and there when the share is
+not, and a face too small to find in it is too small to recognise. The
+boxes are fractions of the picture, so they hold for the original too.
+
+**A table, not a chunk kind.** The plan said a `face` chunk (R13). A
+chunk is a region of a document's text and disposable (invariant 2):
+`--rechunk` rebuilds them. A face is a region of the picture, and its
+id must outlive a rechunk, because step 2's vectors and step 4's names
+and "not this person" are keyed by it. So migration 53 adds `faces`:
+box, landmarks, score, width in pixels, the detector's stamp, found and
+gone. A later reading ends the earlier faces (`gone_at`) and never
+deletes them. CLAUDE.md's conventions say so beside the video.
+
+**The door.** `store.faces_due` hands out every picture with a preview
+and no reading of this version; `store.apply_faces` checks each face
+(fractions, four box values with a size, five landmarks, a score from 0
+to 1) and writes `meta.faces` (`n`, the copy, its size).
+`store.faces_of` is guarded like any read of a document, and
+`GET /doc/{id}/faces` is no named token's route. The picture's page
+draws the boxes over the preview and says how many faces it holds.
+Checked on YuNet's own example picture on a throwaway store: the boxes
+sit on the demo's.
+
+The live run started at 03:00Z: 400 pictures in its first pass of a
+minute, 139 with a face, 267 faces.
+
+Tests: `tests/test_faces.py` (6), one node test.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

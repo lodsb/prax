@@ -641,3 +641,12 @@ test("a person's page reads relations from their side and links people to their 
   const html = lib.personHtml({ name: "Ada", type: "person", labels: [], facts: 0, documents_total: 0, photos: 0, timeline: [], relations: [], documents: [], sample: [], events: [], places: [], with: [] });
   assert.match(html, /No photo depicts them yet/);
 });
+
+test("a picture's faces: the count, and each a box in percent", () => {
+  assert.equal(lib.facesWords(null), "");
+  assert.equal(lib.facesWords({ n: 0 }), "no face");
+  assert.equal(lib.facesWords({ n: 2 }), "2 faces");
+  const box = lib.faceBox({ id: 4, box: [0.1, 0.25, 0.05, 0.075], score: 0.93 });
+  assert.match(box, /left:10\.00%;top:25\.00%;width:5\.00%;height:7\.50%/);
+  assert.match(box, /face 4 · 93%/);
+});

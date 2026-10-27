@@ -174,6 +174,8 @@ class DocumentMeta(TypedDict, total=False):
     taken: dict[str, Any]  # when it was taken: date, precision, by
     # where it was taken, from its GPS position: the geocode step (store.apply_place)
     place: dict[str, Any]  # v, by, at, name, region, country, cc, km, id; or none
+    # where the faces are: the faces step (store.apply_faces, the faces table)
+    faces: dict[str, Any]  # v, by, at, n, from, width, height
     # what it is: the domains, the genres (stage Z)
     domains: list[str]  # the modules it is read against (invariant 9)
     domains_by: str  # a person, a rule, the labeller
