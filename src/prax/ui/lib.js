@@ -491,7 +491,7 @@ function faceGroupRow(g, all) {
   const suggest = (g.named || [])[0];
   const tiles = g.faces.filter((f) => !all || f.verdict == null);
   const form = tiles.length ? `<form class="face-name" data-faces="${tiles.map((f) => f.id).join(",")}">
-      <input name="who" list="people-choice" placeholder="who is this?" autocomplete="off" value="${suggest ? esc(personValue(suggest)) : ""}">
+      <span class="person-field"><input name="who" placeholder="who is this?" autocomplete="off" value="${suggest ? esc(personValue(suggest)) : ""}"><span class="person-choices" hidden></span></span>
       <button name="act" value="name">name them</button> <button name="act" value="not_face" type="button">not faces</button>
       <button name="act" value="nobody" type="button">nobody to name</button> <span class="msg"></span></form>` : "";
   return `<section class="face-group"><p>${title} · ${plural(open, "face")} to name in ${plural(g.pictures, "picture")}${doubled}${more}${named}</p>
@@ -501,6 +501,12 @@ function faceGroupRow(g, all) {
 // back; anything else typed there is a new person's name
 function personValue(p) {
   return `${p.name} #${p.entity_id ?? p.id}`;
+}
+// The people the name field offers, as buttons of the page's own: a
+// browser's datalist is not drawn in Firefox on a field with autocomplete
+// off, nor redrawn when its options arrive after the keystroke
+function personChoices(rows) {
+  return rows.map((r) => `<button type="button" class="person-choice" data-value="${esc(personValue(r))}">${esc(r.name)} <span class="muted">${esc(r.type)}${r.photos ? ` · ${r.photos} photo${r.photos === 1 ? "" : "s"}` : ""}${r.facts ? ` · ${r.facts} fact${r.facts === 1 ? "" : "s"}` : ""}</span></button>`).join("");
 }
 function personChoice(text) {
   const t = String(text || "").trim();
@@ -1063,5 +1069,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, personValue, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, personValue, personChoices, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

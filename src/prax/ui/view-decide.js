@@ -307,7 +307,7 @@ async function viewFaceGroups(p) {
   const limit = 30;
   const offset = Number(p.offset || 0);
   view.innerHTML = `${decideTabs("groups")}<p class="muted">${esc(list.about)}</p>
-    <p id="group-counts" class="muted"></p><div id="face-alike"></div><datalist id="people-choice"></datalist>
+    <p id="group-counts" class="muted"></p><div id="face-alike"></div>
     <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
   const box = document.getElementById("decide-list");
   const counts = document.getElementById("group-counts");
@@ -339,17 +339,39 @@ async function viewFaceGroups(p) {
   bindNaming(box);
 }
 
-// The name field's choices, the people the graph has, as one types
+// The name field's choices, the people the graph has, as one types: a
+// click (or Enter on one) puts a person in the field; an answer that
+// arrives after a later keystroke is dropped
 let peopleTimer;
+let peopleAsked = 0;
 function choosePeople(input) {
+  const list = input.parentElement.querySelector(".person-choices");
   clearTimeout(peopleTimer);
+  const q = input.value.replace(/#\d+$/, "").trim();
+  if (q.length < 2 || /#\d+$/.test(input.value)) { list.hidden = true; return; }
+  const asked = ++peopleAsked;
   peopleTimer = setTimeout(async () => {
-    const q = input.value.replace(/#\d+$/, "").trim();
-    if (q.length < 2) return;
     let rows;
     try { rows = await api("/people", { q, limit: 12 }); } catch { return; }
-    document.getElementById("people-choice").innerHTML = rows.map((r) => `<option value="${esc(personValue(r))}">${esc(r.type)}${r.photos ? `, ${r.photos} photos` : ""}</option>`).join("");
-  }, 250);
+    if (asked !== peopleAsked) return;
+    list.innerHTML = rows.length ? personChoices(rows) : `<span class="muted">nobody known by that name: name them to make a new person</span>`;
+    list.hidden = false;
+  }, 200);
+}
+function bindPersonField(input) {
+  const list = input.parentElement.querySelector(".person-choices");
+  input.addEventListener("input", () => choosePeople(input));
+  input.addEventListener("keydown", (e) => { if (e.key === "Escape") list.hidden = true; });
+  // mousedown, so the choice lands before the field's blur hides the list
+  list.addEventListener("mousedown", (e) => {
+    const b = e.target.closest(".person-choice");
+    if (!b) return;
+    e.preventDefault();
+    input.value = b.dataset.value;
+    list.hidden = true;
+    input.focus();
+  });
+  input.addEventListener("blur", () => setTimeout(() => { list.hidden = true; }, 150));
 }
 
 // A group's form: name the faces not clicked away, or say what they are
@@ -359,7 +381,7 @@ function bindNaming(box) {
     const section = form.closest(".face-group");
     const out = form.querySelector(".msg");
     const input = form.querySelector("input[name=who]");
-    input.addEventListener("input", () => choosePeople(input));
+    bindPersonField(input);
     const chosen = () => [...section.querySelectorAll(".face-tile[data-face]:not(.face-out):not(.face-done)")].map((t) => Number(t.dataset.face));
     const send = async (path, body, words) => {
       const faces = chosen();

@@ -6940,6 +6940,16 @@ naming three of them: the photo and its event.
 
 Tests: `tests/test_face_naming.py` (7), two node tests.
 
+**The name field offered nobody** (the user, the same afternoon: "I
+dont get any hits there"). The door answered and the page filled a
+`<datalist>`, but a browser draws a datalist in its own way: Firefox
+shows none on a field with `autocomplete="off"`, and none is redrawn
+when its options arrive after the keystroke. The field's choices are
+the page's own list now (`personChoices`): name, type, photos and
+facts, picked with a click; an answer that arrives after a later
+keystroke is dropped. Checked over CDP in headless Chrome: typed, the
+request, the list shown, a choice picked into the field.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

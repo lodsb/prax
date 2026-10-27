@@ -710,6 +710,12 @@ table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 
 .face-group > p { margin: 0 0 .35rem; }
 .face-name { margin: 0 0 .5rem; }
 .face-name input { min-width: 14rem; }
+.person-field { position: relative; display: inline-block; }
+.person-choices { position: absolute; left: 0; top: 100%; z-index: 20; min-width: 100%; max-height: 22rem; overflow-y: auto; background: var(--bg, Canvas); border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .25rem 0; }
+.person-choices[hidden] { display: none; }
+.person-choices > .muted { display: block; padding: .3rem .6rem; white-space: nowrap; }
+.person-choice { display: block; width: 100%; text-align: left; padding: .3rem .6rem; border: 0; background: none; font: inherit; color: inherit; letter-spacing: normal; text-transform: none; white-space: nowrap; cursor: pointer; }
+.person-choice:hover, .person-choice:focus { background: var(--panel); }
 .face-pick { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
 .face-out img { opacity: .25; outline: 2px solid var(--muted); }
 .face-done { opacity: .35; }

@@ -685,6 +685,13 @@ test("a face group's strip: what is open, a picture twice, who it was named", ()
   assert.doesNotMatch(loose, /two of its faces/);
 });
 
+test("the name field's choices: name, type, photos and facts", () => {
+  const html = lib.personChoices([{ id: 9, name: "Grace <Hopper>", type: "author", photos: 1, facts: 3 }]);
+  assert.match(html, /data-value="Grace &lt;Hopper&gt; #9"/);
+  assert.match(html, /author · 1 photo · 3 facts/);
+  assert.equal(lib.personChoices([]), "");
+});
+
 test("the name field: a person picked, or a new name", () => {
   assert.equal(lib.personValue({ id: 9, name: "Grace Hopper" }), "Grace Hopper #9");
   assert.deepEqual(lib.personChoice("Grace Hopper #9"), { entity_id: 9 });
