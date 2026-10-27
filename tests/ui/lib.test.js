@@ -733,3 +733,12 @@ test("a picture's faces listed under it: answered, offered, open", () => {
   assert.match(drawn, /title="Ada · face 1/);
   assert.match(drawn, /<span class="face-num">1<\/span>/);
 });
+
+test("the person page's rename and same-person forms", () => {
+  const html = lib.personEditHtml({ id: 7, name: "Ada <L>" });
+  assert.match(html, /data-edit="rename"/);
+  assert.match(html, /data-edit="same"/);
+  assert.match(html, /value="Ada &lt;L&gt;"/);
+  assert.match(html, /form class="person-same search-form" hidden/);
+  assert.match(html, /Ada &lt;L&gt; stays the name/);
+});

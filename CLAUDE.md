@@ -470,7 +470,11 @@ reference `docs/ask.md`.
   or says "not them" (`face_refusals`, migration 57), and that face is not
   offered as them again. A picture's page lists its faces under it, numbered
   as their boxes are, each named, judged or taken back there
-  (`store.picture_faces`, `GET /doc/{id}/faces`). Faces are biometric:
+  (`store.picture_faces`, `GET /doc/{id}/faces`). A person's page renames
+  them (`store.rename_person`: the old name a `was` label) and folds another
+  entity into them (`store.merge_people`), each under a run `unmerge_run`
+  takes back; a face is named as an entity, and the face reads show its
+  canonical one. Faces are biometric:
   never to a paid model or an API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means

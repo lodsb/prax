@@ -202,8 +202,10 @@ from .naming import (  # noqa: F401
     FACE_VERDICTS,
     face_answers,
     judge_faces,
+    merge_people,
     name_faces,
     refuse_faces,
+    rename_person,
     unname_faces,
 )
 from .paths import (  # noqa: F401

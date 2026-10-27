@@ -766,3 +766,39 @@ def person(entity_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+class PersonRenameReq(BaseModel):
+    name: str
+
+
+class PersonSameReq(BaseModel):
+    other: int  # the entity that is this person too; it folds into this one
+
+
+@router.post("/people/{entity_id}/rename")
+def person_rename(
+    entity_id: int, req: PersonRenameReq, request: Request
+) -> dict[str, Any]:
+    """A person called something else, the old name kept as what they are
+    also known by (``store.rename_person``); ``POST /graph/unmerge`` with
+    the run takes it back. Not a named token's route."""
+    try:
+        return store.rename_person(_con(request), entity_id, req.name)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/people/{entity_id}/same")
+def person_same(entity_id: int, req: PersonSameReq, request: Request) -> dict[str, Any]:
+    """Another entity is this person too, and folds into them
+    (``store.merge_people``); ``POST /graph/unmerge`` with the run takes it
+    back. Not a named token's route."""
+    try:
+        return store.merge_people(_con(request), req.other, entity_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc

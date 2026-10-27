@@ -28,9 +28,54 @@ async function viewPeople(p) {
   box.innerHTML = rows.length ? peopleTable(rows) : `<p class="muted">Nobody${q ? ` named like “${esc(q)}”` : ""}.</p>`;
 }
 
-async function viewPerson(id) {
+// note: what the last change did, with its undo (a run of unmerge_run's)
+async function viewPerson(id, note) {
   loading();
   let got;
   try { got = await api(`/people/${encodeURIComponent(id)}`); } catch (err) { showError(view, err); return; }
   view.innerHTML = personHtml(got);
+  const head = view.querySelector("h1 + p");
+  if (head) head.insertAdjacentHTML("afterend", personEditHtml(got));
+  bindPersonEdit(got, note);
+}
+
+function bindPersonEdit(got, note) {
+  const line = view.querySelector(".person-edit");
+  if (!line) return;
+  const out = line.querySelector(".msg");
+  const rename = view.querySelector("form.person-rename");
+  const same = view.querySelector("form.person-same");
+  if (note) {
+    out.innerHTML = `${esc(note.text)}${note.run ? ` · <a href="#" data-undo>undo</a>` : ""}`;
+    const undo = out.querySelector("[data-undo]");
+    if (undo) undo.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try { await post("/graph/unmerge", { run: note.run }); viewPerson(got.id, { text: "taken back" }); }
+      catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+    });
+  }
+  line.querySelectorAll("[data-edit]").forEach((a) => a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const form = a.dataset.edit === "rename" ? rename : same;
+    form.hidden = !form.hidden;
+    if (!form.hidden) form.querySelector("input").focus();
+  }));
+  rename.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const r = await post(`/people/${got.id}/rename`, { name: rename.name.value });
+      viewPerson(r.entity_id, { text: r.run ? `renamed from ${r.was}` : "the same name", run: r.run });
+    } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+  });
+  const input = same.querySelector("input[name=who]");
+  bindPersonField(input);
+  same.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const who = personChoice(input.value);
+    if (!who || who.entity_id == null) { out.textContent = "pick the other person from the list"; return; }
+    try {
+      const r = await post(`/people/${got.id}/same`, { other: who.entity_id });
+      viewPerson(r.kept, { text: `${input.value.replace(/ #\d+$/, "")} joined`, run: r.run });
+    } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+  });
 }

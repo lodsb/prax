@@ -8775,3 +8775,32 @@ contributor's route and the same secret writing once a contributor; a
 token from before roles a contributor; a reader's ask on a priced host
 answering nothing and refusing the paid model by name), the tokens
 table's node test.
+
+## 2026-10-27: renaming a person, and one person twice
+
+The user, about to name more faces: "can I rename persons afterwards?"
+The labels could (a preferred label, the old name kept), and two
+entities could be merged with an undo, but the person page offered
+neither. Then "yeah, do it".
+
+`store.rename_person` (graph part `naming`): the new name a preferred
+label in the language the library shows, the old one marked `was` under
+the same run, so `unmerge_run` puts it back. A name another entity of
+the type already carries is refused with its id: two things may not
+show one name, and when they are one person the other change says so.
+The old name stays a label, so naming a face by it still lands on them
+(`store.link` follows the labels).
+
+`store.merge_people`: another entity folds into this person
+(`merge_entities`, across person types, under a run of its own). The
+face reads (`face_answers`, `picture_faces`, the face groups' tiles)
+showed the entity a face was named as; they now show its canonical one,
+so a folded person's faces show the survivor's name. The person page
+already gathered an alias group.
+
+`POST /people/{id}/rename`, `POST /people/{id}/same` (neither a named
+token's route), and on the person page "rename" and "same person as…"
+under the name, each answered with an undo (`POST /graph/unmerge`).
+
+Tests: one in `tests/test_face_naming.py`, one node test.
+

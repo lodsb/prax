@@ -448,10 +448,11 @@ def _group_faces(
     out: dict[int, list[dict[str, Any]]] = {g: [] for g in group_ids}
     for r in con.execute(
         "SELECT m.group_id, m.strength, f.id, f.doc_id, f.score, f.px,"
-        " f.crop IS NOT NULL AS crop, n.verdict, n.entity_id, e.name"
+        " f.crop IS NOT NULL AS crop, n.verdict, e.id AS entity_id, e.name"
         " FROM face_group_members m JOIN faces f ON f.id = m.face_id"
         " LEFT JOIN face_names n ON n.face_id = f.id AND n.ended_at IS NULL"
-        " LEFT JOIN entities e ON e.id = n.entity_id"
+        " LEFT JOIN entities x ON x.id = n.entity_id"
+        " LEFT JOIN entities e ON e.id = COALESCE(x.canonical_id, x.id)"
         " WHERE m.group_id IN (SELECT value FROM json_each(?))"
         " AND f.gone_at IS NULL ORDER BY m.group_id, m.strength DESC, f.id",
         (json.dumps(group_ids),),
@@ -848,9 +849,10 @@ def picture_faces(
         return []
     rows = con.execute(
         "SELECT f.id, f.box, f.score, f.px, f.crop IS NOT NULL AS crop,"
-        " n.verdict, n.entity_id, n.run, e.name FROM faces f"
+        " n.verdict, e.id AS entity_id, n.run, e.name FROM faces f"
         " LEFT JOIN face_names n ON n.face_id = f.id AND n.ended_at IS NULL"
-        " LEFT JOIN entities e ON e.id = n.entity_id"
+        " LEFT JOIN entities x ON x.id = n.entity_id"
+        " LEFT JOIN entities e ON e.id = COALESCE(x.canonical_id, x.id)"
         " WHERE f.doc_id = ? AND f.gone_at IS NULL ORDER BY f.score DESC, f.id",
         (doc_id,),
     ).fetchall()

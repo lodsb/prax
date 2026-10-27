@@ -555,6 +555,17 @@ function personChoice(text) {
   if (m) return { entity_id: Number(m[1]) };
   return t ? { name: t } : null;
 }
+// What the person page changes (view-people.js): their name, the old one
+// kept as "also known as", and another entity that is them too, folded
+// into them. Both shown on a click, each answered with an undo
+function personEditHtml(got) {
+  const name = esc(got.name);
+  return `<p class="person-edit muted"><a href="#" data-edit="rename">rename</a> · <a href="#" data-edit="same">same person as…</a> <span class="msg"></span></p>
+    <form class="person-rename search-form" hidden autocomplete="off"><input name="name" value="${name}" aria-label="the new name">
+      <button>rename</button> <span class="muted">${name} stays a name they are also known by</span></form>
+    <form class="person-same search-form" hidden><span class="person-field"><input name="who" placeholder="the other person, picked from the list" autocomplete="off"><span class="person-choices" hidden></span></span>
+      <button>same person</button> <span class="muted">their faces, pictures and facts join ${name}'s, and ${name} stays the name</span></form>`;
+}
 // The people list (view-people.js): a row a person, linked to their page.
 function peopleTable(rows) {
   return `<table class="people"><thead><tr><th>name</th><th>type</th><th>facts</th><th>photos</th></tr></thead><tbody>${rows.map((r) =>
@@ -1115,5 +1126,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

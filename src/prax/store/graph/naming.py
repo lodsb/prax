@@ -37,7 +37,7 @@ from typing import Any
 
 from ..base import _reading, _serialized, document_hidden, now
 from .edges import Edge, document_node, end_edge, link
-from .labels import PERSON
+from .labels import PERSON, add_label, display_language, merge_entities
 from .people import DEPICTS, person_types
 
 FACE_VERDICTS = ("person", "not_face", "nobody")
@@ -354,9 +354,11 @@ def face_answers(con: sqlite3.Connection, face_ids: list[int]) -> dict[int, Any]
     ``run``. A face of a picture the viewer may not see is left out."""
     out: dict[int, Any] = {}
     for r in con.execute(
-        "SELECT n.face_id, n.verdict, n.entity_id, n.run, f.doc_id, e.name"
+        # the person as they are now: a merge folds the entity named
+        "SELECT n.face_id, n.verdict, e.id AS entity_id, n.run, f.doc_id, e.name"
         " FROM face_names n JOIN faces f ON f.id = n.face_id"
-        " LEFT JOIN entities e ON e.id = n.entity_id"
+        " LEFT JOIN entities x ON x.id = n.entity_id"
+        " LEFT JOIN entities e ON e.id = COALESCE(x.canonical_id, x.id)"
         " WHERE n.ended_at IS NULL AND n.face_id IN (SELECT value FROM json_each(?))",
         (json.dumps(sorted({int(f) for f in face_ids})),),
     ):
@@ -369,3 +371,94 @@ def face_answers(con: sqlite3.Connection, face_ids: list[int]) -> dict[int, Any]
             "run": r["run"],
         }
     return out
+
+
+# ------------------------------------------------- a person's name, a person twice
+# What the person page changes: a name, and two entities that are one
+# person. Both are claims under a run of their own, which ``unmerge_run``
+# takes back whole; the faces follow, since a face is named as an entity
+# and the reads show its canonical one.
+
+
+def _canonical_person(con: sqlite3.Connection, entity_id: int) -> sqlite3.Row:
+    row = con.execute(
+        "SELECT c.id, c.name, c.type FROM entities e"
+        " JOIN entities c ON c.id = COALESCE(e.canonical_id, e.id)"
+        " WHERE e.id = ?",
+        (entity_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such entity: {entity_id}")
+    if row["type"] not in person_types():
+        raise ValueError(f"entity {entity_id} is a {row['type']}, not a person")
+    return row  # type: ignore[no-any-return]
+
+
+@_serialized
+def rename_person(
+    con: sqlite3.Connection, entity_id: int, name: str, *, by: str = PERSON
+) -> dict[str, Any]:
+    """A person called something else: the new name preferred in the
+    language the library shows, the old one kept as a name they are also
+    known by and marked as what they were called (``was``), both under one
+    run that ``unmerge_run`` takes back. A name another entity of the type
+    already carries is a ValueError naming it: two things may not show one
+    name, and when they are one person ``merge_people`` says so. Returns
+    ``entity_id`` (the canonical one), ``name``, ``was`` and ``run`` (None
+    when the name was the same)."""
+    row = _canonical_person(con, entity_id)
+    eid, old = int(row["id"]), str(row["name"])
+    title = " ".join((name or "").split())[:FACE_NAME_CHARS]
+    if not title:
+        raise ValueError("a person needs a name")
+    if title == old:
+        return {"entity_id": eid, "name": old, "was": old, "run": None}
+    other = con.execute(
+        "SELECT COALESCE(canonical_id, id) FROM entities"
+        " WHERE name = ? AND type = ? AND id != ?",
+        (title, row["type"], eid),
+    ).fetchone()
+    if other is not None:
+        raise ValueError(
+            f"another {row['type']} (#{other[0]}) is called {title!r}: if they"
+            " are one person, say so with 'same person as'"
+        )
+    run = _run("rename")
+    marked = con.execute(
+        "UPDATE entity_labels SET was = 1, run = ?"
+        " WHERE entity_id = ? AND label = ? COLLATE NOCASE",
+        (run, eid, old),
+    ).rowcount
+    if not marked:
+        add_label(con, eid, old, kind="alt", producer=by, run=run, was=True)
+    add_label(
+        con, eid, title, lang=display_language(), kind="pref", producer=by, run=run
+    )
+    shown = con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
+    con.commit()
+    return {"entity_id": eid, "name": str(shown[0]), "was": old, "run": run}
+
+
+@_serialized
+def merge_people(
+    con: sqlite3.Connection, other: int, into: int, *, by: str = PERSON
+) -> dict[str, Any]:
+    """Two entities that are one person: ``other`` folds into ``into``,
+    whose name stays (``merge_entities``, under a run of its own that
+    ``unmerge_run`` takes back). Its faces, pictures and facts are then
+    the survivor's wherever a read follows the canonical entity. Returns
+    ``kept``, ``merged`` and ``run``."""
+    keep = _canonical_person(con, into)
+    fold = _canonical_person(con, other)
+    if int(keep["id"]) == int(fold["id"]):
+        raise ValueError("that is the same person already")
+    run = _run("merge")
+    merge_entities(
+        con,
+        int(fold["id"]),
+        int(keep["id"]),
+        across_types=True,  # two person types (a person, an author) are one
+        producer=by,
+        run=run,
+    )
+    return {"kept": int(keep["id"]), "merged": int(fold["id"]), "run": run}
