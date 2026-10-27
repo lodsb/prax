@@ -6885,6 +6885,11 @@ hold two of them named in red. Nothing is named yet: step 4.
 
 Tests: `tests/test_face_groups.py` (6), one node test.
 
+The first live run, through the door (the face index's own nearest
+neighbours, not the exact ones the measurement used): 8.2 s, 197 groups
+holding 3,454 faces, the largest five 500, 300, 292, 284 and 98, with
+pictures held twice as measured (0, 3, 0, 0, 1).
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5
