@@ -208,18 +208,27 @@ def face_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
     }
 
 
-def _fraction(value: Any) -> float:
+# a landmark may lie past the picture's edge, where the detector placed an
+# eye of a face the frame cuts (5 of 2,022 pictures, 2026-10-27): kept
+# where it was put, since the alignment needs it there
+LANDMARK_REACH = 0.25
+
+
+def _fraction(value: Any, reach: float = 0.01) -> float:
     x = float(value)
-    if not -0.01 <= x <= 1.01:  # a landmark may sit a little past the edge
+    if not -reach <= x <= 1 + reach:
         raise ValueError(f"not a fraction of the picture: {value!r}")
-    return min(1.0, max(0.0, x))
+    return x
 
 
 def _checked_face(face: dict[str, Any]) -> tuple[str, str, float, int]:
     """A face as the worker posted it, checked: its box and landmarks as
     JSON, its score and width in pixels. ValueError for a misshapen one."""
-    box = [_fraction(v) for v in face["box"]]
-    marks = [[_fraction(x), _fraction(y)] for x, y in face["landmarks"]]
+    box = [min(1.0, max(0.0, _fraction(v))) for v in face["box"]]
+    marks = [
+        [_fraction(x, LANDMARK_REACH), _fraction(y, LANDMARK_REACH)]
+        for x, y in face["landmarks"]
+    ]
     if len(box) != 4 or box[2] <= 0 or box[3] <= 0:
         raise ValueError(f"a face's box is x, y, w, h: {face['box']!r}")
     if len(marks) != FACE_LANDMARKS:

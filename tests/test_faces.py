@@ -273,3 +273,45 @@ def test_a_hidden_picture_hides_its_faces(con: sqlite3.Connection) -> None:
     finally:
         store.VIEWER.reset(token)
     assert len(store.faces_of(con, doc)) == 1
+
+
+def test_a_landmark_past_the_edge_is_kept_where_it_was_put(
+    con: sqlite3.Connection,
+) -> None:
+    doc = _picture(con, 6)
+    marks = [[-0.02, 0.3], [0.05, 0.3], [0.02, 0.35], [-0.01, 0.4], [0.04, 0.4]]
+    store.apply_faces(
+        con,
+        doc,
+        faces=[
+            {
+                "box": [-0.005, 0.2, 0.1, 0.25],
+                "landmarks": marks,
+                "score": 0.85,
+                "px": 9,
+            }
+        ],
+        version=faces.VERSION,
+        by="test",
+        width=160,
+        height=120,
+    )
+    (face,) = store.faces_of(con, doc)
+    assert face["landmarks"][0] == [-0.02, 0.3] and face["box"][0] == 0.0
+    with pytest.raises(ValueError):
+        store.apply_faces(
+            con,
+            doc,
+            faces=[
+                {
+                    "box": [0.1, 0.2, 0.1, 0.25],
+                    "landmarks": [[-0.5, 0.3]] * 5,
+                    "score": 0.85,
+                    "px": 9,
+                }
+            ],
+            version=faces.VERSION,
+            by="test",
+            width=160,
+            height=120,
+        )

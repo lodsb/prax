@@ -27,6 +27,15 @@ from .base import HandOut, Pass, Step, TakeIn
 RUN_SECONDS = 90
 
 
+def _first_error(rep: dict[str, Any]) -> str:
+    """The first error the door answered a post with, for the pass's line."""
+    errors = rep.get("errors") or []
+    if not errors:
+        return ""
+    e = errors[0]
+    return f"; the first, doc {e.get('doc_id')}: {str(e.get('error'))[:160]}"
+
+
 class Faces(Step):
     name = "faces"
 
@@ -58,6 +67,7 @@ class Faces(Step):
             return None
         start = time.monotonic()
         tally = {"applied": 0, "found": 0, "none": 0, "errors": 0}
+        first = ""
         while time.monotonic() - start < RUN_SECONDS:
             items = p.fetch(self.name).get("items") or []
             if not items:
@@ -69,13 +79,14 @@ class Faces(Step):
             tally["found"] += int(acts.get("found", 0))
             tally["none"] += int(acts.get("none", 0))
             tally["errors"] += len(rep.get("errors") or [])
+            first = first or _first_error(rep)
             if tally["errors"] and not tally["applied"]:
                 break  # nothing lands: the next pass tries again
         if not any(tally.values()):
             return None
         return (
             f"{tally['applied']} pictures ({tally['found']} with faces,"
-            f" {tally['none']} without, {tally['errors']} not read)"
+            f" {tally['none']} without, {tally['errors']} not read{first})"
         )
 
     @staticmethod
@@ -163,6 +174,7 @@ class FaceVectors(Step):
             return None
         start = time.monotonic()
         tally = {"applied": 0, "faces": 0, "errors": 0}
+        first = ""
         while time.monotonic() - start < RUN_SECONDS:
             items = p.fetch(self.name).get("items") or []
             if not items:
@@ -174,13 +186,14 @@ class FaceVectors(Step):
             tally["applied"] += int(rep.get("applied", 0))
             tally["faces"] += sum(len(r.get("faces") or []) for r in results)
             tally["errors"] += len(rep.get("errors") or [])
+            first = first or _first_error(rep)
             if tally["errors"] and not tally["applied"]:
                 break
         if not any(tally.values()):
             return None
         return (
             f"{tally['faces']} faces in {tally['applied']} pictures"
-            f" ({tally['errors']} not read)"
+            f" ({tally['errors']} not read{first})"
         )
 
     @staticmethod
