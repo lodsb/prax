@@ -80,7 +80,7 @@ setInterval(pollChanges, 10000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pollChanges(); });
 pollChanges();
 
-const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote, inbox: viewInbox, jobs: viewJobs, admin: viewAdmin };
+const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, people: viewPeople, pages: viewPages, promote: viewPromote, inbox: viewInbox, jobs: viewJobs, admin: viewAdmin };
 
 // The HTML the view last drew: a refresh that draws the same is no change.
 let drawn = "";
@@ -94,12 +94,13 @@ async function drawRoute(r) {
   }
   if (r.name === "doc") return await viewDoc(r.arg, r.params);
   if (r.name === "graph") return await viewGraph(r.arg, r.params);
+  if (r.name === "person" && r.arg) return await viewPerson(r.arg);
   return await (views[r.name] || viewSearch)(r.params);
 }
 
 async function render(opts) {
   const r = route();
-  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
+  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === (r.name === "person" ? "people" : r.name)));
   // the ask view widens the page, the document and graph views take all of
   // it; others get the default. The graph keeps its width while the next
   // graph is fetched, so the one on screen does not jump.

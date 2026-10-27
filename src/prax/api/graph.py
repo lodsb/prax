@@ -747,3 +747,22 @@ def graph_event_join(candidate_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/people")
+def people(request: Request, q: str = "", limit: int = 50) -> list[dict[str, Any]]:
+    """Persons, the most photographed and connected first; ``q`` narrows
+    them by name (``store.people``)."""
+    return store.people(_con(request), q=q, limit=limit)
+
+
+@router.get("/people/{entity_id}")
+def person(entity_id: int, request: Request) -> dict[str, Any]:
+    """A person's page: facts, documents, and what the pictures that depict
+    them say (``store.person_page``)."""
+    try:
+        return store.person_page(_con(request), entity_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc

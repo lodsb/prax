@@ -6607,6 +6607,52 @@ a decided group ends within a day before it (undo that first). Routes:
 
 Tests: `tests/test_events.py` (5). Suite: 1,591 passed, 4 skipped.
 
+## 2026-10-27: the person page, and the Review page by what it reviews
+
+The user, after the events: "update the docs first, then start step 1",
+and "we would also restructure the review page a bit to make clear
+where/what is being reviewed". The docs (`docs/biography.md` §7, plan
+item AT) now say there is no face named in XMP in this library, so the
+first names are a person's, and that one person page serves the
+genealogy and the faces. That page is AT's step 0.
+
+**The person page** (`store.person_page`, graph part `people`). A
+person entity's live edges, read directly at its alias group, not
+through `traverse`: the first hop of a walk also carries the edges
+between two neighbours (a page that `annotates` a paper the person
+wrote), and the busiest person had 6,977 rows that way against 2,805
+facts of their own. The dated facts come in world order. The rest are
+grouped by relation and side ("authored by X", "X affiliated with"),
+twelve shown per relation with the count. The documents that say
+something follow, the 30 that say the most. From the pictures that
+`depict` the person come their events (through `recorded_at`), their
+towns (`taken_in`) and who else they depict. Core does not hold
+`depicts` yet (AT step 4 adds it), so that half is empty on this store.
+
+The wall: a fact, a label or a picture from a document the viewer may
+not see is left out, and a rule-derived fact standing on one too
+(`hidden_by_premise`). A person no visible fact speaks of answers 404.
+A merged alias's page is the survivor's. An entity that is not a person
+or a type under one (`author`) answers 400.
+
+**The people list** (`store.people`, `GET /people`): the persons, the
+most photographed first and then the most connected, or those a name
+matches. A person merged into a thing of another type (a person alias
+folded into a venue was found on the live store) is that thing and not
+listed. Measured read-only on the live store: the list 0.27 s, a name
+0.16 s, the page of the busiest person (2,805 facts, 2,632 documents)
+0.04 s and 22 KB, a typical one 2 ms and 10 KB.
+
+The UI: a People view in the top bar, `#person/N`, and "their page" in
+the graph's panel for a person. **The Review page's tabs** are grouped
+under what they review: the graph (facts that did not fit, same thing?,
+one name several things, merges to check), documents (genre) and photos
+(events, and the faces tab when it comes). A line under the tabs names
+the group. At 1,300 px the top bar now wraps its last link.
+
+Tests: `tests/test_people.py` (3), two node tests in
+`tests/ui/lib.test.js`.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

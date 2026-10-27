@@ -25,6 +25,7 @@ ORDER = (
     "paths",
     "geo",
     "events",
+    "people",
 )
 
 from .communities import (  # noqa: F401
@@ -200,6 +201,13 @@ from .paths import (  # noqa: F401
     PATH_REFRESH,
     connect_entities,
     path_index,
+)
+from .people import (  # noqa: F401
+    DEPICTS,
+    PERSON_TYPE,
+    people,
+    person_page,
+    person_types,
 )
 from .rules import (  # noqa: F401
     CONFLICT_PAIRS,

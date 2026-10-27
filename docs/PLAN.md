@@ -1107,14 +1107,18 @@ not done.
       and the model tags what is clearly theirs. No picture of the
       owner's carries a face named in XMP (2026-10-27), so nothing seeds
       the groups: the first names are a person's.
-      - [ ] **Step 0, the person page** (`docs/biography.md` §7), shared
+      - [x] (2026-10-27) **Step 0, the person page** (`docs/biography.md` §7), shared
             with AR's genealogy: a person entity's facts in date order,
             the documents that say something about them, and, once faces
             are named, the photos that depict them, the events those
             were recorded at, their places, and who is photographed with
             them. With it, the Review page's tabs grouped by what is
             reviewed (the graph, documents, photos), so a faces tab has
-            a place to go.
+            a place to go. Built: `store.person_page` and `store.people`
+            (graph part `people`), `GET /people`, `GET /people/{id}`, the
+            People view and `#person/N`, "their page" from the graph's
+            panel. The photo half reads `depicts`, which core gets with
+            step 4.
       - [ ] **Step 1, detection.** A worker step `faces` reads each
             picture through the door (`/doc/N/original`, so a picture on
             an unmounted share waits). A detector finds each face's box

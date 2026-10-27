@@ -25,6 +25,11 @@ function typeColor(t) {
   for (let i = 0; t && i < 8; i++, t = TYPE_PARENTS[t]) if (TYPE_COLORS[t]) return TYPE_COLORS[t];
   return "#888";
 }
+// a person or a type under it (an author) has a page of their own
+function isPersonType(t) {
+  for (let i = 0; t && i < 8; i++, t = TYPE_PARENTS[t]) if (t === "person") return true;
+  return false;
+}
 const regionColor = (id) => `hsl(${regionHue(id)} 40% 44%)`;
 
 // Where each thing was last drawn, by key, for the life of the page: a
@@ -795,6 +800,7 @@ function graphPanel(node, edges, graph) {
   if (node.expanded) acts.push(`<a href="#" id="graph-fold">fold</a>`);
   if (edges.some((e) => e.source_doc)) acts.push(node.docsShown ? `<a href="#" id="graph-docs-off">hide its documents</a>` : `<a href="#" id="graph-docs">show its documents</a>`);
   acts.push(graph && graph.connectFrom === node.key ? `<span>now click the other end</span>` : `<a href="#" id="graph-path">how is it connected to…</a>`);
+  if (isPersonType(node.type)) acts.unshift(`<a href="#people?${new URLSearchParams({ name: node.name })}">their page</a>`);
   const docs = node.docs !== undefined ? ` · in ${node.docs} documents` : "";
   return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)}${docs} · ${edges.length} edges drawn</div>
     <div class="graph-acts">${acts.join(" · ")}</div><ul>${rows.join("")}</ul>`;

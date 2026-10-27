@@ -627,3 +627,17 @@ test("moduleOptions draws the modules as a tree, with a module alone under it", 
   // without counts the tree and its names stay
   assert.match(lib.moduleOptions(["craft", "kitchen"], { kitchen: { requires: ["craft"] } }, ""), /craft \+ kitchen<\/option>/);
 });
+
+test("burstLabel names a burst's day and hours, the second day past midnight", () => {
+  assert.equal(lib.burstLabel({ first: "2018-06-10T09:00:00", last: "2018-06-10T18:30:00" }), "2018-06-10 09:00 – 18:30");
+  assert.equal(lib.burstLabel({ first: "2018-06-10T22:00:00", last: "2018-06-11T01:30:00" }), "2018-06-10 22:00 – 06-11 01:30");
+});
+
+test("a person's page reads relations from their side and links people to their pages", () => {
+  assert.equal(lib.personRelation("affiliated_with", "out", "Ada"), "Ada affiliated with");
+  assert.equal(lib.personRelation("authored_by", "in", "Ada"), "authored by Ada");
+  assert.match(lib.personOther({ other: "Bram", other_type: "person", other_id: 7, person: true }), /href="#person\/7"/);
+  assert.match(lib.personOther({ other: "Harbour", other_type: "organization", other_id: 9, person: false }), /#graph\?entity=Harbour&amp;type=organization|#graph\?entity=Harbour&type=organization/);
+  const html = lib.personHtml({ name: "Ada", type: "person", labels: [], facts: 0, documents_total: 0, photos: 0, timeline: [], relations: [], documents: [], sample: [], events: [], places: [], with: [] });
+  assert.match(html, /No photo depicts them yet/);
+});

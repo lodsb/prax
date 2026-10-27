@@ -24,12 +24,23 @@ const DECIDE_LISTS = {
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
 
+// The tabs by what is reviewed in them: the graph's facts and things,
+// what a document is, the photos. "" is the review queue (view-review.js).
+const DECIDE_GROUPS = [
+  { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges"] },
+  { title: "documents", what: "what each document is and is about", keys: ["genre"] },
+  { title: "photos", what: "pictures grouped into events, and later the people in them", keys: ["events"] },
+];
+
 function decideTabs(current) {
-  const tab = (key, label) => key === current
-    ? `<b>${esc(label)}</b>`
-    : `<a href="#review${key ? `?list=${key}` : ""}">${esc(label)}</a>`;
-  return `<nav class="decide-tabs">${[tab("", "facts that did not fit"),
-    ...Object.entries(DECIDE_LISTS).filter(([, l]) => !l.admin).map(([k, l]) => tab(k, l.title))].join(" · ")}</nav>`;
+  const title = (key) => key ? DECIDE_LISTS[key].title : "facts that did not fit";
+  const tab = (key) => key === current
+    ? `<b>${esc(title(key))}</b>`
+    : `<a href="#review${key ? `?list=${key}` : ""}">${esc(title(key))}</a>`;
+  const here = DECIDE_GROUPS.find((g) => g.keys.includes(current));
+  const groups = DECIDE_GROUPS.map((g) =>
+    `<span class="decide-group${g === here ? " here" : ""}"><span class="decide-group-name">${esc(g.title)}</span> ${g.keys.map(tab).join(" · ")}</span>`);
+  return `<nav class="decide-tabs">${groups.join("")}</nav>${here ? `<p class="decide-what">Reviewing <b>${esc(here.title)}</b>: ${esc(here.what)}.</p>` : ""}`;
 }
 
 async function viewDecide(p) {

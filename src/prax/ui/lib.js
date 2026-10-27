@@ -436,6 +436,49 @@ function timelineRows(t) {
       <div class="event-thumbs">${(b.sample || []).map((d) => `<a href="#doc/${d}"><img loading="lazy" src="/doc/${d}/thumb" alt=""></a>`).join("")}</div></div>`).join("")
     || `<p class="muted">no dated photos in it</p>`;
 }
+// The people list (view-people.js): a row a person, linked to their page.
+function peopleTable(rows) {
+  return `<table class="people"><thead><tr><th>name</th><th>type</th><th>facts</th><th>photos</th></tr></thead><tbody>${rows.map((r) =>
+    `<tr><td><a href="#person/${r.id}">${esc(r.name)}</a></td><td class="muted">${esc(r.type)}</td><td>${r.facts.toLocaleString()}</td><td>${r.photos ? r.photos.toLocaleString() : ""}</td></tr>`).join("")}</tbody></table>`;
+}
+// The other end of a person's fact: another person's page, else the graph.
+function personOther(f) {
+  const href = f.person ? `#person/${f.other_id}` : `#graph?${new URLSearchParams({ entity: f.other, type: f.other_type })}`;
+  return `<a href="${href}">${esc(f.other)}</a> <span class="muted">${esc(f.other_type)}</span>`;
+}
+// A relation read from the person's side: "Ada affiliated with …" for
+// what they are, "authored by Ada" for what points at them.
+function personRelation(rel, dir, name) {
+  const words = esc(String(rel).replace(/_/g, " "));
+  return dir === "out" ? `${esc(name)} ${words}` : `${words} ${esc(name)}`;
+}
+// One person's page (store.person_page): who they are, the pictures and
+// what they say, the dated facts, the rest by relation, the documents.
+function personHtml(got) {
+  const name = got.name;
+  const doc = (f) => f.doc ? ` <a class="muted" href="#doc/${f.doc}">doc ${f.doc}</a>` : "";
+  const known = (got.labels || []).map((l) => esc(l.label)).join(", ");
+  const head = `<h1>${esc(name)}</h1><p class="muted">${esc(got.type)} · ${got.facts.toLocaleString()} facts · in ${got.documents_total.toLocaleString()} documents${got.photos ? ` · in ${got.photos.toLocaleString()} photos` : ""}
+    · <a href="#graph?${new URLSearchParams({ entity: name, type: got.type })}">in the graph</a></p>${known ? `<p class="muted">Also known as ${known}</p>` : ""}`;
+  const counted = (items, link) => items.map((x) => `<li>${link(x)} <span class="muted">· ${x.photos} photo${x.photos === 1 ? "" : "s"}</span></li>`).join("");
+  const photos = got.photos
+    ? `<section><h2>In photos</h2><div class="event-thumbs">${got.sample.map((d) => `<a href="#doc/${d}"><img loading="lazy" src="/doc/${d}/thumb" alt=""></a>`).join("")}</div>
+      ${got.events.length ? `<h3>At</h3><ul>${counted(got.events, (e) => `<a href="#graph?${new URLSearchParams({ entity: e.name, type: "event" })}">${esc(e.name)}</a>${e.first ? ` <span class="muted">${esc(eventDays(e.first, e.last))}</span>` : ""}`)}</ul>` : ""}
+      ${got.places.length ? `<h3>Where</h3><ul>${counted(got.places, (x) => esc(x.name))}</ul>` : ""}
+      ${got.with.length ? `<h3>With</h3><ul>${counted(got.with, (x) => `<a href="#person/${x.id}">${esc(x.name)}</a>`)}</ul>` : ""}</section>`
+    : `<p class="muted">No photo depicts them yet: the faces step (plan item AT) names the people in pictures.</p>`;
+  const dated = got.timeline.length
+    ? `<section><h2>In time</h2><ul class="person-time">${got.timeline.map((f) => `<li><span class="when">${esc(f.world_from || "")}${f.world_to ? ` – ${esc(f.world_to)}` : ""}</span>
+        ${personRelation(f.rel, f.dir, name)} ${personOther(f)}${doc(f)}</li>`).join("")}</ul></section>`
+    : "";
+  const rels = got.relations.map((r) => `<h3>${personRelation(r.rel, r.dir, name)} <span class="muted">${r.count.toLocaleString()}</span></h3>
+      <ul>${r.facts.map((f) => `<li>${personOther(f)}${doc(f)}</li>`).join("")}${r.count > r.facts.length ? `<li class="muted">and ${(r.count - r.facts.length).toLocaleString()} more</li>` : ""}</ul>`).join("");
+  const docs = got.documents.length
+    ? `<section><h2>Documents</h2><ul>${got.documents.map((d) => `<li><a href="#doc/${d.id}">${esc(d.title || `doc ${d.id}`)}</a>${d.published ? ` <span class="muted">${esc(d.published)}</span>` : ""}
+        <span class="muted">· ${d.facts} fact${d.facts === 1 ? "" : "s"}</span></li>`).join("")}${got.documents_total > got.documents.length ? `<li class="muted">and ${(got.documents_total - got.documents.length).toLocaleString()} more</li>` : ""}</ul></section>`
+    : "";
+  return `<article class="person">${head}${photos}${dated}${rels ? `<section><h2>Facts</h2>${rels}</section>` : ""}${docs}</article>`;
+}
 // A document the personal-document rules suspect: what it is, where it
 // came from, and the cues (the owner's name is only ever "name").
 function suspectRow(it) {
@@ -948,5 +991,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }
