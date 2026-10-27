@@ -151,7 +151,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
 def _named(client: TestClient) -> dict[str, str]:
     admin = {"Authorization": f"Bearer {ADMIN}"}
-    secret = client.post("/tokens", json={"name": "mcp"}, headers=admin).json()
+    secret = client.post(
+        "/tokens", json={"name": "mcp", "role": "contributor"}, headers=admin
+    ).json()
     return {"Authorization": f"Bearer {secret['secret']}"}
 
 

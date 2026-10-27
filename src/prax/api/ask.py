@@ -17,7 +17,7 @@ from fastapi.responses import (
 )
 from pydantic import BaseModel
 
-from prax import models, store, work
+from prax import config, models, store, work
 from prax.answering import ask as ask_mod
 from prax.ml import budget
 
@@ -78,6 +78,14 @@ def ask(req: AskReq, request: Request) -> Any:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     con = _con(request)
+    if answerer is not None and _reader_may_not_pay(req.backend):
+        # a reader's token never spends the host's money: named, the paid
+        # model is refused; by default, the caller's own model answers
+        if req.backend:
+            raise HTTPException(
+                403, "a reader's token asks no paid model: the local one or none"
+            )
+        answerer = None
     if answerer is not None:
         # a paid backend answers only while the host's budget has room;
         # without one the bundle still comes back and the caller's own
@@ -114,6 +122,19 @@ def ask(req: AskReq, request: Request) -> Any:
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
     return _ask_stream(req.question, kw)
+
+
+def _reader_may_not_pay(backend: str | None) -> bool:
+    """Whether this request is a reader's token's and the model it would
+    answer with costs money (migration 58, ``auth.READER_ROUTES``)."""
+    viewer = store.VIEWER.get()
+    if viewer is None or viewer.role != "reader":
+        return False
+    try:
+        spec = models.spec(backend) if backend else models.resolve("ask")
+    except (config.ConfigError, ValueError):  # unreadable: assume it pays
+        return True
+    return spec is None or bool(spec.paid)
 
 
 def _asked_for_server(exc: Exception) -> str:

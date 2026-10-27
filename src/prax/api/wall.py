@@ -25,6 +25,11 @@ class TokenReq(BaseModel):
     name: str
     domains: list[str] | None = None  # the modules it sees; none: every one
     personal: bool = False  # sees personal documents too
+    role: str = "reader"  # reader | contributor (store.TOKEN_ROLES)
+
+
+class TokenRoleReq(BaseModel):
+    role: str
 
 
 @router.get("/tokens")
@@ -35,6 +40,7 @@ def tokens(request: Request) -> dict[str, Any]:
     return {
         "tokens": store.list_tokens(_con(request)),
         "modules": [*sorted(ontology.current().modules), store.UNASSIGNED],
+        "roles": list(store.TOKEN_ROLES),
     }
 
 
@@ -48,11 +54,27 @@ def token_add(req: TokenReq, request: Request) -> dict[str, Any]:
         raise HTTPException(400, f"unknown modules: {', '.join(unknown)}")
     try:
         secret = store.add_token(
-            _con(request), req.name, domains=req.domains, personal=req.personal
+            _con(request),
+            req.name,
+            domains=req.domains,
+            personal=req.personal,
+            role=req.role,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"name": req.name, "secret": secret}
+
+
+@router.put("/tokens/{name}")
+def token_role(name: str, req: TokenRoleReq, request: Request) -> dict[str, Any]:
+    """Change what a named token may do; its secret stays the same."""
+    try:
+        found = store.set_token_role(_con(request), name, req.role)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not found:
+        raise HTTPException(404, "no such token")
+    return {"name": name, "role": req.role}
 
 
 @router.delete("/tokens/{name}")

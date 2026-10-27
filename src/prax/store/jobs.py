@@ -445,12 +445,15 @@ def running_jobs(con: sqlite3.Connection) -> int:
 
 # ---------------------------------------------------------------- tokens
 # Named API tokens beside the administrator's PRAX_TOKEN (stage U, the
-# wall). A token is a name, the modules it sees and whether it sees
-# personal documents; only the sha256 of its secret is kept. The door is
+# wall). A token is a name, the modules it sees, whether it sees personal
+# documents and its role (``TOKEN_ROLES``, migration 58); only the sha256
+# of its secret is kept. The door is
 # the only writer, so the lookup the middleware makes on every request is
 # served from memory and forgotten on every change.
 
 TOKEN_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,39}")
+# a reader reads; a contributor also adds to the library and changes it
+TOKEN_ROLES = ("reader", "contributor")
 _tokens: dict[str, dict[str, Any]] | None = None
 
 
@@ -465,26 +468,47 @@ def add_token(
     *,
     domains: list[str] | None = None,
     personal: bool = False,
+    role: str = "reader",
 ) -> str:
     """A new named token; returns its secret, which is kept nowhere."""
     global _tokens
     if not TOKEN_NAME.fullmatch(name):
         raise ValueError("a token name is lowercase letters, digits, - and _")
+    _check_role(role)
     if con.execute("SELECT 1 FROM tokens WHERE name = ?", (name,)).fetchone():
         raise ValueError(f"a token named {name!r} exists; remove it first")
     secret = "prax_" + secrets.token_urlsafe(32)
     con.execute(
-        "INSERT INTO tokens (name, hash, domains, personal) VALUES (?, ?, ?, ?)",
+        "INSERT INTO tokens (name, hash, domains, personal, role)"
+        " VALUES (?, ?, ?, ?, ?)",
         (
             name,
             _token_hash(secret),
             json.dumps(sorted(set(domains))) if domains else None,
             int(bool(personal)),
+            role,
         ),
     )
     con.commit()
     _tokens = None
     return secret
+
+
+def _check_role(role: str) -> None:
+    if role not in TOKEN_ROLES:
+        raise ValueError(f"a token's role is {' or '.join(TOKEN_ROLES)}")
+
+
+@_serialized
+def set_token_role(con: sqlite3.Connection, name: str, role: str) -> bool:
+    """Change what a named token may do; False when there is no such token.
+    Its secret stays the same."""
+    global _tokens
+    _check_role(role)
+    cur = con.execute("UPDATE tokens SET role = ? WHERE name = ?", (role, name))
+    con.commit()
+    _tokens = None
+    return cur.rowcount > 0
 
 
 @_reading
@@ -495,11 +519,12 @@ def list_tokens(con: sqlite3.Connection) -> list[dict[str, Any]]:
             "name": r["name"],
             "domains": json.loads(r["domains"]) if r["domains"] else None,
             "personal": bool(r["personal"]),
+            "role": r["role"],
             "created_at": r["created_at"],
             "last_used": r["last_used"],
         }
         for r in con.execute(
-            "SELECT name, domains, personal, created_at, last_used FROM tokens"
+            "SELECT name, domains, personal, role, created_at, last_used FROM tokens"
             " ORDER BY name"
         )
     ]
@@ -544,7 +569,9 @@ def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
     if _tokens is None:
         _tokens = {
             str(r["hash"]): dict(r)
-            for r in con.execute("SELECT name, hash, domains, personal FROM tokens")
+            for r in con.execute(
+                "SELECT name, hash, domains, personal, role FROM tokens"
+            )
         }
     row = _tokens.get(_token_hash(secret))
     if row is None:
@@ -556,7 +583,7 @@ def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
         for d in json.loads(row["domains"]):
             seen |= set(onto.within(d)) if d != UNASSIGNED else {UNASSIGNED}
         domains = frozenset(seen)
-    return Viewer(str(row["name"]), domains, bool(row["personal"]))
+    return Viewer(str(row["name"]), domains, bool(row["personal"]), str(row["role"]))
 
 
 # ------------------------------------------------------ capture requests

@@ -86,7 +86,7 @@ async function viewChecks(p) {
 
 async function viewTokens() {
   view.innerHTML = `${adminTabs("tokens")}
-    <p class="muted">A named token reads the library through the search, the documents and the graph the MCP tools use, and nothing else: only the modules it is given, and no personal document unless it may. PRAX_TOKEN is the administrator's and is not listed.</p>
+    <p class="muted">A named token reads the library through the search, the documents, the pages and the graph, here or through the MCP tools: only the modules it is given, and no personal document unless it may. A reader changes nothing and asks with no paid model; a contributor also adds to the library and changes it. Neither reaches the people, the faces, the review or this page. PRAX_TOKEN is the administrator's and is not listed.</p>
     <div id="token-secret"></div><div id="token-list">${listPlaceholder("token-list")}</div>`;
   const box = document.getElementById("token-list");
   let res;
@@ -98,6 +98,12 @@ async function viewTokens() {
     try { await post(`/tokens/${encodeURIComponent(b.dataset.revoke)}`, {}, "DELETE"); viewTokens(); }
     catch (err) { b.disabled = false; b.insertAdjacentHTML("afterend", ` <span class="error">${esc(err.message)}</span>`); }
   }));
+  box.querySelectorAll("select[data-role]").forEach((s) => s.addEventListener("change", async () => {
+    s.disabled = true;
+    try { await post(`/tokens/${encodeURIComponent(s.dataset.role)}`, { role: s.value }, "PUT"); setStatus(`${s.dataset.role} is a ${s.value} now`); }
+    catch (err) { s.insertAdjacentHTML("afterend", ` <span class="error">${esc(err.message)}</span>`); }
+    s.disabled = false;
+  }));
   const form = document.getElementById("token-form-add");
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -105,7 +111,7 @@ async function viewTokens() {
     const name = form.name.value.trim();
     const domains = [...form.querySelectorAll("input[name=domain]:checked")].map((c) => c.value);
     try {
-      const r = await post("/tokens", { name, domains: domains.length ? domains : null, personal: form.personal.checked });
+      const r = await post("/tokens", { name, domains: domains.length ? domains : null, personal: form.personal.checked, role: form.role.value });
       await viewTokens();
       document.getElementById("token-secret").innerHTML = tokenSecret(r.name, r.secret);
     } catch (err) { out.textContent = err.message; }

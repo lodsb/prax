@@ -79,9 +79,11 @@ def _library(con: sqlite3.Connection, client: TestClient) -> dict[str, Any]:
             f"/doc/{doc}/sensitivity", json={"state": "personal"}, headers=admin
         )
         assert got.status_code == 200
-    secret = client.post("/tokens", json={"name": "mcp"}, headers=admin).json()[
-        "secret"
-    ]
+    # a contributor, so the walk reaches the writes too (a reader's are
+    # test_a_reader_reads_and_changes_nothing)
+    secret = client.post(
+        "/tokens", json={"name": "mcp", "role": "contributor"}, headers=admin
+    ).json()["secret"]
     chunk = int(
         con.execute(
             "SELECT id FROM chunks WHERE doc_id = ? LIMIT 1", (bank,)
@@ -419,3 +421,103 @@ def test_a_named_token_asks_the_status_only_of_what_it_sees(
     assert rows[lib["bank"]] == {"doc_id": lib["bank"], "state": "unknown"}
     assert rows[lib["paper"]]["state"] == "indexed"
     assert "alive" in got.json()["worker"]
+
+
+def test_a_reader_reads_and_changes_nothing(client: TestClient) -> None:
+    """A reader's token (the default, migration 58) may call every reader's
+    route and none of the contributor's: each write is refused before its
+    handler, and the library is as it was."""
+    con = client.app.state.con
+    lib = _library(con, client)
+    admin = _as(ADMIN)
+    made = client.post("/tokens", json={"name": "friend"}, headers=admin).json()
+    reader = _as(made["secret"])
+    listed = client.get("/tokens", headers=admin).json()
+    roles = {t["name"]: t["role"] for t in listed["tokens"]}
+    assert roles == {"mcp": "contributor", "friend": "reader"}
+    assert listed["roles"] == ["reader", "contributor"]
+    assert client.get("/search", params={"q": "wavelet"}, headers=reader).is_success
+    assert client.get(f"/get/{lib['paper']}", headers=reader).is_success
+    reads = {(m, p.pattern) for m, p in auth.READER_ROUTES}
+    writes = [
+        (m, p)
+        for m, p in WALKED
+        if not any(m == mm and pat.fullmatch(p) for mm, pat in auth.READER_ROUTES)
+    ]
+    assert len(writes) == len(auth.CONTRIBUTOR_ROUTES) - len(reads)
+    for method, path in writes:
+        path = path.replace("/1", f"/{lib['paper']}")
+        got = client.request(method, path, json={}, headers=reader)
+        assert got.status_code == 403, (method, path)
+        assert "reader" in got.json()["detail"]
+    assert client.get("/page/x", headers=reader).status_code == 404  # as for anyone
+    # who it is, on the web page
+    signed = client.post("/session", json={"token": made["secret"]}).json()
+    assert signed["role"] == "reader" and signed["admin"] is False
+    # made a contributor, the same secret writes
+    assert client.put(
+        "/tokens/friend", json={"role": "contributor"}, headers=admin
+    ).json() == {"name": "friend", "role": "contributor"}
+    renamed = client.put(
+        f"/doc/{lib['paper']}/title", json={"title": "Paper"}, headers=reader
+    )
+    assert renamed.status_code != 403
+    assert (
+        client.put("/tokens/friend", json={"role": "boss"}, headers=admin).status_code
+        == 400
+    )
+    assert (
+        client.put("/tokens/nobody", json={"role": "reader"}, headers=admin).status_code
+        == 404
+    )
+    # and the route that changes a role is the administrator's
+    assert (
+        client.put(
+            "/tokens/friend", json={"role": "reader"}, headers=reader
+        ).status_code
+        == 403
+    )
+
+
+def test_a_token_made_before_roles_is_a_contributor(con: sqlite3.Connection) -> None:
+    con.execute("INSERT INTO tokens (name, hash) VALUES ('old', 'abc')")
+    con.commit()
+    (row,) = [t for t in store.list_tokens(con) if t["name"] == "old"]
+    assert row["role"] == "contributor"
+    with pytest.raises(ValueError):
+        store.add_token(con, "new", role="boss")
+    assert store.set_token_role(con, "old", "reader") is True
+    assert store.set_token_role(con, "gone", "reader") is False
+
+
+def test_a_readers_ask_spends_nothing(client: TestClient) -> None:
+    """On a host whose ask is a priced API model, a reader's question comes
+    back with its passages and no answer, and asking for the paid model
+    by name is refused; nothing calls the API."""
+    from prax import config, models
+
+    (config.data_dir() / config.CONFIG_NAME).write_text(
+        "models:\n  api:\n    kind: openai\n    base_url: https://api.example.com/v1\n"
+        "    model: gpt-x\n    price: [2, 8]\nsteps:\n  ask: {model: api}\n",
+        encoding="utf-8",
+    )
+    models.reset()
+    try:
+        con = client.app.state.con
+        _library(con, client)
+        made = client.post("/tokens", json={"name": "friend"}, headers=_as(ADMIN))
+        reader = _as(made.json()["secret"])
+        out = client.post(
+            "/ask", json={"question": "wavelet", "steps": 0}, headers=reader
+        )
+        assert out.status_code == 200
+        assert out.json()["answer"] is None and out.json()["passages"]
+        named = client.post(
+            "/ask",
+            json={"question": "wavelet", "backend": "api", "steps": 0},
+            headers=reader,
+        )
+        assert named.status_code == 403 and "paid" in named.json()["detail"]
+    finally:
+        (config.data_dir() / config.CONFIG_NAME).unlink()
+        models.reset()

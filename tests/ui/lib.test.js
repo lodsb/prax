@@ -339,10 +339,11 @@ test("cleanupRules, cleanupPreview, cleanupRuns: a set shown before it goes, and
 
 test("tokensTable, tokenSecret, privateRules: the admin page", () => {
   const table = lib.tokensTable({ tokens: [
-    { name: "laptop", domains: ["research", "studio"], personal: false, created_at: "2026-09-28T10:00:00Z", last_used: "2026-09-28T11:30:00Z" },
-    { name: "assistant", domains: null, personal: true, created_at: "2026-09-28T10:00:00Z", last_used: null },
-  ], modules: ["core", "research", "studio", "unassigned"] });
-  assert.match(table, /<b>laptop<\/b><\/td>\s*<td>research, studio<\/td>/);
+    { name: "laptop", domains: ["research", "studio"], personal: false, role: "contributor", created_at: "2026-09-28T10:00:00Z", last_used: "2026-09-28T11:30:00Z" },
+    { name: "assistant", domains: null, personal: true, role: "reader", created_at: "2026-09-28T10:00:00Z", last_used: null },
+  ], modules: ["core", "research", "studio", "unassigned"], roles: ["reader", "contributor"] });
+  assert.match(table, /<b>laptop<\/b><\/td>\s*<td><select data-role="laptop"><option>reader<\/option><option selected>contributor<\/option><\/select><\/td>\s*<td>research, studio<\/td>/);
+  assert.match(table, /<select name="role"><option>reader<\/option>/);
   assert.match(table, /every module/);
   assert.match(table, /sees personal/);
   assert.match(table, /2026-09-28 11:30/);

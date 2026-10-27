@@ -2527,8 +2527,10 @@ and invoices. `PRAX_TOKEN` is the administrator and sees all of it. A
 **named token** sees less. Give one to anything that should not see your
 paperwork, such as an MCP client on another machine:
 
-    prax token add laptop --domain research --domain studio   # the secret is printed once
-    prax token add assistant --personal                       # every module, personal documents too
+    prax token add friend                                     # a reader; the secret is printed once
+    prax token add laptop --role contributor --domain research --domain studio
+    prax token add assistant --role contributor --personal    # every module, personal documents too
+    prax token role friend --role contributor                 # the same secret, more rights
     prax token list
     prax token remove laptop
 
@@ -2542,9 +2544,19 @@ who sent it, the NAS path), what it is, its domains and tags, and who may
 see it, with personal and not personal beside that.
 
 A named token sees only the modules it is given, and no document marked
-personal or suspected personal unless it was made with `--personal`. It
-may call only the routes the MCP tools use and the reads of the web
-interface. Only a hash of its secret is kept.
+personal or suspected personal unless it was made with `--personal`.
+What it may do is its role:
+
+| role | may | may not |
+|---|---|---|
+| `reader` (the default) | search, read documents, figures and originals, read pages, walk the graph, ask | ask with a paid model (the passages come back and no answer, or a 403 when the paid model is named), change anything |
+| `contributor` | what a reader may, and capture URLs and files, add text, write and append to pages, link two things, rename a document, set its modules, promote it, ask for a reading | the people, faces, review, clean-up, imports and Admin, like a reader |
+
+An MCP client that writes pages needs a contributor. A token made before
+roles existed (2026-10-27) is a contributor, so nothing it did stops
+working. The Admin page's "tokens" tab shows each token's role and
+changes it in place; the secret stays the same. Only a hash of the
+secret is kept.
 
 A named token also signs in to the web interface, which is how you give
 someone else a look at your library from their phone or laptop: make
@@ -2552,9 +2564,9 @@ one on the Admin page's "tokens" tab, without `--personal`, and give
 them the secret once. Signed in with it, the page shows Search, Ask,
 Browse, Graph and Pages, and a document's page, all without your personal
 documents. People and faces, the regions of the graph, Review, Promote,
-Inbox, Jobs and Admin are not shown and are refused. The token can still
-do what an MCP client does: capture a URL, write a page, link two
-things. Revoke it on the same tab when the visit is over.
+Inbox, Jobs and Admin are not shown and are refused. A reader's page has
+no edit links either, and its questions cost you nothing. Revoke the
+token on the same tab when the visit is over.
 
 **What is personal** is decided in two steps. Rules *suspect* a document,
 and a person decides on the Admin page's "personal?" tab. The rules run

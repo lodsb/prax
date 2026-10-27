@@ -895,13 +895,17 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Named tokens beside the administrator's PRAX_TOKEN. A named token"
             " sees only the modules it is given and, unless --personal, no"
-            " document marked or suspected personal; it may call only the"
-            " routes the MCP tools use. The secret is printed once."
+            " document marked or suspected personal. A reader (the default)"
+            " reads, and asks with no paid model; a contributor also adds to"
+            " the library and changes it, as the MCP tools that write do. The"
+            " secret is printed once."
         ),
         epilog=(
             "examples:\n"
-            "  prax token add mcp                  # every module, nothing personal\n"
+            "  prax token add friend      # a reader: every module, nothing personal\n"
+            "  prax token add mcp --role contributor\n"
             "  prax token add kitchen-tablet --domain kitchen\n"
+            "  prax token role friend --role reader\n"
             "  prax token list\n"
             "  prax token remove mcp"
         ),
@@ -917,6 +921,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--personal", action="store_true", help="it sees personal documents too"
+    )
+    s.add_argument(
+        "--role",
+        choices=("reader", "contributor"),
+        default="reader",
+        help="what it may do (default: reader; with role: the role it gets now)",
     )
     s.set_defaults(func=tokens.token, needs_door=True)
 

@@ -445,6 +445,9 @@ class Viewer:
     # and ``unassigned`` for documents without a set; None: every module
     domains: frozenset[str] | None = None
     personal: bool = False  # sees documents marked or suspected personal
+    # what it may do (migration 58): a reader reads, a contributor also
+    # writes; which routes each may call is the door's (prax.wall.auth)
+    role: str = "reader"
 
 
 VIEWER: ContextVar[Viewer | None] = ContextVar("prax_viewer", default=None)

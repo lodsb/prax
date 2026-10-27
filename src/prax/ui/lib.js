@@ -679,14 +679,17 @@ function cleanupRuns(runs) {
 // one, the secret shown once, and the personal-document rules in force.
 function tokensTable(res) {
   const tokens = (res && res.tokens) || [];
+  const roles = (res && res.roles) || ["reader", "contributor"];
+  const roleSelect = (t) => `<select data-role="${esc(t.name)}">${roles.map((r) => `<option${r === t.role ? " selected" : ""}>${esc(r)}</option>`).join("")}</select>`;
   const rows = tokens.map((t) => `<tr><td><b>${esc(t.name)}</b></td>
+    <td>${roleSelect(t)}</td>
     <td>${t.domains ? t.domains.map(esc).join(", ") : '<span class="muted">every module</span>'}</td>
     <td>${t.personal ? "sees personal" : '<span class="muted">no personal</span>'}</td>
     <td class="muted">${esc(String(t.created_at || "").slice(0, 10))}</td>
     <td class="muted">${t.last_used ? esc(String(t.last_used).slice(0, 16).replace("T", " ")) : "never"}</td>
     <td><button type="button" class="secondary" data-revoke="${esc(t.name)}">revoke</button></td></tr>`).join("");
   const table = tokens.length
-    ? `<table class="entities"><thead><tr><th>name</th><th>modules</th><th>personal</th><th>made</th><th>last used</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    ? `<table class="entities"><thead><tr><th>name</th><th>role</th><th>modules</th><th>personal</th><th>made</th><th>last used</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     : `<p class="muted">No named tokens yet.</p>`;
   const modules = ((res && res.modules) || []).map((m) =>
     `<label><input type="checkbox" name="domain" value="${esc(m)}"> ${esc(m)}</label>`).join(" ");
@@ -696,6 +699,8 @@ function tokensTable(res) {
       <input id="token-name" name="name" placeholder="laptop" pattern="[a-z0-9][a-z0-9_-]{0,39}" required>
       <div class="muted">${modules} <span>(none ticked: every module)</span></div>
       <label><input type="checkbox" name="personal"> may see personal documents</label>
+      <label>role <select name="role">${roles.map((r) => `<option>${esc(r)}</option>`).join("")}</select></label>
+      <div class="muted">a reader reads, and asks with no paid model; a contributor also adds documents, writes pages and links, renames and asks for readings</div>
       <button>make it</button> <span class="error msg"></span></form>`;
 }
 function tokenSecret(name, secret) {

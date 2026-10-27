@@ -71,7 +71,9 @@ def test_a_named_token_plans_any_project_and_syncs_a_registered_one(
     to a scratch script and the old keys."""
     admin = _bearer(ADMIN)
     me = _bearer(
-        client.post("/tokens", json={"name": "laptop"}, headers=admin).json()["secret"]
+        client.post(
+            "/tokens", json={"name": "laptop", "role": "contributor"}, headers=admin
+        ).json()["secret"]
     )
     notes = "# Notes\n\nThe voice board talks I2C.\n"
     plan = client.post("/projects/sync", json=_body(notes), headers=me)

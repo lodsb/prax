@@ -628,12 +628,16 @@ reference `docs/ask.md`.
   edges (and a rule-derived edge any of whose premises is hidden,
   `store.hidden_by_premise`), a count or a cost counts only what is
   seen, and a write to one answers as for a missing document. A named
-  token may call only `auth.RESTRICTED_ROUTES`: the MCP tools' routes,
-  and the web page's reads for search, a document, pages, ask and graph
-  walks (a named token signs in there too, `POST /session`, and `GET
-  /session` tells the page which views to show); never the people,
-  faces, regions, review or admin routes. `tests/test_wall.py` walks every one of them and fails when one is
-  added without a case. A new read that takes a document id is guarded
+  token has a role (`tokens.role`, migration 58): a `reader` (the
+  default) may call only `auth.READER_ROUTES`, the reads of the MCP
+  tools and of the web page's search, document, pages, ask and graph
+  walks, and its ask answers with no paid model (`api.ask`); a
+  `contributor` may also call `auth.CONTRIBUTOR_ROUTES`, the captures,
+  page writes, links, titles, modules and readings. A named token signs
+  in to the web page too (`POST /session`; `GET /session` tells the page
+  its role and which views to show). Neither reaches the people, faces,
+  regions, review or admin routes. `tests/test_wall.py` walks every one
+  of them and fails when one is added without a case. A new read that takes a document id is guarded
   the same way, or it is a leak. What is personal (stage V) is suspected
   by rules and decided by a person: `prax.wall.private` (defaults) plus
   `private:` in prax.yaml (the owner's names and private paths, which

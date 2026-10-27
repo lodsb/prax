@@ -8733,3 +8733,45 @@ browser's settings. A guest's page draws none of it.
 
 Tests: one store-and-route test in `tests/test_face_matching.py`, one
 node test.
+
+## 2026-10-27: what a named token may do
+
+The user, after the friend's sign-in worked: "probably makes sense but
+I guess we'd also have to look at all the rights engineering". Then
+"go" to three roles.
+
+**The inventory.** The door has 174 routes; a named token could call
+41 patterns of them. 28 read: the MCP tools' reads and the web page's.
+13 change the library: ingest text, a file, a URL, URLs, a project
+sync; write, append to and replace a section of a page; link two
+things; rename a document, set its modules, promote it, ask for a
+reading. And one read spends: `POST /ask` answers with the host's model,
+which may be Claude on the owner's key. Every named token could do all
+of it, so a friend's token was an agent's.
+
+**The roles** (`tokens.role`, migration 58). A `reader` may call
+`auth.READER_ROUTES`; a `contributor` also `auth.CONTRIBUTOR_ROUTES`
+(`RESTRICTED_ROUTES` is now the contributor's list, which the wall test
+walks). The administrator is `PRAX_TOKEN` as before. A new token is a
+reader unless told; a token made before is a contributor, the column's
+default, so no client of an old token breaks. `store.set_token_role`
+and `PUT /tokens/{name}` change a role and keep the secret; `prax token
+role NAME --role R` and a select on the Admin page's "tokens" tab call
+it.
+
+**A reader's ask spends nothing.** `api.ask` asks `models.spec` (the
+named backend, else the ask step's model) whether it is paid. For a
+reader it is not used: by default the passages come back with no
+answer, as on a host over its budget; named, the request is a 403. A
+configuration that cannot be read counts as paid.
+
+**The page.** `GET /session` says the role. A guest's document page
+leaves out the edits whose routes are the administrator's (domains,
+properties, process, un-promote, ask again, retire), and a reader's the
+edit links altogether.
+
+Tests: `tests/test_wall.py` (three new: a reader refused every
+contributor's route and the same secret writing once a contributor; a
+token from before roles a contributor; a reader's ask on a priced host
+answering nothing and refusing the paid model by name), the tokens
+table's node test.

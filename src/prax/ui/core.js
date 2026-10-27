@@ -173,6 +173,8 @@ async function whoAmI() {
   } catch (_) { /* the door is away: the first view says so */ }
   const guest = !!who && who.admin === false;
   document.body.classList.toggle("guest", guest);
+  // a reader's token changes nothing: the page leaves out its edits
+  document.body.classList.toggle("reader", guest && who.role !== "contributor");
   document.querySelectorAll("nav a").forEach((a) => { a.hidden = guest && GUEST_HIDDEN.includes(a.dataset.view); });
   return who;
 }

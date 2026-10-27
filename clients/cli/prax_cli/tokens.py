@@ -1,9 +1,10 @@
 """`prax token`: the named API tokens beside the administrator's (stage U).
 
 A named token sees only the modules it is given and, unless told, no
-document marked or suspected personal; it may call only the routes the
-MCP tools use. The secret is printed once, when the token is made, and is
-kept nowhere: the door stores its hash."""
+document marked or suspected personal. A reader reads; a contributor also
+adds to the library and changes it (migration 58). The secret is printed
+once, when the token is made, and is kept nowhere: the door stores its
+hash."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from prax.client import Door
 
 from . import out
 
-ACTIONS = ("add", "list", "remove")
+ACTIONS = ("add", "list", "role", "remove")
 
 
 def token(door: Door, a: Any) -> int:
@@ -30,7 +31,7 @@ def token(door: Door, a: Any) -> int:
             sees = ", ".join(r["domains"]) if r["domains"] else "every module"
             personal = "personal too" if r["personal"] else "no personal documents"
             out.say(
-                f"{out.bold(r['name'])}   {sees} · {personal}"
+                f"{out.bold(r['name'])}   {r['role']} · {sees} · {personal}"
                 + out.dim(f" · made {r['created_at']}")
             )
         return 0
@@ -41,14 +42,25 @@ def token(door: Door, a: Any) -> int:
         door.delete_json(f"/tokens/{a.name}")
         out.say(f"removed {a.name}: its secret opens nothing any more")
         return 0
+    if a.action == "role":
+        door.put_json(f"/tokens/{a.name}", {"role": a.role})
+        out.say(f"{a.name} is a {a.role} now; its secret stays the same")
+        return 0
     got = door.post_json(
         "/tokens",
-        {"name": a.name, "domains": a.domain or None, "personal": a.personal},
+        {
+            "name": a.name,
+            "domains": a.domain or None,
+            "personal": a.personal,
+            "role": a.role,
+        },
     )
     if a.json:
         print(json.dumps(got, indent=1))
         return 0
-    out.say(f"token {out.bold(got['name'])} made. Its secret, shown this once:")
+    out.say(
+        f"token {out.bold(got['name'])} made, a {a.role}. Its secret, shown this once:"
+    )
     print(got["secret"])
     out.say(
         out.dim(
