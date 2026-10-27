@@ -271,6 +271,23 @@ def face_similar(face_id: int, request: Request, k: int = 12) -> list[dict[str, 
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/faces/groups")
+def face_groups(request: Request, offset: int = 0, limit: int = 30) -> dict[str, Any]:
+    """The face groups, the largest first, each with its firmest faces
+    (``store.face_groups``, made by the facegroups pass). Not a named
+    token's route."""
+    return store.face_groups(_con(request), offset=offset, limit=limit)
+
+
+@router.get("/faces/groups/{group_id}")
+def face_group(group_id: int, request: Request) -> dict[str, Any]:
+    """One face group with all its faces (``store.face_group``)."""
+    try:
+        return store.face_group(_con(request), group_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 def _photo_copy(request: Request, doc_id: int, which: str) -> FileResponse:
     path = store.photo_copy(_con(request), doc_id, which)
     if path is None:

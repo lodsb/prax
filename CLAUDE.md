@@ -72,7 +72,7 @@ revisit threshold, under "Decision thresholds" below.
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
    context, views, communities, traversal, rules, paths, geo, events, people), `retrieval` (knobs, compounds, query, legs,
-   vectors, fusion, similar) and `repair` (common, graph, documents,
+   vectors, fusion, similar, faces) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
    set on the package would not reach the part that reads it.
@@ -450,8 +450,13 @@ reference `docs/ask.md`.
   never deletes them. The `facevectors` step aligns each face as OpenCV's
   recogniser does and gives it SFace's 128 numbers (the face index,
   invariant 1) and a small crop filed in the archive; `similar_faces` is
-  the nearest-neighbour search over them. Faces are biometric: never to a
-  paid model or an API, and no named token's route.
+  the nearest-neighbour search over them. The `facegroups` pass of `prax
+  maintain` groups them by density (`prax.ml.clusters`, HDBSCAN over each
+  face's nearest faces in other pictures, a pure module) into candidates
+  that are probably one person (`face_groups`, migration 55), replaced on
+  every run, a group keeping the id of the old one it overlaps most; a
+  name is a fact about a face (step 4), never about a group. Faces are
+  biometric: never to a paid model or an API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means
   re-embedding into a new file. Another dimension means a new file and

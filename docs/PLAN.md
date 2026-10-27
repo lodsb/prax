@@ -1149,10 +1149,20 @@ not done.
             them, but their weights are licensed for non-commercial use
             only, so prax does not ship them. A host may name one in
             `prax.yaml` (`faces.model`).
-      - [ ] **Step 3, the groups.** The faces are clustered (HDBSCAN
+      - [x] (2026-10-27) **Step 3, the groups.** The faces are clustered (HDBSCAN
             over cosine distance) into groups that are probably one
             person. A group is a candidate, kept like
             `entity_candidates`. Nothing is named yet.
+            Built: `prax.ml.clusters` (HDBSCAN written out over each
+            face's nearest faces, so a board carries it at a hundred
+            thousand faces and the door needs no scikit-learn; checked
+            against scikit-learn's), the `facegroups` pass of `prax
+            maintain`, `face_groups` (migration 55), `GET /faces/groups`
+            and `/faces/groups/{id}`, the Review page's face groups tab.
+            Two faces of one picture are never neighbours, and a group
+            that still holds two says so. Whether small faces are read
+            again from the original waits for step 4's names, which are
+            what a measurement of it needs.
       - [ ] **Step 4, naming.** A tab of the Review page shows a group
             as a strip of faces and takes a person: a new `person`
             entity or an existing one, so the face and the name in a

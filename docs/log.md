@@ -6820,6 +6820,71 @@ The faces tab was checked on YuNet's public example picture on a
 throwaway store, which caught a tile that read a list's index as a
 likeness ("NaN% alike").
 
+## 2026-10-27: AT step 3, the faces that are probably one person
+
+The user, on the morning's summary: "nice! do it".
+
+**The algorithm.** HDBSCAN, written out in `prax.ml.clusters` (some 200
+lines, no import of prax) rather than taken from scikit-learn, which
+the door does not carry and whose HDBSCAN needs every pair's distance.
+It reads each face's nearest faces from the face index instead, so the
+work grows with the faces times `k`: a board carries it at a hundred
+thousand faces. The steps are the published ones: core distance, mutual
+reachability, the minimum spanning forest (Kruskal; the parts the lists
+leave apart joined at the largest distance), the condensed tree, the
+groups by excess of mass. Two faces of one picture are never each
+other's neighbour. Measured against scikit-learn 1.9.1's `HDBSCAN` on
+full distance lists, 36 synthetic sets (12 seeds, three settings): the
+same number of groups in all 36, adjusted Rand 0.978 at worst, the few
+differences single points at a group's edge.
+
+Two choices beyond the paper, both from the measurement below:
+
+- **A floor.** A distance under `faces.groups.floor` (0.3) counts as
+  0.3, HDBSCAN's cluster selection epsilon. Without it a burst of near
+  copies makes a group of its own and leaves the rest of that person's
+  faces out: the largest group, 500 faces at the floor, does not exist
+  without it.
+- **No group of no persistence.** A group whose points all leave where
+  it was born is not chosen. With the floor, a tie of distances makes
+  such groups, and they were chosen otherwise.
+
+**Measured on the live faces**, read only, counts only (8,916 faces
+with a vector; `k` 15; 0.2 s):
+
+| min_samples, min_size, floor | groups | faces grouped | largest | holding two of one picture |
+|---|---|---|---|---|
+| 3, 3, 0 | 229 | 34% | 300, 292, 243 | 4 groups |
+| **3, 3, 0.3** | **203** | **39%** | **500, 300, 292** | **5 groups** |
+| 5, 5, 0.3 | 99 | 34% | 501, 405, 286 | 6 groups |
+| 8, 5, 0.3 | 79 | 31% | 520, 389, 295 | 4 groups |
+
+`k` of 8 and of 30 give the same within three groups. At the setting
+chosen, the three largest groups (500, 292 and 284 faces, a median of
+some 160 px) hold no picture twice, which is what one person looks like;
+the 300 has three pictures twice in 295, and a group of 98 small faces
+(median 43 px) one in 97. The other three holding a picture twice are
+groups of 6 to 13 small, unsure faces (median 14 to 41 px, score 0.82
+to 0.85), likely not faces. Coarser
+settings merge two people (the 405 at 5, 5 holds 16 pictures twice).
+No grouped face is a weak member: strength 0.73 at the tenth
+percentile, none under 0.5. Small faces are grouped less (25% of those
+under 40 px, 59% of 80 px and over).
+
+**Built.** The `facegroups` pass of `prax maintain`, nightly
+(`faces.groups` in prax.yaml: `neighbours`, `min_size`, `min_samples`,
+`floor`). Migration 55: `face_groups` (size, pictures, doubled,
+persistence, model, run) and `face_group_members` (one group a face,
+with its strength). Replaced whole each run; a group that overlaps an
+old one by 0.5 (Jaccard) keeps its id. `store.face_neighbours`,
+`replace_face_groups`, `face_groups`, `face_group`, through the wall
+(a hidden picture's face is not in its group, and the counts follow);
+`GET /faces/groups`, `/faces/groups/{id}`; the Review page's "face
+groups" tab, a strip of each group's firmest faces, the pictures that
+hold two of them named in red. Nothing is named yet: step 4.
+
+Tests: `tests/test_face_groups.py` (6), one node test.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

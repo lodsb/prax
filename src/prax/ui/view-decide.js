@@ -22,6 +22,8 @@ const DECIDE_LISTS = {
     about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back. Split…: cut a group before a burst of its photos, kept for every later pass; join takes a cut back." },
   faces: { title: "faces", view: (p) => viewFaces(p),
     about: "Every face the faces step found, as a small picture of it: the least sure first, to see what the detector takes for a face; the smallest, to see where recognition will struggle; or the surest. Alike shows the faces whose vectors are nearest to one, with how alike they are: a check of what the vectors say, not a decision. Nothing is named here yet." },
+  groups: { title: "face groups", view: (p) => viewFaceGroups(p),
+    about: "Faces that are probably one person, grouped by how alike their vectors are (the facegroups pass of prax maintain, each night): the largest group first, each face's firmest members first. A group is a guess: where a picture holds two of its faces, it is surely more than one person. Faces in no group were not close enough to enough others. Nothing is named here yet." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -31,7 +33,7 @@ const DECIDE_LISTS = {
 const DECIDE_GROUPS = [
   { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges"] },
   { title: "documents", what: "what each document is and is about", keys: ["genre"] },
-  { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces"] },
+  { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces", "groups"] },
 ];
 
 function decideTabs(current) {
@@ -299,6 +301,54 @@ async function viewEvents(p) {
   });
 }
 
+// The face groups (AT step 3): a strip of faces a group, or one group whole
+async function viewFaceGroups(p) {
+  const list = DECIDE_LISTS.groups;
+  const limit = 30;
+  const offset = Number(p.offset || 0);
+  view.innerHTML = `${decideTabs("groups")}<p class="muted">${esc(list.about)}</p>
+    <p id="group-counts" class="muted"></p><div id="face-alike"></div>
+    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  const box = document.getElementById("decide-list");
+  const counts = document.getElementById("group-counts");
+  if (p.group) {
+    let g;
+    try { g = await api(`/faces/groups/${Number(p.group)}`); } catch (err) { showError(box, err); return; }
+    counts.innerHTML = `<a href="#review?list=groups">all groups</a>`;
+    box.innerHTML = faceGroupRow(g, true);
+  } else {
+    let res;
+    try { res = await api("/faces/groups", { offset, limit }); } catch (err) { showError(box, err); return; }
+    counts.textContent = res.total
+      ? `${res.total.toLocaleString()} groups holding ${res.grouped.toLocaleString()} faces, grouped ${res.built_at}`
+      : "";
+    const page = (o) => `#review?${new URLSearchParams({ list: "groups", offset: o })}`;
+    const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+      ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+    box.innerHTML = res.items.length
+      ? res.items.map((g) => faceGroupRow(g)).join("") + pager
+      : `<p class="muted">No groups yet: the facegroups pass of prax maintain makes them from the face vectors.</p>`;
+  }
+  bindAlike(box);
+}
+
+// "alike" under a face tile: the faces most like it, above the list
+function bindAlike(box) {
+  const alike = document.getElementById("face-alike");
+  box.querySelectorAll("[data-alike]").forEach((b) => b.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const id = b.dataset.alike;
+    alike.innerHTML = `<p class="muted">looking…</p>`;
+    let near;
+    try { near = await api(`/face/${id}/similar`, { k: 24 }); } catch (err) { showError(alike, err); return; }
+    alike.innerHTML = `<section class="face-alike"><p>Most like face ${esc(id)} <a href="#" data-alike-close>close</a></p>
+      <div class="face-grid">${faceTile({ id: Number(id), doc_id: Number(b.dataset.doc), crop: true, score: Number(b.dataset.score), px: Number(b.dataset.px) })}${near.map((f) => faceTile({ ...f, crop: true }, f)).join("")}</div>
+      ${near.length ? "" : `<p class="muted">No vector for it yet: the facevectors step makes them.</p>`}</section>`;
+    alike.querySelector("[data-alike-close]").addEventListener("click", (ev) => { ev.preventDefault(); alike.innerHTML = ""; });
+    alike.scrollIntoView({ block: "nearest" });
+  }));
+}
+
 // The faces the faces step found (AT steps 1 and 2): crops in an order,
 // the counts by score and size, and for a face the faces most like it
 async function viewFaces(p) {
@@ -319,17 +369,5 @@ async function viewFaces(p) {
   const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
     ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
   box.innerHTML = res.items.length ? `<div class="face-grid">${res.items.map((f) => faceTile(f)).join("")}</div>${pager}` : `<p class="muted">No face found yet: the faces step reads the photos' previews.</p>`;
-  const alike = document.getElementById("face-alike");
-  box.querySelectorAll("[data-alike]").forEach((b) => b.addEventListener("click", async (e) => {
-    e.preventDefault();
-    const id = b.dataset.alike;
-    alike.innerHTML = `<p class="muted">looking…</p>`;
-    let near;
-    try { near = await api(`/face/${id}/similar`, { k: 24 }); } catch (err) { showError(alike, err); return; }
-    alike.innerHTML = `<section class="face-alike"><p>Most like face ${esc(id)} <a href="#" data-alike-close>close</a></p>
-      <div class="face-grid">${faceTile({ id: Number(id), doc_id: Number(b.dataset.doc), crop: true, score: Number(b.dataset.score), px: Number(b.dataset.px) })}${near.map((f) => faceTile({ ...f, crop: true }, f)).join("")}</div>
-      ${near.length ? "" : `<p class="muted">No vector for it yet: the facevectors step makes them.</p>`}</section>`;
-    alike.querySelector("[data-alike-close]").addEventListener("click", (ev) => { ev.preventDefault(); alike.innerHTML = ""; });
-    alike.scrollIntoView({ block: "nearest" });
-  }));
+  bindAlike(box);
 }

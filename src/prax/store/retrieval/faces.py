@@ -310,3 +310,207 @@ def faces_page(
         ),
         "items": items,
     }
+
+
+# the groups (plan item AT step 3)
+GROUPS_PAGE = 60  # groups a page of the Review page shows at most
+GROUP_STRIP = 12  # faces of a group the list shows, the firmest first
+GROUP_CARRY = 0.5  # a new group takes the id of an old one this close (Jaccard)
+
+
+@_reading
+def face_neighbours(
+    con: sqlite3.Connection, *, k: int, model: str = FACE_MODEL
+) -> tuple[list[int], list[list[tuple[int, float]]]]:
+    """What the grouping reads: every live face with a vector of
+    ``model``, and for each its ``k`` nearest faces in the face index as
+    (position in that list, cosine distance), nearest first. A face of
+    the same picture is never a neighbour: one picture rarely shows a
+    person twice. Read for the facegroups pass, which runs as the
+    administrator, so nothing is hidden here; the reads below are."""
+    rows = [
+        (int(r[0]), int(r[1]))
+        for r in con.execute(
+            "SELECT id, doc_id FROM faces WHERE gone_at IS NULL"
+            " AND vector_model = ? ORDER BY id",
+            (model,),
+        )
+    ]
+    at = {face: i for i, (face, _) in enumerate(rows)}
+    path = face_index_path(model)
+    # the most faces one picture holds: so many more are asked for
+    most = con.execute(
+        "SELECT max(n) FROM (SELECT count(*) AS n FROM faces"
+        " WHERE gone_at IS NULL GROUP BY doc_id)"
+    ).fetchone()[0]
+    ask = k + int(most or 0) + 1
+    out: list[list[tuple[int, float]]] = []
+    for face, doc in rows:
+        vec = _get_vector(path, face)
+        near: list[tuple[int, float]] = []
+        if vec is not None:
+            for key, d in _knn(path, vec, ask):
+                j = at.get(int(key))
+                if j is None or rows[j][1] == doc:
+                    continue
+                near.append((j, min(max(float(d), 0.0), 2.0)))
+                if len(near) >= k:
+                    break
+        out.append(near)
+    return [face for face, _ in rows], out
+
+
+@_serialized
+def replace_face_groups(
+    con: sqlite3.Connection,
+    faces: list[int],
+    labels: list[int],
+    strength: list[float],
+    persistence: list[float],
+    *,
+    model: str,
+    run: str,
+) -> dict[str, int]:
+    """Replace the face groups with a new grouping (``prax.ml.clusters``:
+    ``labels[i]`` is face ``faces[i]``'s group or -1). A group that overlaps
+    an old one by ``GROUP_CARRY`` or more takes its id. Returns the counts."""
+    old: dict[int, set[int]] = {}
+    for r in con.execute("SELECT face_id, group_id FROM face_group_members"):
+        old.setdefault(int(r[1]), set()).add(int(r[0]))
+    was = {face: g for g, members in old.items() for face in members}
+    members: dict[int, list[int]] = {}
+    for i, g in enumerate(labels):
+        if g >= 0:
+            members.setdefault(g, []).append(i)
+    docs = {
+        int(r[0]): int(r[1])
+        for r in con.execute(
+            "SELECT id, doc_id FROM faces WHERE id IN (SELECT value FROM json_each(?))",
+            (json.dumps(faces),),
+        )
+    }
+    taken: set[int] = set()
+    next_id = max(old, default=0) + 1
+    stamp = now()
+    groups, rows = [], []
+    report = {"groups": len(members), "carried": 0, "new": 0, "doubled": 0}
+    # the largest first, so it is the one that keeps a contested id
+    for g, at in sorted(members.items(), key=lambda kv: -len(kv[1])):
+        mine = {faces[i] for i in at}
+        best, best_j = None, 0.0
+        for gid in sorted({was[f] for f in mine if f in was} - taken):
+            j = len(mine & old[gid]) / len(mine | old[gid])
+            if j > best_j:
+                best, best_j = gid, j
+        if best is not None and best_j >= GROUP_CARRY:
+            gid = best
+            report["carried"] += 1
+        else:
+            gid = next_id
+            next_id += 1
+            report["new"] += 1
+        taken.add(gid)
+        per_doc: dict[int, int] = {}
+        for f in mine:
+            per_doc[docs[f]] = per_doc.get(docs[f], 0) + 1
+        doubled = sum(1 for n in per_doc.values() if n > 1)
+        report["doubled"] += doubled > 0
+        groups.append(
+            (gid, len(mine), len(per_doc), doubled, persistence[g], model, run, stamp)
+        )
+        rows += [(faces[i], gid, round(strength[i], 4)) for i in at]
+    con.execute("DELETE FROM face_group_members")
+    con.execute("DELETE FROM face_groups")
+    con.executemany(
+        "INSERT INTO face_groups (id, size, pictures, doubled, persistence, model,"
+        " run, built_at) VALUES (?,?,?,?,?,?,?,?)",
+        groups,
+    )
+    con.executemany(
+        "INSERT INTO face_group_members (face_id, group_id, strength) VALUES (?,?,?)",
+        rows,
+    )
+    con.commit()
+    return report
+
+
+def _group_faces(
+    con: sqlite3.Connection, group_ids: list[int], hidden: frozenset[int]
+) -> dict[int, list[dict[str, Any]]]:
+    """The live, visible faces of these groups, the firmest first."""
+    out: dict[int, list[dict[str, Any]]] = {g: [] for g in group_ids}
+    for r in con.execute(
+        "SELECT m.group_id, m.strength, f.id, f.doc_id, f.score, f.px,"
+        " f.crop IS NOT NULL AS crop FROM face_group_members m"
+        " JOIN faces f ON f.id = m.face_id"
+        " WHERE m.group_id IN (SELECT value FROM json_each(?))"
+        " AND f.gone_at IS NULL ORDER BY m.group_id, m.strength DESC, f.id",
+        (json.dumps(group_ids),),
+    ):
+        if int(r["doc_id"]) in hidden:
+            continue
+        out[int(r["group_id"])].append(
+            {
+                "id": int(r["id"]),
+                "doc_id": int(r["doc_id"]),
+                "score": float(r["score"]),
+                "px": int(r["px"]),
+                "strength": float(r["strength"]),
+                "crop": bool(r["crop"]),
+            }
+        )
+    return out
+
+
+def _group_line(gid: int, faces: list[dict[str, Any]]) -> dict[str, Any]:
+    per_doc: dict[int, int] = {}
+    for f in faces:
+        per_doc[f["doc_id"]] = per_doc.get(f["doc_id"], 0) + 1
+    return {
+        "id": gid,
+        "size": len(faces),
+        "pictures": len(per_doc),
+        # two faces of one picture: surely more than one person
+        "doubled": sorted(d for d, n in per_doc.items() if n > 1),
+    }
+
+
+@_reading
+def face_groups(
+    con: sqlite3.Connection, *, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """The face groups, the largest first, each with its firmest faces
+    (``GROUP_STRIP``), its size and pictures as the viewer sees them, and
+    the pictures that hold two of its faces; and how many faces are in a
+    group at all. A face of a hidden picture is left out, and a group of
+    none is absent."""
+    hidden = hidden_documents(con)
+    ids = [
+        int(r[0])
+        for r in con.execute("SELECT id FROM face_groups ORDER BY size DESC, id")
+    ]
+    faces = _group_faces(con, ids, hidden)
+    lines = [
+        {**_group_line(g, faces[g]), "faces": faces[g][:GROUP_STRIP]}
+        for g in ids
+        if faces[g]
+    ]
+    lines.sort(key=lambda line: (-line["size"], line["id"]))
+    built = con.execute("SELECT max(built_at) FROM face_groups").fetchone()
+    limit = max(1, min(limit, GROUPS_PAGE))
+    return {
+        "total": len(lines),
+        "grouped": sum(line["size"] for line in lines),
+        "built_at": built[0],
+        "items": lines[max(0, offset) : max(0, offset) + limit],
+    }
+
+
+@_reading
+def face_group(con: sqlite3.Connection, group_id: int) -> dict[str, Any]:
+    """One group with all its visible faces, the firmest first. KeyError
+    when there is no such group or the viewer sees none of its faces."""
+    faces = _group_faces(con, [group_id], hidden_documents(con))[group_id]
+    if not faces:
+        raise KeyError(f"no such face group: {group_id}")
+    return {**_group_line(group_id, faces), "faces": faces}

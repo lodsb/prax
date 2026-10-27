@@ -706,4 +706,6 @@ table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 
 .face-tile img, .face-none { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--panel); border-radius: 2px; }
 .face-none { font-size: .75rem; display: flex; align-items: center; justify-content: center; }
 .face-tile figcaption { font-size: .78rem; margin-top: .15rem; }
+.face-group { margin: 0 0 1.25rem; }
+.face-group > p { margin: 0 0 .35rem; }
 .face-alike { border: 1px solid var(--line); padding: .5rem; margin: .5rem 0 1rem; }

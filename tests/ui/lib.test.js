@@ -664,3 +664,15 @@ test("the faces tab's tiles and counts", () => {
   assert.match(counts, /1,200 faces in 400 pictures, 30 with a vector/);
   assert.match(counts, /under 0\.9 5/);
 });
+
+test("a face group's strip: size, pictures, a picture with two of its faces", () => {
+  const faces = [{ id: 1, doc_id: 7, crop: true, score: 0.9, px: 60 }];
+  const row = lib.faceGroupRow({ id: 12, size: 40, pictures: 39, doubled: [7], faces });
+  assert.match(row, /group 12 · 40 faces in 39 pictures/);
+  assert.match(row, /1 picture with two of its faces: more than one person/);
+  assert.match(row, /list=groups&amp;group=12|list=groups&group=12/);
+  assert.match(row, /src="\/face\/1\/crop"/);
+  const whole = lib.faceGroupRow({ id: 3, size: 1, pictures: 1, doubled: [], faces }, true);
+  assert.match(whole, /1 face in 1 picture/);
+  assert.doesNotMatch(whole, /two of its faces|all 1/);
+});

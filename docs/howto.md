@@ -2360,6 +2360,8 @@ by `prax maintain` on request:
 | `conflicts` | two facts of a functional relation that cannot both hold, kept in `edge_conflicts` (`store.find_conflicts`). Shown as `disputed`, never resolved |
 | `communities` | the regions of the library rebuilt at two levels (`prax.graph.communities`, `docs/communities.md`) |
 | `histories` | the parse and extraction histories held to `HISTORY_KEEP` entries |
+| `events` | photos taken close together found again as candidate events for the Review page (`store.find_event_candidates`); what a person decided is kept |
+| `facegroups` | the faces that are probably one person, grouped by density over the face vectors (`prax.ml.clusters`, HDBSCAN) for the Review page's face groups tab; a group keeps its id while its faces change. `faces.groups` in prax.yaml: `neighbours` (15), `min_size` (3), `min_samples` (3), `floor` (0.3) |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c). The nightly has no reason to |
 | `rejudge` (only when named) | the corpus's rulings on which names are the library's word, asked again under the current test |
 | `vectors` (only when named) | both vector deltas merged and the chunk index rid of vectors of chunks that are gone, rebuilt when they are a tenth of it (`compact_vectors`) |
