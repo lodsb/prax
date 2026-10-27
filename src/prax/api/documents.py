@@ -272,11 +272,69 @@ def face_similar(face_id: int, request: Request, k: int = 12) -> list[dict[str, 
 
 
 @router.get("/faces/groups")
-def face_groups(request: Request, offset: int = 0, limit: int = 30) -> dict[str, Any]:
-    """The face groups, the largest first, each with its firmest faces
-    (``store.face_groups``, made by the facegroups pass). Not a named
-    token's route."""
-    return store.face_groups(_con(request), offset=offset, limit=limit)
+def face_groups(
+    request: Request, offset: int = 0, limit: int = 30, event: int | None = None
+) -> dict[str, Any]:
+    """The face groups with faces to name, each with its firmest open faces
+    (``store.face_groups``, made by the facegroups pass); with ``event``,
+    one event's pictures only. Not a named token's route."""
+    try:
+        return store.face_groups(_con(request), offset=offset, limit=limit, event=event)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+class FaceNameReq(BaseModel):
+    faces: list[int]
+    entity_id: int | None = None  # a person the graph has
+    name: str | None = None  # or a new person's name
+
+
+class FaceJudgeReq(BaseModel):
+    faces: list[int]
+    verdict: str  # not_face | nobody
+
+
+class FaceUnnameReq(BaseModel):
+    faces: list[int] | None = None
+    run: str | None = None  # every answer of one action
+
+
+@router.post("/faces/name")
+def face_name(req: FaceNameReq, request: Request) -> dict[str, Any]:
+    """These faces are one person: each picture ``depicts`` them
+    (``store.name_faces``). Not a named token's route."""
+    try:
+        return store.name_faces(
+            _con(request), req.faces, entity_id=req.entity_id, name=req.name
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/faces/judge")
+def face_judge(req: FaceJudgeReq, request: Request) -> dict[str, Any]:
+    """These faces are no face, or nobody to name (``store.judge_faces``)."""
+    try:
+        return store.judge_faces(_con(request), req.faces, verdict=req.verdict)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/faces/unname")
+def face_unname(req: FaceUnnameReq, request: Request) -> dict[str, Any]:
+    """Answers taken back, of these faces or of one action
+    (``store.unname_faces``)."""
+    if (req.faces is None) == (req.run is None):
+        raise HTTPException(400, "give faces or a run")
+    try:
+        return store.unname_faces(_con(request), req.faces, run=req.run)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/faces/groups/{group_id}")

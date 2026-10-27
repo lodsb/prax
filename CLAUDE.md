@@ -71,7 +71,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
-   context, views, communities, traversal, rules, paths, geo, events, people), `retrieval` (knobs, compounds, query, legs,
+   context, views, communities, traversal, rules, paths, geo, events, people, naming), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
@@ -183,7 +183,9 @@ revisit threshold, under "Decision thresholds" below.
    what one document says of another (`links_to`, `supersedes`,
    `invalidates`; core 4, 2026-10-04), and where a picture was taken
    (`taken_in`, from its GPS position; core 5, 2026-10-26) and the event
-   a person grouped it into (`recorded_at`; core 6, the same day). A bump that only adds what a
+   a person grouped it into (`recorded_at`; core 6, the same day), and the
+   person a picture shows and the event a person was at (`depicts`,
+   `attended`; core 7, 2026-10-27). A bump that only adds what a
    module accepts moves the extraction stamps by migration (18, 26, 39)
    instead of making every document due again.
    `research.yaml` holds papers, methods, claims and pages.
@@ -200,7 +202,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core6+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
+   (`core7+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that
@@ -455,8 +457,14 @@ reference `docs/ask.md`.
   face's nearest faces in other pictures, a pure module) into candidates
   that are probably one person (`face_groups`, migration 55), replaced on
   every run, a group keeping the id of the old one it overlaps most; a
-  name is a fact about a face (step 4), never about a group. Faces are
-  biometric: never to a paid model or an API, and no named token's route.
+  name is a fact about a face, never about a group. A person names faces
+  on the Review page (graph part `naming`, `face_names`, migration 56):
+  a person, and each picture then `depicts` them (EXTRACTED, producer
+  `human`, sourced to the picture), or `not_face`, or `nobody`. One live
+  answer a face; a new answer or an undo ends the old one and the
+  `depicts` edge no answer holds up any more. A picture with a named face
+  is `suspected` unless a person decided about it. Faces are biometric:
+  never to a paid model or an API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means
   re-embedding into a new file. Another dimension means a new file and

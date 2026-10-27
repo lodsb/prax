@@ -39,7 +39,7 @@ def test_the_characteristics_load_and_change_no_version() -> None:
     assert onto.relations["published_in"].functional
     assert onto.relations["authored_by"].same_as == ("schema:author",)
     assert onto.types["person"].same_as == ("schema:Person",)
-    assert onto.version.startswith("core6+")
+    assert onto.version.startswith("core7+")
 
 
 def test_the_lint_refuses_what_contradicts_itself() -> None:

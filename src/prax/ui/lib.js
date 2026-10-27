@@ -456,8 +456,13 @@ function faceCounts(res) {
 }
 // One face as a tile: its crop, its picture a click away, its score and
 // size, or its likeness to the face asked about
-function faceTile(f, near) {
+function faceTile(f, near, pick) {
   const img = f.crop ? `<img loading="lazy" src="/face/${f.id}/crop" alt="">` : `<span class="face-none">no crop yet</span>`;
+  if (pick) {
+    // a face to answer for: the crop toggles it, its picture is a link
+    return `<figure class="face-tile" data-face="${f.id}"><button type="button" class="face-pick" title="click: not them">${img}</button><figcaption class="muted"><a href="#doc/${f.doc_id}">picture</a> · ${f.px} px
+      · <a href="#" data-alike="${f.id}" data-doc="${f.doc_id}" data-score="${f.score}" data-px="${f.px}">alike</a></figcaption></figure>`;
+  }
   // a likeness as a number only: OpenCV's line for one pair (MATCH) is
   // passed by 99% of a library's faces' nearest (2026-10-27), so a mark
   // at it would say nothing; step 5 measures a line of the library's own
@@ -467,16 +472,41 @@ function faceTile(f, near) {
 }
 // One face group (AT step 3) as a strip of its firmest faces: its size,
 // its pictures, and a warning where a picture holds two of its faces
+// AT steps 3 and 4: a click on a face marks it "not them", the form
+// answers for the rest, and what its faces were named so far is beside it
 function faceGroupRow(g, all) {
   const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
-  const doubled = g.doubled.length
+  // faces in no group share pictures as a matter of course
+  const doubled = g.id != null && g.doubled.length
     ? ` · <span class="error">${plural(g.doubled.length, "picture")} with two of its faces: more than one person</span>`
     : "";
-  const more = !all && g.size > g.faces.length
-    ? ` · <a href="#review?${new URLSearchParams({ list: "groups", group: g.id })}">all ${g.size.toLocaleString()}</a>`
+  const open = g.open ?? g.size;
+  const more = !all && g.id != null && open > g.faces.length
+    ? ` · <a href="#review?${new URLSearchParams({ list: "groups", group: g.id })}">all ${open.toLocaleString()} to name</a>`
     : "";
-  return `<section class="face-group"><p>group ${g.id} · ${plural(g.size, "face")} in ${plural(g.pictures, "picture")}${doubled}${more}</p>
-    <div class="face-grid">${g.faces.map((f) => faceTile(f)).join("")}</div></section>`;
+  const named = (g.named || []).length
+    ? `<br><span class="muted">named so far: ${g.named.map((w) => `<a href="#person/${w.entity_id}">${esc(w.name)}</a> ${w.faces}`).join(", ")}</span>`
+    : "";
+  const title = g.id == null ? "not in a group" : `group ${g.id}`;
+  const suggest = (g.named || [])[0];
+  const tiles = g.faces.filter((f) => !all || f.verdict == null);
+  const form = tiles.length ? `<form class="face-name" data-faces="${tiles.map((f) => f.id).join(",")}">
+      <input name="who" list="people-choice" placeholder="who is this?" autocomplete="off" value="${suggest ? esc(personValue(suggest)) : ""}">
+      <button name="act" value="name">name them</button> <button name="act" value="not_face" type="button">not faces</button>
+      <button name="act" value="nobody" type="button">nobody to name</button> <span class="msg"></span></form>` : "";
+  return `<section class="face-group"><p>${title} · ${plural(open, "face")} to name in ${plural(g.pictures, "picture")}${doubled}${more}${named}</p>
+    ${form}<div class="face-grid">${tiles.map((f) => faceTile(f, null, true)).join("")}</div></section>`;
+}
+// A person in the name field: their name and id, which personChoice reads
+// back; anything else typed there is a new person's name
+function personValue(p) {
+  return `${p.name} #${p.entity_id ?? p.id}`;
+}
+function personChoice(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/#(\d+)$/);
+  if (m) return { entity_id: Number(m[1]) };
+  return t ? { name: t } : null;
 }
 // The people list (view-people.js): a row a person, linked to their page.
 function peopleTable(rows) {
@@ -1033,5 +1063,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, personValue, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

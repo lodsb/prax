@@ -26,6 +26,7 @@ ORDER = (
     "geo",
     "events",
     "people",
+    "naming",
 )
 
 from .communities import (  # noqa: F401
@@ -196,6 +197,13 @@ from .lookups import (  # noqa: F401
     labels_of_entities,
     own_type,
     page_slugs_of,
+)
+from .naming import (  # noqa: F401
+    FACE_VERDICTS,
+    face_answers,
+    judge_faces,
+    name_faces,
+    unname_faces,
 )
 from .paths import (  # noqa: F401
     PATH_REFRESH,

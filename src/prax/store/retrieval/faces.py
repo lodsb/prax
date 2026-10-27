@@ -435,82 +435,203 @@ def replace_face_groups(
 
 
 def _group_faces(
-    con: sqlite3.Connection, group_ids: list[int], hidden: frozenset[int]
+    con: sqlite3.Connection,
+    group_ids: list[int],
+    hidden: frozenset[int],
+    docs: frozenset[int] | None = None,
 ) -> dict[int, list[dict[str, Any]]]:
-    """The live, visible faces of these groups, the firmest first."""
+    """The live, visible faces of these groups (of ``docs`` only, when
+    given), the firmest first, each with its live answer (step 4's
+    ``face_names``): ``verdict`` None for a face nobody has answered for."""
     out: dict[int, list[dict[str, Any]]] = {g: [] for g in group_ids}
     for r in con.execute(
         "SELECT m.group_id, m.strength, f.id, f.doc_id, f.score, f.px,"
-        " f.crop IS NOT NULL AS crop FROM face_group_members m"
-        " JOIN faces f ON f.id = m.face_id"
+        " f.crop IS NOT NULL AS crop, n.verdict, n.entity_id, e.name"
+        " FROM face_group_members m JOIN faces f ON f.id = m.face_id"
+        " LEFT JOIN face_names n ON n.face_id = f.id AND n.ended_at IS NULL"
+        " LEFT JOIN entities e ON e.id = n.entity_id"
         " WHERE m.group_id IN (SELECT value FROM json_each(?))"
         " AND f.gone_at IS NULL ORDER BY m.group_id, m.strength DESC, f.id",
         (json.dumps(group_ids),),
     ):
-        if int(r["doc_id"]) in hidden:
+        doc = int(r["doc_id"])
+        if doc in hidden or (docs is not None and doc not in docs):
             continue
-        out[int(r["group_id"])].append(
-            {
-                "id": int(r["id"]),
-                "doc_id": int(r["doc_id"]),
-                "score": float(r["score"]),
-                "px": int(r["px"]),
-                "strength": float(r["strength"]),
-                "crop": bool(r["crop"]),
-            }
-        )
+        out[int(r["group_id"])].append(_face_item(r))
     return out
 
 
-def _group_line(gid: int, faces: list[dict[str, Any]]) -> dict[str, Any]:
+def _face_item(r: sqlite3.Row) -> dict[str, Any]:
+    keys = r.keys()
+    return {
+        "id": int(r["id"]),
+        "doc_id": int(r["doc_id"]),
+        "score": float(r["score"]),
+        "px": int(r["px"]),
+        "strength": float(r["strength"]) if "strength" in keys else None,
+        "crop": bool(r["crop"]),
+        "verdict": r["verdict"],
+        "entity_id": r["entity_id"],
+        "name": r["name"],
+    }
+
+
+def _group_line(gid: int | None, faces: list[dict[str, Any]]) -> dict[str, Any]:
     per_doc: dict[int, int] = {}
+    named: dict[int, dict[str, Any]] = {}
     for f in faces:
         per_doc[f["doc_id"]] = per_doc.get(f["doc_id"], 0) + 1
+        if f["verdict"] == "person":
+            who = named.setdefault(
+                f["entity_id"],
+                {"entity_id": f["entity_id"], "name": f["name"], "faces": 0},
+            )
+            who["faces"] += 1
     return {
         "id": gid,
         "size": len(faces),
+        "open": sum(1 for f in faces if f["verdict"] is None),
         "pictures": len(per_doc),
         # two faces of one picture: surely more than one person
         "doubled": sorted(d for d, n in per_doc.items() if n > 1),
+        "named": sorted(named.values(), key=lambda w: (-w["faces"], w["entity_id"])),
+        "judged": sum(1 for f in faces if f["verdict"] in ("not_face", "nobody")),
     }
+
+
+def _event_docs(
+    con: sqlite3.Connection, event_id: int, hidden: frozenset[int]
+) -> tuple[str, frozenset[int]]:
+    """An event's name and the visible pictures recorded at it (its alias
+    group's live ``recorded_at`` edges); KeyError for none."""
+    row = con.execute(
+        "SELECT c.id, c.name FROM entities e"
+        " JOIN entities c ON c.id = COALESCE(e.canonical_id, e.id)"
+        " WHERE e.id = ? AND c.type = 'event'",
+        (event_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such event: {event_id}")
+    docs = frozenset(
+        int(r[0])
+        for r in con.execute(
+            "SELECT x.source_doc FROM edges x JOIN entities t ON t.id = x.dst"
+            " WHERE x.rel = 'recorded_at' AND x.valid_to IS NULL"
+            " AND COALESCE(t.canonical_id, t.id) = ? AND x.source_doc IS NOT NULL",
+            (int(row["id"]),),
+        )
+        if int(r[0]) not in hidden
+    )
+    return str(row["name"]), docs
+
+
+def _events_with_faces(
+    con: sqlite3.Connection, hidden: frozenset[int]
+) -> list[dict[str, Any]]:
+    """The events whose pictures hold faces nobody has answered for, the
+    most such faces first: what the tab's choice of one event lists."""
+    count: dict[int, int] = {}
+    names: dict[int, str] = {}
+    for r in con.execute(
+        "SELECT COALESCE(t.canonical_id, t.id) AS ev, f.doc_id, count(*) AS n"
+        " FROM faces f JOIN edges x ON x.source_doc = f.doc_id"
+        " JOIN entities t ON t.id = x.dst"
+        " WHERE x.rel = 'recorded_at' AND x.valid_to IS NULL AND f.gone_at IS NULL"
+        " AND f.id NOT IN (SELECT face_id FROM face_names WHERE ended_at IS NULL)"
+        " GROUP BY ev, f.doc_id"
+    ):
+        if int(r["doc_id"]) not in hidden:
+            count[int(r["ev"])] = count.get(int(r["ev"]), 0) + int(r["n"])
+    if count:
+        names = {
+            int(r[0]): str(r[1])
+            for r in con.execute(
+                "SELECT id, name FROM entities WHERE id IN"
+                " (SELECT value FROM json_each(?))",
+                (json.dumps(sorted(count)),),
+            )
+        }
+    return [
+        {"id": ev, "name": names.get(ev, ""), "faces": n}
+        for ev, n in sorted(count.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
 @_reading
 def face_groups(
-    con: sqlite3.Connection, *, offset: int = 0, limit: int = 30
+    con: sqlite3.Connection,
+    *,
+    offset: int = 0,
+    limit: int = 30,
+    event: int | None = None,
 ) -> dict[str, Any]:
-    """The face groups, the largest first, each with its firmest faces
-    (``GROUP_STRIP``), its size and pictures as the viewer sees them, and
-    the pictures that hold two of its faces; and how many faces are in a
-    group at all. A face of a hidden picture is left out, and a group of
-    none is absent."""
+    """The face groups with faces nobody has answered for, the most such
+    first, each with its firmest open faces (``GROUP_STRIP``), its size,
+    pictures and the pictures that hold two of its faces, and who its
+    faces were named so far (``named``). ``done`` counts the groups every
+    face of which is answered for. With ``event`` (an event's entity id)
+    only that event's pictures count, and ``loose`` holds their open faces
+    in no group. ``events`` lists the events with open faces. A face of a
+    hidden picture is left out, and a group of none is absent."""
     hidden = hidden_documents(con)
+    docs = None
+    out: dict[str, Any] = {}
+    if event is not None:
+        title, docs = _event_docs(con, event, hidden)
+        out["event"] = {"id": event, "name": title}
     ids = [
         int(r[0])
         for r in con.execute("SELECT id FROM face_groups ORDER BY size DESC, id")
     ]
-    faces = _group_faces(con, ids, hidden)
-    lines = [
-        {**_group_line(g, faces[g]), "faces": faces[g][:GROUP_STRIP]}
-        for g in ids
-        if faces[g]
-    ]
-    lines.sort(key=lambda line: (-line["size"], line["id"]))
+    faces = _group_faces(con, ids, hidden, docs)
+    lines = []
+    done = 0
+    for g in ids:
+        if not faces[g]:
+            continue
+        line = _group_line(g, faces[g])
+        if not line["open"]:
+            done += 1
+            continue
+        line["faces"] = [f for f in faces[g] if f["verdict"] is None][:GROUP_STRIP]
+        lines.append(line)
+    lines.sort(key=lambda line: (-line["open"], line["id"]))
+    if docs is not None:
+        loose = [
+            _face_item(r)
+            for r in con.execute(
+                "SELECT f.id, f.doc_id, f.score, f.px, f.crop IS NOT NULL AS crop,"
+                " NULL AS verdict, NULL AS entity_id, NULL AS name FROM faces f"
+                " WHERE f.gone_at IS NULL"
+                " AND f.doc_id IN (SELECT value FROM json_each(?))"
+                " AND f.id NOT IN (SELECT face_id FROM face_group_members)"
+                " AND f.id NOT IN"
+                " (SELECT face_id FROM face_names WHERE ended_at IS NULL)"
+                " ORDER BY f.score DESC, f.id LIMIT ?",
+                (json.dumps(sorted(docs)), FACES_PAGE),
+            )
+        ]
+        out["loose"] = {**_group_line(None, loose), "faces": loose}
     built = con.execute("SELECT max(built_at) FROM face_groups").fetchone()
     limit = max(1, min(limit, GROUPS_PAGE))
     return {
         "total": len(lines),
-        "grouped": sum(line["size"] for line in lines),
+        "grouped": sum(line["open"] for line in lines),
+        "done": done,
         "built_at": built[0],
         "items": lines[max(0, offset) : max(0, offset) + limit],
+        "events": _events_with_faces(con, hidden),
+        **out,
     }
 
 
 @_reading
 def face_group(con: sqlite3.Connection, group_id: int) -> dict[str, Any]:
-    """One group with all its visible faces, the firmest first. KeyError
-    when there is no such group or the viewer sees none of its faces."""
+    """One group with all its visible faces: the open ones, the firmest
+    first, then those answered for. KeyError when there is no such group
+    or the viewer sees none of its faces."""
     faces = _group_faces(con, [group_id], hidden_documents(con))[group_id]
     if not faces:
         raise KeyError(f"no such face group: {group_id}")
+    faces.sort(key=lambda f: f["verdict"] is not None)
     return {**_group_line(group_id, faces), "faces": faces}

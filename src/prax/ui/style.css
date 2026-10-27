@@ -708,4 +708,10 @@ table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 
 .face-tile figcaption { font-size: .78rem; margin-top: .15rem; }
 .face-group { margin: 0 0 1.25rem; }
 .face-group > p { margin: 0 0 .35rem; }
+.face-name { margin: 0 0 .5rem; }
+.face-name input { min-width: 14rem; }
+.face-pick { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.face-out img { opacity: .25; outline: 2px solid var(--muted); }
+.face-done { opacity: .35; }
+.face-done .face-pick { pointer-events: none; }
 .face-alike { border: 1px solid var(--line); padding: .5rem; margin: .5rem 0 1rem; }

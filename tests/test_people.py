@@ -40,15 +40,13 @@ def _picture(con: sqlite3.Connection, n: int, taken: str) -> int:
 
 
 def _depicts(con: sqlite3.Connection, picture: int, person: str) -> None:
-    # AT's faces write depicts; core does not hold it yet, so the test
-    # writes the row the faces step will
-    node, _ = store.document_node(con, picture)
-    src = _entity(con, node, "document")
-    con.execute(
-        "INSERT INTO edges (src, dst, rel, confidence, source_doc, ingested_at,"
-        " valid_from, producer)"
-        " VALUES (?, ?, 'depicts', 'EXTRACTED', ?, ?, ?, 'human')",
-        (src, _entity(con, person), picture, store.now(), store.now()),
+    # what naming a face writes (core 7, store.name_faces)
+    node, ntype = store.document_node(con, picture)
+    store.link(
+        con,
+        store.Edge(node, ntype, "depicts", person, "person"),
+        source_doc=picture,
+        producer="human",
     )
     con.commit()
 

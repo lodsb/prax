@@ -39,7 +39,7 @@ requires: [core]
 entity_types:
   relative: {parent: person, description: a family member}
 relation_types:
-  depicts: {domain: [document], range: [person], description: shown in the picture}
+  portrays: {domain: [document], range: [person], description: shown in the picture}
 """
 
 

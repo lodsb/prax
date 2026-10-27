@@ -665,14 +665,29 @@ test("the faces tab's tiles and counts", () => {
   assert.match(counts, /under 0\.9 5/);
 });
 
-test("a face group's strip: size, pictures, a picture with two of its faces", () => {
-  const faces = [{ id: 1, doc_id: 7, crop: true, score: 0.9, px: 60 }];
-  const row = lib.faceGroupRow({ id: 12, size: 40, pictures: 39, doubled: [7], faces });
-  assert.match(row, /group 12 · 40 faces in 39 pictures/);
+test("a face group's strip: what is open, a picture twice, who it was named", () => {
+  const faces = [{ id: 1, doc_id: 7, crop: true, score: 0.9, px: 60, verdict: null }];
+  const row = lib.faceGroupRow({ id: 12, size: 40, open: 30, pictures: 39, doubled: [7], named: [{ entity_id: 5, name: "Ada Lovelace", faces: 10 }], faces });
+  assert.match(row, /group 12 · 30 faces to name in 39 pictures/);
   assert.match(row, /1 picture with two of its faces: more than one person/);
-  assert.match(row, /list=groups&amp;group=12|list=groups&group=12/);
-  assert.match(row, /src="\/face\/1\/crop"/);
-  const whole = lib.faceGroupRow({ id: 3, size: 1, pictures: 1, doubled: [], faces }, true);
-  assert.match(whole, /1 face in 1 picture/);
-  assert.doesNotMatch(whole, /two of its faces|all 1/);
+  assert.match(row, /list=groups&group=12/);
+  assert.match(row, /all 30 to name/);
+  assert.match(row, /named so far: <a href="#person\/5">Ada Lovelace<\/a> 10/);
+  assert.match(row, /value="Ada Lovelace #5"/);
+  assert.match(row, /data-faces="1"/);
+  assert.match(row, /data-face="1"><button type="button" class="face-pick"/);
+  const whole = lib.faceGroupRow({ id: 3, size: 2, open: 1, pictures: 1, doubled: [], named: [], faces: [...faces, { ...faces[0], id: 2, verdict: "nobody" }] }, true);
+  assert.match(whole, /1 face to name in 1 picture/);
+  assert.match(whole, /data-faces="1"/);
+  assert.doesNotMatch(whole, /two of its faces|to name<\/a>|data-face="2"/);
+  const loose = lib.faceGroupRow({ id: null, size: 2, open: 2, pictures: 1, doubled: [7], named: [], faces }, true);
+  assert.match(loose, /not in a group/);
+  assert.doesNotMatch(loose, /two of its faces/);
+});
+
+test("the name field: a person picked, or a new name", () => {
+  assert.equal(lib.personValue({ id: 9, name: "Grace Hopper" }), "Grace Hopper #9");
+  assert.deepEqual(lib.personChoice("Grace Hopper #9"), { entity_id: 9 });
+  assert.deepEqual(lib.personChoice("  Grace  "), { name: "Grace" });
+  assert.equal(lib.personChoice(" "), null);
 });

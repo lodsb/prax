@@ -23,7 +23,7 @@ const DECIDE_LISTS = {
   faces: { title: "faces", view: (p) => viewFaces(p),
     about: "Every face the faces step found, as a small picture of it: the least sure first, to see what the detector takes for a face; the smallest, to see where recognition will struggle; or the surest. Alike shows the faces whose vectors are nearest to one, with how alike they are: a check of what the vectors say, not a decision. Nothing is named here yet." },
   groups: { title: "face groups", view: (p) => viewFaceGroups(p),
-    about: "Faces that are probably one person, grouped by how alike their vectors are (the facegroups pass of prax maintain, each night): the largest group first, each face's firmest members first. A group is a guess: where a picture holds two of its faces, it is surely more than one person. Faces in no group were not close enough to enough others. Nothing is named here yet." },
+    about: "Faces that are probably one person, grouped each night by how alike they look (the facegroups pass): the group with the most faces to name first. Click a face that is not them, then name the rest: a person the graph has (pick one as you type) or a new name. Each picture then depicts them, and a picture with a named face is kept from tokens that may not see personal documents. Naming two groups as one person joins them; a face clicked away stays to name. Not faces and nobody to name answer for the faces too. Every answer can be undone. Where a picture holds two of a group's faces, it is surely more than one person. Choose an event to name the faces of one occasion, those in no group too." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -307,10 +307,11 @@ async function viewFaceGroups(p) {
   const limit = 30;
   const offset = Number(p.offset || 0);
   view.innerHTML = `${decideTabs("groups")}<p class="muted">${esc(list.about)}</p>
-    <p id="group-counts" class="muted"></p><div id="face-alike"></div>
+    <p id="group-counts" class="muted"></p><div id="face-alike"></div><datalist id="people-choice"></datalist>
     <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
   const box = document.getElementById("decide-list");
   const counts = document.getElementById("group-counts");
+  const event = p.event ? Number(p.event) : undefined;
   if (p.group) {
     let g;
     try { g = await api(`/faces/groups/${Number(p.group)}`); } catch (err) { showError(box, err); return; }
@@ -318,18 +319,76 @@ async function viewFaceGroups(p) {
     box.innerHTML = faceGroupRow(g, true);
   } else {
     let res;
-    try { res = await api("/faces/groups", { offset, limit }); } catch (err) { showError(box, err); return; }
-    counts.textContent = res.total
-      ? `${res.total.toLocaleString()} groups holding ${res.grouped.toLocaleString()} faces, grouped ${res.built_at}`
+    try { res = await api("/faces/groups", { offset, limit, event }); } catch (err) { showError(box, err); return; }
+    const choose = res.events.length || res.event
+      ? ` · <select id="face-event"><option value="">every event</option>${(res.event && !res.events.some((e) => e.id === res.event.id) ? [{ ...res.event, faces: 0 }] : []).concat(res.events).map((e) =>
+        `<option value="${e.id}"${res.event && e.id === res.event.id ? " selected" : ""}>${esc(e.name)} (${e.faces})</option>`).join("")}</select>`
       : "";
-    const page = (o) => `#review?${new URLSearchParams({ list: "groups", offset: o })}`;
+    counts.innerHTML = `${res.total.toLocaleString()} groups with ${res.grouped.toLocaleString()} faces to name${res.done ? `, ${res.done.toLocaleString()} named whole` : ""}${res.built_at ? `, grouped ${esc(res.built_at)}` : ""}${choose}`;
+    const pick = document.getElementById("face-event");
+    if (pick) pick.addEventListener("change", () => { location.hash = `#review?${new URLSearchParams(pick.value ? { list: "groups", event: pick.value } : { list: "groups" })}`; });
+    const page = (o) => `#review?${new URLSearchParams({ list: "groups", offset: o, ...(event ? { event } : {}) })}`;
     const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
       ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
-    box.innerHTML = res.items.length
-      ? res.items.map((g) => faceGroupRow(g)).join("") + pager
-      : `<p class="muted">No groups yet: the facegroups pass of prax maintain makes them from the face vectors.</p>`;
+    const loose = res.loose && res.loose.faces.length ? faceGroupRow(res.loose, true) : "";
+    box.innerHTML = res.items.length || loose
+      ? res.items.map((g) => faceGroupRow(g)).join("") + loose + pager
+      : `<p class="muted">No faces to name here: the facegroups pass of prax maintain groups the face vectors each night.</p>`;
   }
   bindAlike(box);
+  bindNaming(box);
+}
+
+// The name field's choices, the people the graph has, as one types
+let peopleTimer;
+function choosePeople(input) {
+  clearTimeout(peopleTimer);
+  peopleTimer = setTimeout(async () => {
+    const q = input.value.replace(/#\d+$/, "").trim();
+    if (q.length < 2) return;
+    let rows;
+    try { rows = await api("/people", { q, limit: 12 }); } catch { return; }
+    document.getElementById("people-choice").innerHTML = rows.map((r) => `<option value="${esc(personValue(r))}">${esc(r.type)}${r.photos ? `, ${r.photos} photos` : ""}</option>`).join("");
+  }, 250);
+}
+
+// A group's form: name the faces not clicked away, or say what they are
+function bindNaming(box) {
+  box.querySelectorAll(".face-pick").forEach((b) => b.addEventListener("click", () => b.closest(".face-tile").classList.toggle("face-out")));
+  box.querySelectorAll("form.face-name").forEach((form) => {
+    const section = form.closest(".face-group");
+    const out = form.querySelector(".msg");
+    const input = form.querySelector("input[name=who]");
+    input.addEventListener("input", () => choosePeople(input));
+    const chosen = () => [...section.querySelectorAll(".face-tile[data-face]:not(.face-out):not(.face-done)")].map((t) => Number(t.dataset.face));
+    const send = async (path, body, words) => {
+      const faces = chosen();
+      if (!faces.length) { out.textContent = "every face is clicked away"; return; }
+      form.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        const r = await post(path, { faces, ...body });
+        faces.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.add("face-done"));
+        out.innerHTML = `${esc(words(r))} · <a href="#" data-undo="${esc(r.run)}">undo</a>`;
+        out.querySelector("[data-undo]").addEventListener("click", async (e) => {
+          e.preventDefault();
+          try {
+            await post("/faces/unname", { run: r.run });
+            faces.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.remove("face-done"));
+            out.textContent = "taken back";
+          } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+        });
+      } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+      form.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+    };
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const who = personChoice(input.value);
+      if (!who) { out.textContent = "who is this? a name, or a person picked from the list"; return; }
+      send("/faces/name", who, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"} named ${r.name}${r.facts ? `, ${r.facts} picture${r.facts === 1 ? "" : "s"} depict them` : ""}`);
+    });
+    form.querySelectorAll("button[type=button]").forEach((b) => b.addEventListener("click", () =>
+      send("/faces/judge", { verdict: b.value }, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"}: ${r.verdict === "nobody" ? "nobody to name" : "not faces"}`)));
+  });
 }
 
 // "alike" under a face tile: the faces most like it, above the list

@@ -50,8 +50,13 @@
 # core v6 (2026-10-26, the same stage): `recorded_at` (document → event),
 # a photo in the event a person grouped it into on the Review page.
 # Only an addition: migration 51 moves the stamps.
+# core v7 (2026-10-27, plan item AT step 4): `depicts` (document →
+# person), a picture showing a person, as a person named a face in it on
+# the Review page; and `attended` (person → event), for step 6's rule
+# that a person a picture of an event depicts was there. Only additions:
+# migration 56 moves the stamps.
 module: core
-version: 6
+version: 7
 
 entity_types:
   person:
@@ -177,6 +182,22 @@ relation_types:
     description: >-
       the event a photo, a video or a recording was made at, as a person
       grouped it; never from what a text says
+  depicts:
+    kind: eternal
+    same_as: foaf:depicts
+    domain: [document]
+    range: [person]
+    description: >-
+      a person a photo or a video shows, as a person named their face in
+      it; a picture of someone, never a text about them
+  attended:
+    kind: event
+    same_as: schema:attendee
+    domain: [person]
+    range: [event]
+    description: >-
+      an event a person was at: the inverse of schema:attendee, which an
+      event says of a person
   links_to:
     kind: eternal
     same_as: dcterms:references

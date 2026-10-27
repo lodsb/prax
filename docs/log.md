@@ -6890,6 +6890,56 @@ neighbours, not the exact ones the measurement used): 8.2 s, 197 groups
 holding 3,454 faces, the largest five 500, 300, 292, 284 and 98, with
 pictures held twice as measured (0, 3, 0, 0, 1).
 
+## 2026-10-27: AT step 4, naming the faces
+
+The user: "ok, lets go on!".
+
+**What a person says, and of what.** Of a face, never of a group:
+the groups are made again every night (step 3) and a face's id stays.
+The plan's "split a group, merge two" are therefore not operations. A
+person clicks away the faces of a strip that are not the person and
+names the rest (a split), or names two groups as one person (a merge);
+the night's grouping then has the named faces to stand on. A face's
+answer is one of three (`face_names`, migration 56, one live answer a
+face): a person; `not_face`; `nobody` (a face with no one to name). A
+new answer ends the old one (`ended_at`), never deletes it.
+
+**What follows from a name.** Each picture holding a named face
+`depicts` the person (core 7, `foaf:depicts`): EXTRACTED, producer
+`human`, under the action's run, sourced to the picture, dated by the
+day it was taken. Two faces of one picture named alike are one fact,
+held up by both; the fact ends when the last answer holding it up ends
+(an undo, another name, nobody). Core 7 also adds `attended` (person to
+event, the inverse of `schema:attendee`) for step 6, so one bump serves
+both; migration 56 moves the extraction stamps as 51 did. The person is
+an entity of a person type the graph has, picked by id from the names
+the field offers (`GET /people?q=`), or a new `person`. A name typed
+that a person entity already carries is that entity: a name is the
+identity until `docs/stratification.md` step 5.
+
+**The wall.** A picture with a named face is marked `suspected`, by
+`faces`, unless a person decided about it; the `depicts` edge is sourced
+to the picture, so a token that may not see it does not see the edge. A
+face of a picture the viewer may not see cannot be answered for (as if
+absent). The routes are no named token's.
+
+**A run a second was not enough.** The first run ids were the action's
+second, and the routes test named a face and judged another in the same
+second: undoing the first took back both. A run carries six random hex
+letters now.
+
+**The tab.** Each group shows its open faces (answered ones drop out),
+who its faces were named so far (the first is the field's suggestion),
+and "all N to name" for the whole group. Every answer has its undo
+(`POST /faces/unname {run}`). The choice of an event lists the events
+whose pictures hold open faces, the most first, and shows that event's
+groups and its faces in no group. Checked headless on a throwaway store
+with YuNet's public example picture recorded at an event (52 faces, no
+groups, as one picture's faces never are), and the person page after
+naming three of them: the photo and its event.
+
+Tests: `tests/test_face_naming.py` (7), two node tests.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

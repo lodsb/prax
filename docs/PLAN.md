@@ -1163,7 +1163,7 @@ not done.
             that still holds two says so. Whether small faces are read
             again from the original waits for step 4's names, which are
             what a measurement of it needs.
-      - [ ] **Step 4, naming.** A tab of the Review page shows a group
+      - [x] (2026-10-27) **Step 4, naming.** A tab of the Review page shows a group
             as a strip of faces and takes a person: a new `person`
             entity or an existing one, so the face and the name in a
             letter are one entity. It can also split a group, merge
@@ -1173,6 +1173,18 @@ not done.
             at a time. A library whose faces are named already (MWG
             regions in XMP, a Mac's Photos library through `osxphotos`)
             would seed the groups; the owner's has none.
+            Built: core 7 (`depicts`, and `attended` for step 6;
+            migration 56 moves the stamps), `face_names` (migration 56),
+            `store.name_faces`, `judge_faces`, `unname_faces` and
+            `face_answers` (graph part `naming`), `POST /faces/name`,
+            `/faces/judge`, `/faces/unname`, and the face groups tab
+            grown: a click marks a face "not them", a name field offers
+            the people the graph has, every answer has its undo, and a
+            choice of event shows one occasion's faces, those in no group
+            too. Split and merge are not operations of their own: a
+            person names a face, and the groups are made again each
+            night, so a split is naming the faces but the ones clicked
+            away, and a merge is naming two groups as one person.
       - [ ] **Step 5, the new pictures.** A face is matched by a
             nearest-neighbour search over every named face, not a mean
             per person, so each face a person names is one more to land

@@ -228,6 +228,8 @@ def test_no_face_index_no_groups(con: sqlite3.Connection) -> None:
     assert store.face_groups(con) == {
         "total": 0,
         "grouped": 0,
+        "done": 0,
         "built_at": None,
         "items": [],
+        "events": [],
     }
