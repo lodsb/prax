@@ -997,9 +997,10 @@ not done.
             thumbnail and a preview filed in the archive, served at
             `/doc/N/thumb` and `/doc/N/preview` and shown on the page
             with the share offline; handed out only while the original
-            is reachable. Left for AR: XMP (tags, albums, face regions),
-            the GPS position as a place entity, the perceptual hash, and
-            a video's poster frame.
+            is reachable. Left for AR: the perceptual hash and a video's
+            poster frame (the place entity was built on 2026-10-26; XMP
+            waits for a library that has it: the owner's has none,
+            2026-10-27).
       - [x] (2026-10-26) **Where a photo was taken**, the first of the
             graph for pictures: core 5's `taken_in` and `located_in` for
             places, the `geocode` step naming the nearest GeoNames town
@@ -1103,7 +1104,17 @@ not done.
       where i can identify the faces, so everyone is tagged". After AR's
       photo stage, because the taken date and the place make a review
       fast ("every face from one trip"). A person names a group once,
-      and the model tags what is clearly theirs.
+      and the model tags what is clearly theirs. No picture of the
+      owner's carries a face named in XMP (2026-10-27), so nothing seeds
+      the groups: the first names are a person's.
+      - [ ] **Step 0, the person page** (`docs/biography.md` §7), shared
+            with AR's genealogy: a person entity's facts in date order,
+            the documents that say something about them, and, once faces
+            are named, the photos that depict them, the events those
+            were recorded at, their places, and who is photographed with
+            them. With it, the Review page's tabs grouped by what is
+            reviewed (the graph, documents, photos), so a faces tab has
+            a place to go.
       - [ ] **Step 1, detection.** A worker step `faces` reads each
             picture through the door (`/doc/N/original`, so a picture on
             an unmounted share waits). A detector finds each face's box
@@ -1131,14 +1142,27 @@ not done.
             letter are one entity. It can also split a group, merge
             two, mark a face "not a face" or "nobody to name". A name
             writes `depicts` edges (picture -> person, core's, AR) with
-            `producer: human`. A face XMP already names (MWG regions)
-            and the people a Mac's Photos library names (`osxphotos`,
-            an importer) seed the groups.
-      - [ ] **Step 5, the new pictures.** A face close to a named
-            person's faces gets their name as an INFERRED `depicts` with
-            the distance as its confidence and the run as its producer.
-            A face between two people, or near none, goes to the tab.
-            A wrong tag is ended, never deleted (invariant 8).
+            `producer: human`. The tab can show the faces of one event
+            at a time. A library whose faces are named already (MWG
+            regions in XMP, a Mac's Photos library through `osxphotos`)
+            would seed the groups; the owner's has none.
+      - [ ] **Step 5, the new pictures.** A face is matched by a
+            nearest-neighbour search over every named face, not a mean
+            per person, so each face a person names is one more to land
+            near. A face close to one person's faces gets their name as
+            an INFERRED `depicts` with the distance as its confidence
+            and the run as its producer. A face between two people, or
+            just past the line, goes to the tab's "who is this?" queue,
+            with the faces it might be beside it and its event and day,
+            ordered by how many photos an answer settles. "Not this
+            person" is kept, and that face is never offered to them
+            again. A wrong tag is ended, never deleted (invariant 8).
+      - [ ] **Step 6, who was there.** A rule: a picture `recorded_at`
+            an event that `depicts` a person makes the person `attended`
+            the event (a relation for core, INFERRED with its premises,
+            so ending a face's tag ends what followed from it). The one
+            behind the camera is rarely in the picture; that is a fact
+            of its own (a camera's owner), not this rule's.
       - **The wall.** A face vector is biometric data. Faces, their
         vectors and their names never leave the host: no paid model, no
         vision API. A `face` chunk and a `depicts` edge to a person are

@@ -171,13 +171,30 @@ lab's micrographs and a museum's scans are pictures too.
   page (2026-10-26, core 6's `recorded_at`).
 - **Tags, albums and the people in it** from XMP. digiKam, Lightroom and
   others write face regions with a person's name (the MWG regions
-  schema). Those become `depicts` edges with no face recognition at all.
+  schema). Those would become `depicts` edges with no face recognition
+  at all. The owner's library has none (2026-10-27): no sidecar files on
+  the share, and cameras and phones that write no regions. An XMP reader
+  waits for a library that has them.
 - **A caption** from the vision reading, which needs the card.
 
 Face recognition is a stage of its own after this one (plan item AT,
 asked for on 2026-10-23). It is the most sensitive reading there is, so
-it runs on the host only. A face tag already written to XMP comes first
-and seeds it.
+it runs on the host only. With no face named in XMP, it starts from
+nothing named: a person names the first groups of faces.
+
+**The person page and the faces tab** (2026-10-27). A person's life is
+shown on one page, whatever its sources: the person entity's facts in
+date order (born, child of, member of, from GEDCOM, a CV or a page), the
+documents that say something about them, and from the photos the
+pictures that depict them, the events those pictures were recorded at,
+the places of those events, and the people photographed with them. The
+genealogy of stage 2 and the faces of AT fill the same page, so there is
+no photo page beside a family page. The work is done elsewhere, on the
+Review page's faces tab: groups of faces to name, and the faces the
+recognition is unsure of ("who is this?"). Recognition improves without
+training a model. Every named face is one more face a new one is
+compared with (a nearest-neighbour search over the face index). Every
+"not this person" is kept, so that face is not offered to them again.
 
 A photo library is large and usually lies on a NAS. It is the case for
 which AQ references an original instead of copying it
@@ -298,9 +315,11 @@ and each would serve other libraries too:
    and its domain rule. A GEDCOM importer, tested on an invented tree
    checked into the tests. The date qualifier as a migration.
 2. **The owner's own account.** Facts from pages, kinship as a path, a
-   person's facts in date order on their entity page.
-3. **Photos.** The image reader with EXIF and XMP, `depicts` in core,
-   the pictures referenced on the NAS. This stage waits for AQ stage 3.
+   person's facts in date order on the person page (§7; its first
+   version, the facts and documents, 2026-10-27).
+3. **Photos.** The image reader with EXIF, `depicts` in core, the
+   pictures referenced on the NAS (the photos step, the places and the
+   events: 2026-10-26). The people in them come from AT's faces.
 4. **Captions**, with the vision reading once the card runs.
 5. **A timeline view** in the UI: one person, or the whole family, by
    world date.
@@ -308,9 +327,9 @@ and each would serve other libraries too:
 ## Questions for the user
 
 The pack's name was the first question, answered the same day:
-`biography`. Two remain:
+`biography`. The photo library was the second: the phone's library
+copied onto the NAS by icloudpd, and no face tags in XMP (2026-10-27).
+One remains:
 
-1. **The photo library.** Which program keeps it, and does it write face
-   tags to XMP? That decides how much of §7 needs no model.
-2. **Where the trees are now.** An exported GEDCOM file or a site's
+1. **Where the trees are now.** An exported GEDCOM file or a site's
    pages decides which importer comes first.
