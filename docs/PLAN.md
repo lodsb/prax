@@ -1214,12 +1214,20 @@ not done.
             wrong for a face in no group: every named face so far was
             named from a group, so the measure of 2026-10-27 says nothing
             about the loose faces.
-      - [ ] **Step 6, who was there.** A rule: a picture `recorded_at`
+      - [x] (2026-10-27) **Step 6, who was there.** A rule: a picture `recorded_at`
             an event that `depicts` a person makes the person `attended`
             the event (a relation for core, INFERRED with its premises,
             so ending a face's tag ends what followed from it). The one
             behind the camera is rarely in the picture; that is a fact
             of its own (a camera's owner), not this rule's.
+            Built: a relation characteristic, `chain` (OWL's property
+            chain; `attended: chain: [~depicts, recorded_at]` in
+            core.yaml, no version bump), and the rule pass's `chain`
+            kind (`rules.chain`, producer `rule:chain`, run
+            `rule:attended`). A chain stands on two premises of one
+            document whatever its sensitivity, or of two open ones; the
+            fact is sourced to that one document, the most open one that
+            shows it, so the wall hides it wherever the picture is.
       - **The wall.** A face vector is biometric data. Faces, their
         vectors and their names never leave the host: no paid model, no
         vision API. A `face` chunk and a `depicts` edge to a person are

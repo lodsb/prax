@@ -8804,3 +8804,69 @@ under the name, each answered with an undo (`POST /graph/unmerge`).
 
 Tests: one in `tests/test_face_naming.py`, one node test.
 
+## 2026-10-27: AT step 6, who was there; and what the answers say of 5b and small faces
+
+The user, after naming more: "I fixed some face-groups etc already. so I
+guess you can go ahead with the other steps".
+
+**Step 6.** A relation characteristic of its own, `chain` (OWL's
+property chain): `attended: chain: [~depicts, recorded_at]` in
+core.yaml, a person a picture depicts was at the event the picture was
+recorded at. Like the other characteristics it changes nothing that
+validates, so no version moves. The rule pass derives it
+(`rules.chain`, producer `rule:chain`, run `rule:attended`) with its two
+premises.
+
+The wall decided its shape. The rule pass stood only on facts of open
+documents, so that a derivation never says what a hidden note says. A
+picture with a named face is suspected, and a referenced one is from its
+registration, so a chain kept to open documents would say nothing. A
+chain therefore stands on two premises of one document whatever its
+sensitivity, and its fact is sourced to that document: it is hidden
+wherever the picture is, by every read that filters by source, as well
+as by `hidden_by_premise`. Of the pictures that show it, the most open
+one is chosen. Two premises of two documents count only when both are
+open, since no single document would then hide the fact. A fact whose
+best picture changes is ended and written again with the new one.
+
+**Step 5b, measured** (`offer_eval.py` in the session's scratchpad,
+read only, counts only). The owner's answers to the offers: 426 faces
+named from an offer (runs of kind `match`), 240 refused. Each was
+matched again against the named faces but itself and its picture, by
+the offered person's nearest face:
+
+| similarity | taken | refused |
+|---|---|---|
+| 0.45-0.50 | 40 | 114 |
+| 0.50-0.55 | 86 | 75 |
+| 0.55-0.60 | 92 | 28 |
+| 0.60-0.65 | 99 | 19 |
+| 0.65-0.70 | 42 | 3 |
+| 0.70-0.80 | 37 | 1 |
+| 0.80- | 30 | 0 |
+
+Nearly all of them (659 of 666) are faces in no group, which is what
+2026-10-27's first measure could not say. A tag past 0.65 with a margin
+of 0.05 and three of five votes would have been 109 tags, 4 wrong; past
+0.70, 64 tags, 1 wrong. But of the 5,349 faces still open, only 13 pass
+0.65 and 6 pass 0.70: the owner took the clear offers already. Tagging
+without asking would settle almost nothing today; it is worth building
+for the pictures still to come, not for these. Left open.
+
+**Small faces** (`face_size_eval.py`). Among the 2,655 named faces (55
+people), the nearest named faces name the face's own person as often
+when it is small as when it is large: 98.0% under 30 px wide in the
+preview (150 faces), 99.0% at 30-40, 98.3% at 40-60, 98.7% at 60-80,
+99.2% from 80 (1,712). The faces named are those that grouped or were
+offered, so this flatters a small face; the strangers are the harder
+test, and there the small ones are offered as someone a little more
+often (60 of 602 under 40 px, 21 of 295 above), with no steady slope.
+42% of the faces with a vector are under 40 px. Nothing here says a
+re-reading from the original would change an answer; what it cannot
+say is how many faces the preview missed. Left open until something
+does.
+
+Tests: three in `tests/test_rules.py` (the chain on suspected pictures,
+hidden with them and ended with the name; a chain across two open
+documents; the lint of a chain).
+

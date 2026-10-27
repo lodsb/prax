@@ -1,6 +1,7 @@
 """What follows from what is stated (stage AN): the closure of a transitive
 relation, the converse of a symmetric one, the inverse of one that has
-one (the relation's characteristics in the ontology's YAML).
+one, and what a chain of two relations gives (the relation's
+characteristics in the ontology's YAML).
 
 A derived edge is INFERRED, signed by its rule (producer ``rule:<kind>``,
 run ``rule:<relation>``), and written with its premises
@@ -16,6 +17,13 @@ retiring a run takes all of it back. ``RULE_CAP`` derivations a relation
 at most, chains of ``RULE_DEPTH`` steps at most. A ``part_of`` whose names
 say it runs the wrong way round (``ontology.part_of_suspect``) is no
 premise: a closure carries one backwards fact into every chain through it.
+
+A chain (``attended``: a person a picture depicts was at the event it was
+recorded at, plan item AT step 6) may also stand on two premises of one
+document whatever its sensitivity, and its fact is then sourced to that
+document, so it is hidden wherever the document is: the pictures that
+say who was where are suspected nearly all, and a rule kept to open
+documents would say nothing of them.
 """
 
 from __future__ import annotations
@@ -37,6 +45,9 @@ EVIDENCE_CHARS = 300
 
 Pair = tuple[int, int]
 Plan = dict[Pair, list[int]]  # (src, dst) canonical entities -> premise edge ids
+# (edge id, src, dst, world_from, source_doc, how hidden its document is)
+Premise = tuple[int, int, int, str | None, int | None, int]
+SENSITIVITY_RANK = {None: 0, "suspected": 1, "personal": 2}
 
 
 @_reading
@@ -61,6 +72,77 @@ def _premise_edges(
         (rel,),
     ).fetchall()
     return [(int(r[0]), int(r[1]), int(r[2]), r[3]) for r in rows if r[1] != r[2]]
+
+
+@_reading
+def _chain_edges(con: sqlite3.Connection, rel: str) -> list[Premise]:
+    """The live asserted edges of ``rel`` a chain may stand on, of any
+    document but a retired one, each with its document and how hidden it
+    is (``SENSITIVITY_RANK``); the ends as their canonical entities."""
+    rows = con.execute(
+        """
+        SELECT e.id, COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id),
+               e.world_from, e.source_doc, d.sensitivity
+        FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        LEFT JOIN documents d ON d.id = e.source_doc
+        WHERE e.rel = ? AND e.valid_to IS NULL
+          AND COALESCE(e.producer, '') NOT LIKE 'rule:%'
+          AND (e.source_doc IS NULL OR json_extract(d.meta, '$.retired') IS NULL)
+        """,
+        (rel,),
+    ).fetchall()
+    return [
+        (
+            int(r[0]),
+            int(r[1]),
+            int(r[2]),
+            r[3],
+            None if r[4] is None else int(r[4]),
+            SENSITIVITY_RANK.get(r[5], 2),
+        )
+        for r in rows
+        if r[1] != r[2]
+    ]
+
+
+def chain(
+    first: list[Premise], second: list[Premise], *, cap: int
+) -> tuple[Plan, dict[Pair, int | None]]:
+    """The pairs ``a -first-> m -second-> c`` reaches, each through the
+    one middle that shows it most openly, and the document each is then
+    sourced to: two premises of one document (it), or two of open
+    documents (none). Two premises of different documents not both open
+    give nothing, since no one document would hide the fact with them.
+    The edges come oriented already (a ``~`` step reversed)."""
+    after: dict[int, list[Premise]] = defaultdict(list)
+    for p in second:
+        after[p[1]].append(p)
+    best: dict[Pair, tuple[tuple[int, int, int, int], int | None]] = {}
+    for e1, a, m, _, doc1, rank1 in first:
+        for e2, _, c, _, doc2, rank2 in after.get(m, ()):
+            if a == c:
+                continue
+            if doc1 is not None and doc1 == doc2:
+                source, rank = doc1, rank1
+            elif rank1 == 0 and rank2 == 0:
+                source, rank = None, 0
+            else:
+                continue
+            key = (rank, int(source is None), e1, e2)
+            held = best.get((a, c))
+            if held is None and len(best) >= cap:
+                continue
+            if held is None or key < held[0]:
+                best[(a, c)] = (key, source)
+    plan = {k: [v[0][2], v[0][3]] for k, v in best.items()}
+    return plan, {k: v[1] for k, v in best.items()}
+
+
+def _oriented(edges: list[Premise], step: str) -> list[Premise]:
+    """A chain's step as ``(id, from, to, ...)``: ``~rel`` walks it back."""
+    if not step.startswith("~"):
+        return edges
+    return [(e, b, a, w, d, r) for e, a, b, w, d, r in edges]
 
 
 def closure(edges: list[tuple[int, int, int, str | None]], *, cap: int) -> Plan:
@@ -204,14 +286,15 @@ def _write(
     rel: str,
     kind: str,
     run: str,
-    items: list[tuple[Pair, list[int], str | None]],
+    items: list[tuple[Pair, list[int], str | None, int | None]],
     names: dict[int, tuple[str, str]],
     lines: dict[int, str],
 ) -> tuple[int, int]:
-    """Link one batch of derivations with their premises; ``(written,
-    refused)``, refused being those the ontology does not take."""
+    """Link one batch of derivations with their premises, each sourced to
+    its document when it has one (a chain's); ``(written, refused)``,
+    refused being those the ontology does not take."""
     written = refused = 0
-    for (a, b), premises, world_from in items:
+    for (a, b), premises, world_from, source in items:
         if a not in names or b not in names:
             continue
         (sa, ta), (sb, tb) = names[a], names[b]
@@ -225,6 +308,7 @@ def _write(
                 producer=f"rule:{kind}",
                 run=run,
                 world_from=world_from,
+                source_doc=source,
             )
         except ValueError:
             refused += 1  # a chain across types the relation does not join
@@ -236,6 +320,14 @@ def _write(
         written += 1
     con.commit()
     return written, refused
+
+
+@_reading
+def _source_of(con: sqlite3.Connection, edge_id: int) -> int | None:
+    row = con.execute(
+        "SELECT source_doc FROM edges WHERE id = ?", (edge_id,)
+    ).fetchone()
+    return None if row is None or row[0] is None else int(row[0])
 
 
 @_serialized
@@ -275,22 +367,46 @@ def derive_rules(
             jobs.append((r.name, r.name, "symmetric"))
         if r.inverse_of and r.inverse_of in onto.relations:
             jobs.append((r.name, r.inverse_of, "inverse"))
+        if len(r.chain) == 2 and all(
+            s.removeprefix("~") in onto.relations for s in r.chain
+        ):
+            jobs.append((r.name, r.name, "chain"))
     report: dict[str, dict[str, int]] = {}
     for read, writes, kind in sorted(jobs):
-        edges = _premise_edges(con, read)
-        if read == "part_of":
-            doubted = {int(x["edge_id"]) for x in part_of_suspects(con)}
-            edges = [e for e in edges if e[0] not in doubted]
-        plan = (
-            closure(edges, cap=cap)
-            if kind == "transitive"
-            else converse(edges, cap=cap)
-        )
+        sources: dict[Pair, int | None] = {}
+        if kind == "chain":
+            first, second = (
+                _oriented(_chain_edges(con, s.removeprefix("~")), s)
+                for s in onto.relations[read].chain
+            )
+            plan, sources = chain(first, second, cap=cap)
+            stated = {(p[1], p[2]) for p in _chain_edges(con, writes)}
+            plan = {k: v for k, v in plan.items() if k not in stated}
+            edges = [(p[0], p[1], p[2], p[3]) for p in first + second]
+        else:
+            edges = _premise_edges(con, read)
+            if read == "part_of":
+                doubted = {int(x["edge_id"]) for x in part_of_suspects(con)}
+                edges = [e for e in edges if e[0] not in doubted]
+            plan = (
+                closure(edges, cap=cap)
+                if kind == "transitive"
+                else converse(edges, cap=cap)
+            )
         if kind == "inverse":
             stated_inverse = {(a, b) for _, a, b, _ in _premise_edges(con, writes)}
             plan = {k: v for k, v in plan.items() if k not in stated_inverse}
         run = f"rule:{writes}" if kind != "inverse" else f"rule:{writes}<-{read}"
         held = _rule_edges(con, run)
+        if kind == "chain":
+            # a chain's fact is hidden with its document: one that would
+            # be sourced elsewhere now is ended and written again
+            for k in [
+                k
+                for k, ids in held.items()
+                if k in plan and _source_of(con, ids[0]) != sources.get(k)
+            ]:
+                _end(con, held.pop(k))
         # one edge stands for a pair; a second one a merge folded onto it
         # is ended with those that no longer follow
         have = {k: ids[0] for k, ids in held.items()}
@@ -306,6 +422,7 @@ def derive_rules(
                     k,
                     plan[k],
                     max((w for p in plan[k] if (w := world.get(p))), default=None),
+                    sources.get(k),
                 )
                 for k in new[i : i + RULE_BATCH]
             ]

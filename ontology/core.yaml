@@ -195,6 +195,9 @@ relation_types:
     same_as: schema:attendee
     domain: [person]
     range: [event]
+    # a person a picture depicts was at the event it was recorded at
+    # (plan item AT step 6, the rule pass)
+    chain: [~depicts, recorded_at]
     description: >-
       an event a person was at: the inverse of schema:attendee, which an
       event says of a person

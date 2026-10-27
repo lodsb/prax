@@ -95,6 +95,11 @@ class Relation:
     symmetric: bool = False
     functional: bool = False
     inverse_of: str = ""
+    # a chain of two relations it follows from (OWL's property chain):
+    # ``("~depicts", "recorded_at")`` says a person a picture depicts
+    # attended the event the picture was recorded at; ``~`` walks a
+    # relation backwards
+    chain: tuple[str, ...] = ()
     # how a fact of it lasts: "state" (holds for a while: an affiliation),
     # "event" (happens once: a publication), "eternal" (holds as long as
     # the things do: authorship); empty says nothing
@@ -355,7 +360,8 @@ def lint(types: dict[str, EntityType], relations: dict[str, Relation]) -> list[s
     relation transitive and functional at once (its closure would give a
     subject several values), symmetric between types it cannot hold the
     other way round, an ``inverse_of`` that names nothing or is not
-    mutual, an unknown ``kind``, a subtype cycle."""
+    mutual, a ``chain`` that is not two known relations, an unknown
+    ``kind``, a subtype cycle."""
     out: list[str] = []
     for r in relations.values():
         if r.transitive and r.functional:
@@ -377,6 +383,15 @@ def lint(types: dict[str, EntityType], relations: dict[str, Relation]) -> list[s
                 )
             elif r.symmetric:
                 out.append(f"relation {r.name!r} is symmetric and has an inverse")
+        if r.chain:
+            steps = [s.removeprefix("~") for s in r.chain]
+            if len(steps) != 2:
+                out.append(f"relation {r.name!r}: a chain is two relations")
+            for s in steps:
+                if s not in relations:
+                    out.append(f"relation {r.name!r}: chain names {s!r}, unknown")
+                elif s == r.name:
+                    out.append(f"relation {r.name!r}: a chain through itself")
         if r.kind and r.kind not in RELATION_KINDS:
             out.append(f"relation {r.name!r}: kind {r.kind!r}, one of {RELATION_KINDS}")
         if r.strength and r.strength not in RELATION_STRENGTHS:
@@ -425,6 +440,7 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
             symmetric=bool(a.get("symmetric", False)),
             functional=bool(a.get("functional", False)),
             inverse_of=str(a.get("inverse_of") or ""),
+            chain=tuple(str(s) for s in (a.get("chain") or [])),
             kind=str(a.get("kind") or ""),
             strength=str(a.get("strength") or ""),
             same_as=_same_as(n, a.get("same_as")),

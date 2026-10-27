@@ -208,12 +208,15 @@ revisit threshold, under "Decision thresholds" below.
    against; none means every module. It is extracted against that
    subset and stamped with the subset's version (`core1+family1`).
    A relation says what follows from it (`transitive`, `symmetric`,
-   `functional`, `inverse_of`, `kind`) and a type or relation its
+   `functional`, `inverse_of`, `kind`, and `chain`, two relations it
+   follows from: `attended` is `[~depicts, recorded_at]`) and a type or relation its
    standard names (`same_as`: `schema:author`, `skos:Concept`); none of
    it bumps a version, and `ontology.lint` refuses a contradiction at
    load. The rule pass (`store.derive_rules`) writes INFERRED edges with
    their premises (`edge_premises`) in the nightly `prax maintain`, and
-   stands on no `part_of` its names doubt (stage AN). Two facts of a
+   stands on no `part_of` its names doubt (stage AN). A chain may stand on
+   two premises of one document of any sensitivity, and its fact is then
+   sourced to that document, so the wall hides it with the document. Two facts of a
    functional relation that cannot both hold are kept beside the edges
    (`edge_conflicts`, the `conflicts` pass), shown as `disputed` by
    `traverse` and listed by `why`; no fact is ended for it.

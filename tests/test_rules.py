@@ -310,3 +310,105 @@ def test_heal_turns_a_reversed_part_of_and_ends_a_misfit(
     ) in live
     assert not any(b == "course" for _, b, _ in live)
     assert ("Normen von Funktionen", "SS 2009 Blatt 2", "t") in live
+
+
+# ------------------------------------------------- a chain (AT step 6)
+
+
+def _picture(con: sqlite3.Connection, title: str, *, personal: bool = True) -> int:
+    doc = int(store.ingest_text(con, f"{title} " * 40, title=title)["doc_id"])
+    if personal:
+        store.set_sensitivity(con, doc, "suspected")
+    return doc
+
+
+def _says(con: sqlite3.Connection, doc: int, rel: str, dst: str, dtype: str) -> int:
+    node = store.document_node(con, doc)
+    return store.link(
+        con,
+        E(node[0], node[1], rel, dst, dtype),
+        source_doc=doc,
+        producer="human",
+        run="t",
+    )
+
+
+def _attended(con: sqlite3.Connection) -> dict[tuple[str, str], int | None]:
+    rows = con.execute(
+        "SELECT s.name, t.name, e.source_doc FROM edges e"
+        " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+        " WHERE e.rel = 'attended' AND e.valid_to IS NULL"
+    )
+    return {(r[0], r[1]): r[2] for r in rows}
+
+
+def test_who_a_picture_of_an_event_depicts_attended_it(
+    con: sqlite3.Connection,
+) -> None:
+    """``attended`` follows from ``~depicts`` then ``recorded_at``
+    (core.yaml's chain): sourced to the picture that shows it, so hidden
+    wherever the picture is, and ended when the face's name is."""
+    assert ontology.current().relations["attended"].chain == ("~depicts", "recorded_at")
+    wedding = _picture(con, "IMG one")
+    ada = _says(con, wedding, "depicts", "Ada", "person")
+    _says(con, wedding, "recorded_at", "The wedding", "event")
+    # a second picture of it showing her again: still one fact
+    again = _picture(con, "IMG two")
+    _says(con, again, "depicts", "Ada", "person")
+    _says(con, again, "recorded_at", "The wedding", "event")
+    # her in one picture, an event of another's: no one document says so
+    lone = _picture(con, "IMG three")
+    _says(con, lone, "depicts", "Grace", "person")
+    other = _picture(con, "IMG four")
+    _says(con, other, "recorded_at", "The wedding", "event")
+    report = store.derive_rules(con)["rule:attended"]
+    assert report["added"] == 1
+    got = _attended(con)
+    assert list(got) == [("Ada", "The wedding")]
+    assert got[("Ada", "The wedding")] in (wedding, again)
+    (edge,) = con.execute(
+        "SELECT id, producer, confidence FROM edges WHERE rel = 'attended'"
+    ).fetchall()
+    assert edge[1] == "rule:chain" and edge[2] == "INFERRED"
+    assert len(store.edge_premises(con, int(edge[0]))) == 2
+    # a viewer who may not see the picture does not see the fact
+    token = store.VIEWER.set(store.Viewer(name="t", domains=None, personal=False))
+    try:
+        assert store.edge_hidden(con, int(edge[0]))
+    finally:
+        store.VIEWER.reset(token)
+    # a pass again keeps it; the name taken back from both pictures ends it
+    assert store.derive_rules(con)["rule:attended"]["kept"] == 1
+    store.end_edge(con, ada, run="t")
+    for eid in con.execute(
+        "SELECT id FROM edges WHERE rel = 'depicts' AND source_doc = ?"
+        " AND valid_to IS NULL",
+        (again,),
+    ).fetchall():
+        store.end_edge(con, int(eid[0]), run="t")
+    assert store.derive_rules(con)["rule:attended"]["ended"] == 1
+    assert _attended(con) == {}
+
+
+def test_a_chain_across_two_open_documents(con: sqlite3.Connection) -> None:
+    """Two open documents may make a chain between them: nothing about
+    them is hidden, and the fact is sourced to neither."""
+    one = _picture(con, "open one", personal=False)
+    two = _picture(con, "open two", personal=False)
+    node = store.document_node(con, one)
+    store.link(con, E(node[0], node[1], "depicts", "Ada", "person"), source_doc=two)
+    store.link(
+        con, E(node[0], node[1], "recorded_at", "A trip", "event"), source_doc=one
+    )
+    store.derive_rules(con)
+    assert _attended(con) == {("Ada", "A trip"): None}
+
+
+def test_a_chain_names_two_known_relations() -> None:
+    bad = ontology.parse_module(
+        "module: m\nversion: 1\nrelation_types:\n"
+        "  went: {domain: [thing], range: [thing], chain: [~nothing, went]}\n"
+    )
+    problems = ontology.lint({}, bad.relations)
+    assert any("'nothing', unknown" in p for p in problems)
+    assert any("a chain through itself" in p for p in problems)
