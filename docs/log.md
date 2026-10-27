@@ -8706,3 +8706,30 @@ findings in the order they pay, and one that came out of writing it.
       usearch suspected; the merge no longer holds the index lock for
       its build. Watch `logs/up.log` for another. (2026-09-27, stage S:
       four native exits in all, none since 2026-09-20; see the log.)
+
+## 2026-10-27: a picture's faces under it
+
+The user: "there are frames around the faces, it would be nice to be
+able to see the respective links to the boxes (== faces) below the
+picture. and probably also an option to create a new person from a
+boxed face. and then also just the option to hide the boxes".
+
+`store.picture_faces` (retrieval part `faces`) answers `GET
+/doc/{id}/faces` now: each face's box, whether it has a crop, its live
+answer, and for an open face the matching's offer at the line and
+margin of `faces.match` (from the cache `face_matches` keeps, so no
+second computation). Nothing for a picture the viewer may not see, and
+still no named token's route.
+
+The document page numbers the boxes and lists the faces under the
+picture in the same order: a named face links to the person and has an
+undo; an open one has the name field of the Review page, holding the
+offer when there is one. A name not picked from the list makes a new
+person (`POST /faces/name` with `name`). Taking the offer as it stands
+sends `matched`, so the answer counts for step 5b. A click on a box
+finds its row; a row lit by the pointer or the keyboard lights its box.
+"hide faces" hides the boxes and the list, kept as `faces` in this
+browser's settings. A guest's page draws none of it.
+
+Tests: one store-and-route test in `tests/test_face_matching.py`, one
+node test.

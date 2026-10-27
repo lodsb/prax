@@ -706,6 +706,7 @@ from .retrieval import (  # noqa: F401
     pending_document_embeddings,
     pending_embeddings,
     phrase_languages,
+    picture_faces,
     published_dates,
     reconcile_face_vectors,
     reconcile_unsaved,

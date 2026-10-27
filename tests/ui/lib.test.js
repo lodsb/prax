@@ -712,3 +712,23 @@ test("the name field: a person picked, or a new name", () => {
   assert.deepEqual(lib.personChoice("  Grace  "), { name: "Grace" });
   assert.equal(lib.personChoice(" "), null);
 });
+
+test("a picture's faces listed under it: answered, offered, open", () => {
+  const box = { box: [0.1, 0.1, 0.2, 0.2], score: 0.9, px: 60, crop: true };
+  const named = lib.pictureFaceRow({ id: 1, ...box, answer: { verdict: "person", entity_id: 7, name: "Ada", run: "r" } }, 1);
+  assert.match(named, /href="#person\/7">Ada</);
+  assert.match(named, /data-unname="1"/);
+  assert.doesNotMatch(named, /<form/);
+  const offered = lib.pictureFaceRow({ id: 2, ...box, answer: null, offer: { entity_id: 7, name: "Ada", similarity: 0.61 } }, 2);
+  assert.match(offered, /probably <a href="#person\/7">Ada<\/a>, 61% alike/);
+  assert.match(offered, /data-offer="7"/);
+  assert.match(offered, /value="Ada #7"/);
+  const open = lib.pictureFaceRow({ id: 3, ...box, crop: false, answer: null, offer: null }, 3);
+  assert.match(open, /no crop yet/);
+  assert.match(open, /value=""/);
+  assert.match(lib.pictureFaceRow({ id: 4, ...box, answer: { verdict: "not_face" } }, 4), /not a face/);
+  const drawn = lib.faceBox({ id: 1, ...box, answer: { verdict: "person", name: "Ada" } }, 1);
+  assert.match(drawn, /face-said/);
+  assert.match(drawn, /title="Ada · face 1/);
+  assert.match(drawn, /<span class="face-num">1<\/span>/);
+});

@@ -831,3 +831,73 @@ def face_matches(
         "margin": margin,
         "items": items,
     }
+
+
+@_reading
+def picture_faces(
+    con: sqlite3.Connection, doc_id: int, *, model: str = FACE_MODEL
+) -> list[dict[str, Any]]:
+    """The faces of one picture as its page lists them under it, the most
+    certain first: each its ``id``, ``box`` (fractions of the upright
+    picture), ``score``, ``px``, ``crop`` (whether it has one), its live
+    ``answer`` (``verdict``, ``entity_id``, ``name``, ``run``) or None,
+    and for an open face the matching offers (as ``face_matches`` does,
+    at the same line and margin) the ``offer``: ``entity_id``, ``name``,
+    ``similarity``. Nothing for a picture the viewer may not see."""
+    if document_hidden(con, doc_id):
+        return []
+    rows = con.execute(
+        "SELECT f.id, f.box, f.score, f.px, f.crop IS NOT NULL AS crop,"
+        " n.verdict, n.entity_id, n.run, e.name FROM faces f"
+        " LEFT JOIN face_names n ON n.face_id = f.id AND n.ended_at IS NULL"
+        " LEFT JOIN entities e ON e.id = n.entity_id"
+        " WHERE f.doc_id = ? AND f.gone_at IS NULL ORDER BY f.score DESC, f.id",
+        (doc_id,),
+    ).fetchall()
+    offers: dict[int, matching.Match] = {}
+    if any(r["verdict"] is None for r in rows):
+        line = config.number("faces.match.line", default=0.45)
+        margin = config.number("faces.match.margin", default=0.05)
+        k = config.whole("faces.match.neighbours", default=5)
+        offers = {
+            face: m
+            for face, doc, m, _ in _matched(con, hidden_documents(con), k, model)
+            if doc == doc_id and m.similarity >= line and m.margin >= margin
+        }
+    names = {
+        int(r[0]): str(r[1])
+        for r in con.execute(
+            "SELECT id, name FROM entities"
+            " WHERE id IN (SELECT value FROM json_each(?))",
+            (json.dumps(sorted({m.person for m in offers.values()})),),
+        )
+    }
+    out = []
+    for r in rows:
+        face = int(r["id"])
+        m = offers.get(face)
+        out.append(
+            {
+                "id": face,
+                "box": json.loads(r["box"]),
+                "score": float(r["score"]),
+                "px": int(r["px"]),
+                "crop": bool(r["crop"]),
+                "answer": None
+                if r["verdict"] is None
+                else {
+                    "verdict": r["verdict"],
+                    "entity_id": r["entity_id"],
+                    "name": r["name"],
+                    "run": r["run"],
+                },
+                "offer": None
+                if m is None
+                else {
+                    "entity_id": m.person,
+                    "name": names.get(m.person, ""),
+                    "similarity": round(m.similarity, 4),
+                },
+            }
+        )
+    return out

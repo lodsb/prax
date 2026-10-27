@@ -443,10 +443,33 @@ function facesWords(f) {
   return f.n ? `${f.n} face${f.n === 1 ? "" : "s"}` : "no face";
 }
 // A face as a box over its picture: its place in percent of the picture,
-// its score as the title
-function faceBox(f) {
+// who it was named as and its score as the title, and with ``n`` its
+// number in the list under the picture
+function faceBox(f, n) {
   const [x, y, w, h] = f.box.map((v) => (v * 100).toFixed(2));
-  return `<span class="face-box" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" title="face ${f.id} · ${Math.round(f.score * 100)}%"></span>`;
+  const who = f.answer && f.answer.verdict === "person" ? `${esc(f.answer.name)} · ` : "";
+  const num = n == null ? "" : `<span class="face-num">${n}</span>`;
+  return `<span class="face-box${f.answer ? " face-said" : ""}" data-face="${f.id}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" title="${who}face ${f.id} · ${Math.round(f.score * 100)}%">${num}</span>`;
+}
+// One face of a picture in the list under it (view-doc.js): its number on
+// the box, its crop, and its answer with an undo, or a field to name it,
+// holding the matching's offer when there is one. A name not picked from
+// the list makes a new person
+function pictureFaceRow(f, n) {
+  const img = f.crop ? `<img loading="lazy" src="/face/${f.id}/crop" alt="">` : `<span class="face-none">no crop yet</span>`;
+  const a = f.answer;
+  let said;
+  if (a) {
+    const what = a.verdict === "person" ? `<a href="#person/${a.entity_id}">${esc(a.name)}</a>`
+      : a.verdict === "nobody" ? "nobody to name" : "not a face";
+    said = `${what} · <a href="#" data-unname="${f.id}">undo</a>`;
+  } else {
+    const offer = f.offer ? `<span class="muted">probably <a href="#person/${f.offer.entity_id}">${esc(f.offer.name)}</a>, ${Math.round(f.offer.similarity * 100)}% alike</span><br>` : "";
+    said = `${offer}<form class="face-name"${f.offer ? ` data-offer="${f.offer.entity_id}"` : ""}>
+      <span class="person-field"><input name="who" placeholder="who is this? a new name makes a person" autocomplete="off" value="${f.offer ? esc(personValue(f.offer)) : ""}"><span class="person-choices" hidden></span></span>
+      <button name="act" value="name">name</button> <button type="button" value="not_face">not a face</button> <button type="button" value="nobody">nobody to name</button></form>`;
+  }
+  return `<li class="picture-face" data-face="${f.id}"><span class="face-num">${n}</span>${img}<div>${said} <span class="msg"></span></div></li>`;
 }
 // The faces tab's counts (store.faces_page): how many, in how many
 // pictures, how many have a vector, by score and by size
@@ -1087,5 +1110,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

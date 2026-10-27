@@ -468,7 +468,9 @@ reference `docs/ask.md`.
   `store.face_matches`, the "who is this?" tab, `faces.match` in
   prax.yaml), computed on request and never written: a person confirms it,
   or says "not them" (`face_refusals`, migration 57), and that face is not
-  offered as them again. Faces are biometric:
+  offered as them again. A picture's page lists its faces under it, numbered
+  as their boxes are, each named, judged or taken back there
+  (`store.picture_faces`, `GET /doc/{id}/faces`). Faces are biometric:
   never to a paid model or an API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means

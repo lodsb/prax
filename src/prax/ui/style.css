@@ -699,7 +699,19 @@ table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 
 .face-frame { position: relative; display: inline-block; max-width: 100%; }
 .face-frame .doc-image { display: block; margin-bottom: 0; }
 .faces-over { position: absolute; inset: 0; pointer-events: none; }
-.face-box { position: absolute; border: 2px solid var(--accent); border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .6); }
+.face-box { position: absolute; border: 2px solid var(--accent); border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .6); pointer-events: auto; cursor: pointer; }
+.face-box.face-said { border-style: dashed; }
+.face-box.face-lit { border-width: 3px; box-shadow: 0 0 0 2px var(--fg); }
+.face-num { position: absolute; left: 0; top: 0; transform: translateY(-100%); font-size: .7rem; line-height: 1; padding: .1rem .25rem; background: var(--accent); color: var(--bg); border-radius: 2px 2px 0 0; }
+.faces-hidden .faces-over { display: none; }
+/* the list of a picture's faces under it (view-doc.js, bindFaces) */
+.picture-faces { margin: .5rem 0 1rem; }
+.picture-faces.faces-hidden .picture-face-list { display: none; }
+.picture-face-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+.picture-face { display: grid; grid-template-columns: auto 3.5rem 1fr; gap: .5rem; align-items: start; }
+.picture-face .face-num { position: static; transform: none; border-radius: 2px; }
+.picture-face img, .picture-face .face-none { width: 3.5rem; aspect-ratio: 1; object-fit: cover; background: var(--panel); border-radius: 2px; display: block; font-size: .7rem; }
+.picture-face form { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
 /* the faces tab (view-decide.js, viewFaces) */
 .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: .5rem; }
 .face-tile { margin: 0; }

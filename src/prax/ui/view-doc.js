@@ -61,19 +61,82 @@ function pictureHtml(doc, meta, isImage, offline) {
   const preview = meta.photo && meta.photo.preview;
   if (!preview && offline) return "";
   let img = `<img class="doc-image" src="${preview ? `/doc/${doc.id}/preview` : originalHref(doc.id)}" alt="${esc(doc.title || "")}">`;
-  // the faces step's boxes over it, drawn once they are fetched (bindFaces)
-  if (preview && meta.faces && meta.faces.n) img = `<span class="face-frame">${img}<span class="faces-over"></span></span>`;
-  return offline ? img : `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener">${img}</a>`;
+  // the faces step's boxes over it and the list of them under it, drawn
+  // once they are fetched (bindFaces); the administrator's alone, since a
+  // face is biometric and no named token's route
+  const faces = preview && meta.faces && meta.faces.n && !isGuest();
+  const hide = faces && !settings().faces ? " faces-hidden" : "";
+  if (faces) img = `<span class="face-frame${hide}">${img}<span class="faces-over"></span></span>`;
+  const linked = offline ? img : `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener">${img}</a>`;
+  return faces ? `${linked}<section class="picture-faces${hide}"></section>` : linked;
 }
 
 // The faces of a picture as boxes over its preview (GET /doc/N/faces):
-// fractions of the upright picture, so they hold at any size it is drawn
+// fractions of the upright picture, so they hold at any size it is drawn.
+// Under it the same faces as a numbered list, each named, judged or taken
+// back there (the Review page's routes); a click on a box finds its row.
+// "hide faces" hides both, a setting of this browser's
 async function bindFaces(view, doc) {
   const over = view.querySelector(".faces-over");
-  if (!over) return;
+  const panel = view.querySelector(".picture-faces");
+  if (!over || !panel) return;
   let found;
   try { found = await api(`/doc/${doc.id}/faces`); } catch (_) { return; }
-  over.innerHTML = found.map((f) => faceBox(f)).join("");
+  over.innerHTML = found.map((f, i) => faceBox(f, i + 1)).join("");
+  const shown = !panel.classList.contains("faces-hidden");
+  const toggle = `<a href="#" data-faces-toggle>${shown ? "hide faces" : "show faces"}</a>`;
+  panel.innerHTML = `<p class="muted">${facesWords({ n: found.length })} · ${toggle}</p>
+    <ol class="picture-face-list">${found.map((f, i) => pictureFaceRow(f, i + 1)).join("")}</ol>`;
+  const again = () => bindFaces(view, doc);
+  panel.querySelector("[data-faces-toggle]").addEventListener("click", (e) => {
+    e.preventDefault();
+    saveSettings({ ...settings(), faces: !shown });
+    panel.classList.toggle("faces-hidden", shown);
+    over.parentElement.classList.toggle("faces-hidden", shown);
+    again();
+  });
+  const lit = (id, on) => { const b = over.querySelector(`.face-box[data-face="${id}"]`); if (b) b.classList.toggle("face-lit", on); };
+  over.querySelectorAll(".face-box").forEach((b) => b.addEventListener("click", (e) => {
+    // the box lies over the link to the original
+    e.preventDefault();
+    e.stopPropagation();
+    const row = panel.querySelector(`.picture-face[data-face="${b.dataset.face}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: "nearest" });
+    const input = row.querySelector("input[name=who]");
+    if (input) input.focus();
+  }));
+  panel.querySelectorAll(".picture-face").forEach((row) => {
+    const id = Number(row.dataset.face);
+    const out = row.querySelector(".msg");
+    row.addEventListener("mouseenter", () => lit(id, true));
+    row.addEventListener("mouseleave", () => lit(id, false));
+    row.addEventListener("focusin", () => lit(id, true));
+    row.addEventListener("focusout", () => lit(id, false));
+    const send = async (path, body) => {
+      row.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try { await post(path, body); again(); }
+      catch (err) {
+        out.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+        row.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      }
+    };
+    const undo = row.querySelector("[data-unname]");
+    if (undo) undo.addEventListener("click", (e) => { e.preventDefault(); send("/faces/unname", { faces: [id] }); });
+    const form = row.querySelector("form.face-name");
+    if (!form) return;
+    const input = form.querySelector("input[name=who]");
+    bindPersonField(input);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const who = personChoice(input.value);
+      if (!who) { out.textContent = "a name, or a person picked from the list"; return; }
+      // an offer taken as it was is the matching's answer (step 5b measures them)
+      const matched = form.dataset.offer != null && who.entity_id === Number(form.dataset.offer);
+      send("/faces/name", { faces: [id], ...who, matched });
+    });
+    form.querySelectorAll("button[type=button]").forEach((b) => b.addEventListener("click", () => send("/faces/judge", { faces: [id], verdict: b.value })));
+  });
 }
 
 // What a picture's EXIF said (the photos step, meta.photo and meta.taken)

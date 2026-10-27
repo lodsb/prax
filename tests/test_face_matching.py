@@ -166,3 +166,31 @@ def test_the_routes(con: sqlite3.Connection, client: TestClient) -> None:
     ).status_code == 404
     u = client.post("/faces/unname", json={"run": no.json()["run"]})
     assert u.status_code == 200 and u.json()["refusals"] == len(a) - 5
+
+
+@pytestmark_vectors
+def test_a_pictures_faces_with_their_answers_and_offers(
+    con: sqlite3.Connection, client: TestClient
+) -> None:
+    people = _grouped(con)
+    a = people["a"]
+    ada = store.name_faces(con, [f for _, f in a[:3]], name="Ada Lovelace")
+    store.judge_faces(con, [a[4][1]], verdict="nobody")
+    (named,) = [f for f in store.picture_faces(con, a[0][0]) if f["id"] == a[0][1]]
+    assert named["answer"]["verdict"] == "person" and named["offer"] is None
+    assert named["answer"]["name"] == "Ada Lovelace" and named["crop"] in (True, False)
+    assert len(named["box"]) == 4
+    (open_face,) = [f for f in store.picture_faces(con, a[3][0]) if f["id"] == a[3][1]]
+    assert open_face["answer"] is None
+    assert open_face["offer"]["entity_id"] == ada["entity_id"]
+    assert open_face["offer"]["name"] == "Ada Lovelace"
+    (nobody,) = [f for f in store.picture_faces(con, a[4][0]) if f["id"] == a[4][1]]
+    assert nobody["answer"]["verdict"] == "nobody" and nobody["offer"] is None
+    r = client.get(f"/doc/{a[3][0]}/faces")
+    assert r.status_code == 200 and r.json()[0]["offer"] is not None
+    store.set_sensitivity(con, a[3][0], "personal")
+    token = store.VIEWER.set(store.Viewer(name="t", domains=None, personal=False))
+    try:
+        assert store.picture_faces(con, a[3][0]) == []
+    finally:
+        store.VIEWER.reset(token)

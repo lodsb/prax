@@ -31,7 +31,7 @@ const statusEl = document.getElementById("status");
 // thing the door sees). The theme is also applied by an inline script in
 // index.html before the first paint, so a reload does not flash.
 const SETTINGS_KEY = "prax.settings";
-const SETTINGS_DEFAULTS = { theme: "system", ask_limit: 8, search_limit: 20 };
+const SETTINGS_DEFAULTS = { theme: "system", ask_limit: 8, search_limit: 20, faces: true };
 const THEMES = ["bindery", "dessau", "riso", "cyanotype", "night", "funk"];  // docs/design/BRIEF.md
 const OLD_THEMES = { light: "bindery", dark: "night", paper: "bindery" };
 

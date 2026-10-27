@@ -61,6 +61,7 @@ from .faces import (  # noqa: F401
     face_neighbours,
     face_vectors_due,
     faces_page,
+    picture_faces,
     reconcile_face_vectors,
     replace_face_groups,
     save_face_vectors,

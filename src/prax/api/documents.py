@@ -231,10 +231,11 @@ def photo_preview(doc_id: int, request: Request) -> FileResponse:
 
 @router.get("/doc/{doc_id}/faces")
 def photo_faces(doc_id: int, request: Request) -> list[dict[str, Any]]:
-    """The faces the faces step found in a picture: boxes and landmarks as
-    fractions of the upright picture (``store.faces_of``). Biometric, so
-    no named token's route: not in ``auth.RESTRICTED_ROUTES``."""
-    return store.faces_of(_con(request), doc_id)
+    """The faces the faces step found in a picture, as its page lists them:
+    boxes as fractions of the upright picture, each face's answer and the
+    matching's offer (``store.picture_faces``). Biometric, so no named
+    token's route: not in ``auth.RESTRICTED_ROUTES``."""
+    return store.picture_faces(_con(request), doc_id)
 
 
 @router.get("/faces")
