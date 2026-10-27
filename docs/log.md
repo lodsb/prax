@@ -7014,6 +7014,42 @@ holding them, each face with how alike it is.
 
 Tests: `tests/test_face_matching.py` (6), one node test.
 
+## 2026-10-27: a named token on the web page
+
+The user: "why does it not accept a newly created token (on a mobile
+phone)?", then "it is a friends phone. can you do the proper fix? token
+doesnt need to be mcp only".
+
+**Why.** `POST /session` checked the administrator's secret alone
+(`auth.valid`), so the page's "not accepted" came before anything else.
+Past it, the page's first reads (`/changes`, `/ontology`,
+`/domains/counts`) were no route a named token may call. The door's log
+held the phone's refusals.
+
+**What a named token may now read on the page.** The routes the page's
+search, document, pages, ask and graph walks make, each audited for the
+wall before it was added (a script over the handlers: which store reads
+each makes, and whether each is `_guards`ed, `_scrubbed` or filters
+`hidden_documents`). Four were not, and are now:
+
+- `store.document_edges` (`/graph/document/{id}`): a hidden document's
+  facts were drawn. Guarded.
+- `store.list_pages` (`/pages`): a personal page's title was listed.
+  Filtered.
+- `store.hub_graph` (`/graph/overview`): a hub's degree and documents
+  counted the hidden ones. For a viewer it now counts only the edges of
+  documents it sees, and no rule's edge (no `source_doc`).
+- `/doc/{id}/chunks` answered `[]` rather than 404 for a hidden
+  document. It is a 404 now.
+
+The regions (`/communities*`) are drawn from the whole library and stay
+the administrator's, with people, faces, review and admin. The page asks
+`GET /session` who it is signed in as and leaves out the views a named
+token is refused; the graph view leaves out the regions.
+
+Tests: `tests/test_wall.py` walks the fifteen routes added, and a test
+signs in with a named token and reads with the cookie alone.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

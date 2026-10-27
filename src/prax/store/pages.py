@@ -14,7 +14,13 @@ from typing import Any, Final
 
 from prax.text import blocks, markup, slugs
 
-from .base import _read_archive, _reading, _serialized, document_hidden
+from .base import (
+    _read_archive,
+    _reading,
+    _serialized,
+    document_hidden,
+    hidden_documents,
+)
 from .documents import (
     _set_promote,
     get_meta,
@@ -249,7 +255,8 @@ def list_pages(
         """,
         args,
     ).fetchall()
-    return [dict(r) for r in rows]
+    hidden = hidden_documents(con)
+    return [dict(r) for r in rows if int(r["doc_id"]) not in hidden]
 
 
 @_serialized

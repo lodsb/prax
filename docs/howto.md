@@ -2543,8 +2543,18 @@ see it, with personal and not personal beside that.
 
 A named token sees only the modules it is given, and no document marked
 personal or suspected personal unless it was made with `--personal`. It
-may call only the routes the MCP tools use. Only a hash of its secret is
-kept.
+may call only the routes the MCP tools use and the reads of the web
+interface. Only a hash of its secret is kept.
+
+A named token also signs in to the web interface, which is how you give
+someone else a look at your library from their phone or laptop: make
+one on the Admin page's "tokens" tab, without `--personal`, and give
+them the secret once. Signed in with it, the page shows Search, Ask,
+Browse, Graph and Pages, and a document's page, all without your personal
+documents. People and faces, the regions of the graph, Review, Promote,
+Inbox, Jobs and Admin are not shown and are refused. The token can still
+do what an MCP client does: capture a URL, write a page, link two
+things. Revoke it on the same tab when the visit is over.
 
 **What is personal** is decided in two steps. Rules *suspect* a document,
 and a person decides on the Admin page's "personal?" tab. The rules run

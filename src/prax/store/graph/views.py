@@ -14,7 +14,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import names
 
-from ..base import _reading, domain_clause, hidden_documents
+from ..base import _guards, _reading, domain_clause, hidden_documents
 from .edges import held_in_world
 from .lookups import entity_named_in
 
@@ -125,6 +125,14 @@ def hub_graph(
     if within is not None:
         docs += " AND source_doc IN (SELECT value FROM json_each(?))"
         docs_args = (*docs_args, json.dumps(sorted(within)))
+    hidden = hidden_documents(con)
+    if hidden:
+        # a viewer's hubs: from what it may see, never a rule's edge
+        docs += (
+            " AND source_doc IS NOT NULL"
+            " AND source_doc NOT IN (SELECT value FROM json_each(?))"
+        )
+        docs_args = (*docs_args, json.dumps(sorted(hidden)))
     if world_at:
         world, world_args = held_in_world("edges", world_at)
         docs += f" AND {world}"
@@ -298,6 +306,7 @@ def _on_x(clause: str) -> str:
 DOCUMENT_EDGES = 300  # a document's graph: a book says more than a page holds
 
 
+@_guards("doc", list)
 @_reading
 def document_edges(
     con: sqlite3.Connection, doc_id: int, *, limit: int = DOCUMENT_EDGES

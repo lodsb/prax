@@ -139,6 +139,22 @@ WALKED = (
     ("POST", "/maths"),
     ("GET", "/work/status"),
     ("POST", "/projects/sync"),
+    # the web page's reads (test_the_web_page_with_a_named_token)
+    ("GET", "/changes"),
+    ("GET", "/ontology"),
+    ("GET", "/genres"),
+    ("GET", "/ask/config"),
+    ("GET", "/domains/counts"),
+    ("GET", "/doc/1/original"),
+    ("GET", "/doc/1/text"),
+    ("GET", "/doc/1/chunks"),
+    ("GET", "/doc/1/thumb"),
+    ("GET", "/doc/1/preview"),
+    ("GET", "/pages"),
+    ("GET", "/entities"),
+    ("GET", "/graph/overview"),
+    ("GET", "/graph/documents"),
+    ("GET", "/graph/document/1"),
 )
 
 
@@ -260,10 +276,11 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
     )
     # every other route is the administrator's
     for method, path in (
-        ("GET", "/graph/overview"),
+        ("GET", "/communities"),
+        ("GET", "/people"),
+        ("GET", "/faces/groups"),
         ("GET", "/tokens"),
         ("PUT", f"/doc/{bank}/sensitivity"),
-        ("GET", f"/doc/{bank}/text"),
     ):
         assert client.request(method, path, headers=me).status_code == 403, path
     # a secret nobody made opens nothing
@@ -278,6 +295,59 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
         "/search", params={"q": "zebrafinch", "mode": "fts"}, headers=admin
     )
     assert _says(hits, "Bank statement")
+
+
+def test_the_web_page_with_a_named_token(client: TestClient) -> None:
+    """Signed in on the web page with a named token: its session cookie
+    carries it, the page learns who it is, and the reads the page makes
+    show nothing of the personal statement or page."""
+    con = client.app.state.con
+    lib = _library(con, client)
+    bank, page, paper = lib["bank"], lib["page"], lib["paper"]
+    assert client.post("/session", json={"token": "prax_nobody"}).status_code == 401
+    signed = client.post("/session", json={"token": lib["secret"]})
+    assert signed.status_code == 200
+    assert signed.json()["admin"] is False and signed.json()["name"] == "mcp"
+    # from here on the cookie alone, as a browser sends it
+    assert client.get("/session").json()["name"] == "mcp"
+    for path in (
+        f"/doc/{bank}/text",
+        f"/doc/{bank}/chunks",
+        f"/doc/{bank}/original",
+        f"/doc/{bank}/thumb",
+        f"/doc/{bank}/preview",
+    ):
+        assert client.get(path).status_code == 404, path
+    assert client.get(f"/doc/{paper}/text").status_code == 200
+    assert client.get(f"/doc/{paper}/chunks").json()
+    assert client.get(f"/graph/document/{bank}").json()["edges"] == []
+    assert client.get(f"/graph/document/{paper}").json()["edges"]
+    pages = client.get("/pages").json()
+    assert page not in {p["doc_id"] for p in pages}
+    found = client.get("/entities", params={"q": "Landlord"}).json()
+    assert not _says_text(found, "Landlord Smith")
+    titles = client.get("/graph/documents", params={"ids": f"{bank},{paper}"})
+    assert not _says(titles, "Bank statement") and _says(titles, "Open paper")
+    overview = client.get("/graph/overview", params={"min_shared": 1})
+    assert overview.status_code == 200
+    # a hub counts only what the token sees: the paper, not the statement
+    assert [(n["name"], n["docs"]) for n in overview.json()["nodes"]] == [
+        ("wavelet transform", 1)
+    ]
+    assert not _says(overview, "Landlord Smith", "Bank statement")
+    changes = client.get("/changes", params={"doc": bank}).json()
+    assert changes["doc"] is None and "stamp" in changes
+    for path in ("/ontology", "/genres", "/ask/config", "/domains/counts"):
+        assert client.get(path).status_code == 200, path
+    # the administrator's views stay refused
+    assert client.get("/people").status_code == 403
+    assert client.get("/communities").status_code == 403
+    # the administrator, signed in the same way, is the administrator
+    assert client.post("/session", json={"token": ADMIN}).json()["admin"] is True
+    assert client.get("/session").json() == {"admin": True}
+    assert client.get(f"/doc/{bank}/text").status_code == 200
+    overview = client.get("/graph/overview", params={"min_shared": 1})
+    assert overview.json()["nodes"][0]["docs"] == 2  # the statement's too
 
 
 def test_a_token_of_one_module_sees_only_that_module(client: TestClient) -> None:

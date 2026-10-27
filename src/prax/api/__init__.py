@@ -322,16 +322,33 @@ def health() -> dict[str, Any]:
 
 @app.post("/session")
 def session(req: SessionReq, request: Request) -> JSONResponse:
-    """Exchange the bearer token for the session cookie the UI uses."""
-    if auth.token() is None:
+    """Exchange a token for the session cookie the UI uses: the
+    administrator's, or a named token's, which then sees in the UI what it
+    sees anywhere (``auth.RESTRICTED_ROUTES``, each read filtered)."""
+    who = auth.whose(req.token.strip())
+    if auth.token() is None and who is None:
         if not auth.is_loopback(request):
             raise HTTPException(401, "no token configured")
-        return JSONResponse({"ok": True, "cookie": False})
-    if not auth.valid(req.token):
+        return JSONResponse({"ok": True, "cookie": False, "admin": True})
+    if who is None:
         raise HTTPException(401, "invalid token")
-    response = JSONResponse({"ok": True, "cookie": True})
-    auth.session_cookie(response, req.token, secure=request.url.scheme == "https")
+    response = JSONResponse({"ok": True, "cookie": True, **who})
+    auth.session_cookie(
+        response, req.token.strip(), secure=request.url.scheme == "https"
+    )
     return response
+
+
+@app.get("/session")
+def session_whose(request: Request) -> dict[str, Any]:
+    """Who the page is signed in as, so it shows only the views that one
+    may use: ``admin``, or a named token's ``name``. A 401 when neither."""
+    who = auth.whose(auth.presented(request))
+    if who is None and auth.token() is None and auth.is_loopback(request):
+        who = {"admin": True}
+    if who is None:
+        raise HTTPException(401, "not signed in")
+    return who
 
 
 @app.delete("/session")

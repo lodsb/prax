@@ -99,8 +99,39 @@ RESTRICTED_ROUTES = tuple(
         # a plan of any project, a sync of one the administrator registered
         # (prax.capture.projects._named_may)
         ("POST", r"/projects/sync"),
+        # the web page's reads, for a token signed in there (POST /session):
+        # its search, document, pages, ask and graph walks, each read
+        # filtered by the viewer. The people, faces, regions, review and
+        # admin views stay the administrator's
+        ("GET", r"/changes"),
+        ("GET", r"/ontology"),
+        ("GET", r"/genres"),
+        ("GET", r"/ask/config"),
+        ("GET", r"/domains/counts"),
+        ("GET", r"/doc/\d+/(original|text|chunks|thumb|preview)"),
+        ("GET", r"/pages"),
+        ("GET", r"/entities"),
+        ("GET", r"/graph/overview"),
+        ("GET", r"/graph/documents"),
+        ("GET", r"/graph/document/\d+"),
     )
 )
+
+
+def whose(candidate: str | None) -> dict[str, object] | None:
+    """Who a secret is: ``{"admin": True}`` for the administrator's,
+    ``{"admin": False, "name": …, "personal": …}`` for a named token, or
+    None for neither."""
+    if valid(candidate):
+        return {"admin": True}
+    if not candidate or not candidate.startswith("prax_"):
+        return None
+    from prax import store
+
+    viewer = store.token_viewer(store.thread_connection(), candidate)
+    if viewer is None:
+        return None
+    return {"admin": False, "name": viewer.name, "personal": viewer.personal}
 
 
 def restricted_may(request: Request) -> bool:

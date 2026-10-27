@@ -125,7 +125,8 @@ function showError(el, err) {
 }
 
 // ------------------------------------------------------------------ auth
-// The door wants a bearer token (PRAX_TOKEN). The UI exchanges it once for
+// The door wants a bearer token: the administrator's (PRAX_TOKEN) or a
+// named one (prax token add). The UI exchanges it once for
 // an HttpOnly session cookie via POST /session, so plain links (originals,
 // raw text) work in new tabs too. The token is never kept in the browser
 // (localStorage holds the settings, sessionStorage the ask conversation).
@@ -137,7 +138,7 @@ function askForToken() {
   box.innerHTML = `
     <form id="token-form" class="search-form" autocomplete="off">
       <label for="token-input">Access token</label>
-      <input id="token-input" name="token" type="password" placeholder="PRAX_TOKEN" autofocus>
+      <input id="token-input" name="token" type="password" placeholder="your access token" autofocus>
       <button>Unlock</button>
       <span id="token-msg" class="error"></span>
     </form>`;
@@ -152,12 +153,30 @@ function askForToken() {
     });
     if (res.ok) {
       box.remove();
+      await whoAmI();
       render();
     } else {
       document.getElementById("token-msg").textContent = "not accepted";
     }
   });
 }
+
+// Who the page is signed in as (GET /session). A named token sees the
+// views its routes reach (auth.RESTRICTED_ROUTES), and the page shows
+// only those: search, ask, browse, graph walks, pages, a document.
+const GUEST_HIDDEN = ["people", "review", "promote", "inbox", "jobs", "admin"];
+async function whoAmI() {
+  let who = null;
+  try {
+    const res = await fetch("/session");
+    if (res.ok) who = await res.json();
+  } catch (_) { /* the door is away: the first view says so */ }
+  const guest = !!who && who.admin === false;
+  document.body.classList.toggle("guest", guest);
+  document.querySelectorAll("nav a").forEach((a) => { a.hidden = guest && GUEST_HIDDEN.includes(a.dataset.view); });
+  return who;
+}
+function isGuest() { return document.body.classList.contains("guest"); }
 
 function setStatus(text) { statusEl.textContent = text; }
 

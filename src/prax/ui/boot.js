@@ -200,4 +200,4 @@ document.addEventListener("click", (e) => {
 });
 
 window.addEventListener("hashchange", render);
-render();
+whoAmI().finally(render);

@@ -44,6 +44,7 @@ let REGION_LABELS = null;
 async function regionLabels() {
   if (!REGION_LABELS) {
     REGION_LABELS = new Map();
+    if (isGuest()) return REGION_LABELS;
     try {
       for (const c of (await api("/communities", { level: 0, limit: 500 })).communities) REGION_LABELS.set(c.id, regionName(c));
     } catch (_) { /* an older door: ids alone */ }
@@ -1120,7 +1121,8 @@ async function graphRoute({ p, q, entity, docId, communityId }) {
     };
   }
   if (!entity && !q) {
-    const tools = `<select id="graph-map" title="what the overview draws"><option value="" selected>draw: the hubs</option><option value="regions">draw: the regions</option></select>
+    // the regions are drawn from the whole library: the administrator's
+    const tools = `${isGuest() ? "" : `<select id="graph-map" title="what the overview draws"><option value="" selected>draw: the hubs</option><option value="regions">draw: the regions</option></select>`}
       ${await scopeBar(p, "draw one module's graph")}
       <span>${scopeWords() ? `The graph of ${scopeWords()}: its most connected things` : "Overview: the most connected concepts, methods, tools and datasets"}</span>
       ${compareWords()}
@@ -1130,7 +1132,7 @@ async function graphRoute({ p, q, entity, docId, communityId }) {
       comparing() ? api("/graph/overview", { limit: 30, ...vsParams() }) : null,
     ]);
     let regions = null;
-    if (!scopeWords() && !comparing()) {
+    if (!scopeWords() && !comparing() && !isGuest()) {
       try { regions = (await api("/communities", { level: 0, limit: 40 })).communities; } catch (_) { /* an older door */ }
     }
     return {
