@@ -57,6 +57,7 @@ from .faces import (  # noqa: F401
     face_group,
     face_groups,
     face_index_path,
+    face_matches,
     face_neighbours,
     face_vectors_due,
     faces_page,

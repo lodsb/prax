@@ -111,7 +111,7 @@ def test_an_answer_changed_or_taken_back(con: sqlite3.Connection) -> None:
     assert out["ended"] == 1 and _depicts(con, doc) == []
     assert store.face_answers(con, [face])[face]["verdict"] == "nobody"
     # taken back: the face is open again
-    assert store.unname_faces(con, [face]) == {"faces": 1, "ended": 0}
+    assert store.unname_faces(con, [face]) == {"faces": 1, "ended": 0, "refusals": 0}
     assert store.face_answers(con, [face]) == {}
     named = store.name_faces(con, [face], name="Hedy Lamarr")
     assert store.unname_faces(con, run=named["run"])["ended"] == 1
@@ -212,6 +212,6 @@ def test_the_routes(con: sqlite3.Connection, client: TestClient) -> None:
     )
     assert client.post("/faces/unname", json={}).status_code == 400
     u = client.post("/faces/unname", json={"run": r.json()["run"]})
-    assert u.status_code == 200 and u.json() == {"faces": 1, "ended": 1}
+    assert u.status_code == 200 and u.json() == {"faces": 1, "ended": 1, "refusals": 0}
     assert client.post("/faces/unname", json={"run": "nope"}).status_code == 404
     assert client.get("/faces/groups", params={"event": 99999}).status_code == 404

@@ -1185,7 +1185,7 @@ not done.
             person names a face, and the groups are made again each
             night, so a split is naming the faces but the ones clicked
             away, and a merge is naming two groups as one person.
-      - [ ] **Step 5, the new pictures.** A face is matched by a
+      - [x] (2026-10-27, offered, not tagged) **Step 5, the new pictures.** A face is matched by a
             nearest-neighbour search over every named face, not a mean
             per person, so each face a person names is one more to land
             near. A face close to one person's faces gets their name as
@@ -1196,6 +1196,24 @@ not done.
             ordered by how many photos an answer settles. "Not this
             person" is kept, and that face is never offered to them
             again. A wrong tag is ended, never deleted (invariant 8).
+            Built: the offer, with no tag written. `prax.ml.matching` (the
+            five nearest named faces vote; a person already named in the
+            picture, or refused for the face, is left out),
+            `store.face_matches` (on request, cached until an answer
+            changes), `store.refuse_faces` and `name_faces(refused=,
+            matched=)`, `face_refusals` (migration 57), `GET
+            /faces/matches`, `POST /faces/refuse`, the Review page's "who
+            is this?" tab. Measured on the owner's answers
+            (`docs/log.md`, 2026-10-27): of the 817 faces said to be
+            nobody, 64 would be offered as someone at the default line.
+      - [ ] **Step 5b, tags without asking.** An INFERRED `depicts` for
+            an offered face past a line of its own, with the similarity as
+            its confidence and the run as its producer. Only once the
+            owner's answers to the offers (runs of kind `match`, and
+            `face_refusals`) say how often an offer at a similarity is
+            wrong for a face in no group: every named face so far was
+            named from a group, so the measure of 2026-10-27 says nothing
+            about the loose faces.
       - [ ] **Step 6, who was there.** A rule: a picture `recorded_at`
             an event that `depicts` a person makes the person `attended`
             the event (a relation for core, INFERRED with its premises,

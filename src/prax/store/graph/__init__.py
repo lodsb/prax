@@ -203,6 +203,7 @@ from .naming import (  # noqa: F401
     face_answers,
     judge_faces,
     name_faces,
+    refuse_faces,
     unname_faces,
 )
 from .paths import (  # noqa: F401

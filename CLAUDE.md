@@ -463,7 +463,12 @@ reference `docs/ask.md`.
   `human`, sourced to the picture), or `not_face`, or `nobody`. One live
   answer a face; a new answer or an undo ends the old one and the
   `depicts` edge no answer holds up any more. A picture with a named face
-  is `suspected` unless a person decided about it. Faces are biometric:
+  is `suspected` unless a person decided about it. An open face is offered
+  as the person most of its nearest named faces are (`prax.ml.matching`,
+  `store.face_matches`, the "who is this?" tab, `faces.match` in
+  prax.yaml), computed on request and never written: a person confirms it,
+  or says "not them" (`face_refusals`, migration 57), and that face is not
+  offered as them again. Faces are biometric:
   never to a paid model or an API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means

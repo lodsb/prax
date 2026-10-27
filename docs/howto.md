@@ -2361,7 +2361,7 @@ by `prax maintain` on request:
 | `communities` | the regions of the library rebuilt at two levels (`prax.graph.communities`, `docs/communities.md`) |
 | `histories` | the parse and extraction histories held to `HISTORY_KEEP` entries |
 | `events` | photos taken close together found again as candidate events for the Review page (`store.find_event_candidates`); what a person decided is kept |
-| `facegroups` | the faces that are probably one person, grouped by density over the face vectors (`prax.ml.clusters`, HDBSCAN) for the Review page's face groups tab; a group keeps its id while its faces change. `faces.groups` in prax.yaml: `neighbours` (15), `min_size` (3), `min_samples` (3), `floor` (0.3) |
+| `facegroups` | the faces that are probably one person, grouped by density over the face vectors (`prax.ml.clusters`, HDBSCAN) for the Review page's face groups tab; a group keeps its id while its faces change. `faces.groups` in prax.yaml: `neighbours` (15), `min_size` (3), `min_samples` (3), `floor` (0.3). The "who is this?" tab is no pass: it matches the open faces against the named ones on request, with `faces.match`: `neighbours` (5, the named faces that vote), `line` (0.45, the least cosine similarity offered) and `margin` (0.05, how much nearer than anyone else) |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c). The nightly has no reason to |
 | `rejudge` (only when named) | the corpus's rulings on which names are the library's word, asked again under the current test |
 | `vectors` (only when named) | both vector deltas merged and the chunk index rid of vectors of chunks that are gone, rebuilt when they are a tenth of it (`compact_vectors`) |

@@ -6950,6 +6950,70 @@ facts, picked with a click; an answer that arrives after a later
 keystroke is dropped. Checked over CDP in headless Chrome: typed, the
 request, the list shown, a choice picked into the field.
 
+## 2026-10-27: AT step 5, who an open face probably is
+
+The user, after naming: "ok, did a couple of groupings, for some I
+actually have to remember the name". Then "yeah" to matching the faces
+left open against the named ones.
+
+**What there was to measure on.** In the live store, counts only:
+1,932 faces named as 32 people (512 faces the most, 1 the fewest), 817
+faces said to be nobody, 15 not faces, 11 answers ended; 1,926 live
+`depicts` edges in 1,533 pictures. 690 faces in groups and some 5,400
+in none were open. Every named face was named from a group.
+
+**The measurement** (`match_eval.py` in the session's scratchpad, read
+only). Each named face matched against the other named faces, never one
+of its own picture; each nobody face matched against all of them. A
+match is the person most of the five nearest named faces are, with the
+similarity of that person's nearest face and the margin to anyone
+else's nearest.
+
+| line | margin | named faces offered (wrong) | nobody faces offered, of 817 | open faces offered, of 6,152 |
+|---|---|---|---|---|
+| 0.363 | 0 | 1,912 (10) | 342 | 3,115 |
+| 0.45 | 0.05 | 1,842 (3) | 64 | 927 |
+| 0.50 | 0.05 | 1,839 (2) | 25 | 539 |
+| 0.55 | 0.05 | 1,823 (2) | 7 | 293 |
+| 0.60 | 0.05 | 1,756 (2) | 2 | 148 |
+
+The named faces' column flatters: their nearest named faces are their
+own group's, which are near by construction. The nobody faces are the
+honest test of a wrong tag, and at OpenCV's line (0.363) 42% of them
+would have been given a name. The nearest single face (k = 1) does a
+little worse than five voting (18 wrong of the named at 0.363, 435
+nobody faces offered).
+
+**So the matching offers and never tags.** The plan's INFERRED tag past
+a line waits (step 5b): nothing measured says how often an offer is
+wrong for a face in no group, which is most of the open faces. The
+offers are made at 0.45 and a margin of 0.05 (`faces.match`), where a
+person checks each one: 914 faces as 26 people on the live store,
+0.18 s on the desktop (`match_live.py`), cached in the door until an
+answer, a refusal or a face's vector is new.
+
+**The offer.** `prax.ml.matching.nearest_people` is pure numpy: the
+product of the asked faces and the named ones in slices of four million
+numbers, so it holds some 16 MB at any size. A person is left out for a
+face when they are already named in its picture, or when a person said
+the face is not them. `store.face_matches` groups the offers by person,
+the one whose answer settles the most pictures first, each with a face
+of theirs beside the strip (the named face the first offer is most
+like).
+
+**"Not them".** `face_refusals` (migration 57), one live refusal a face
+and person. Naming the faces of an offer with some clicked away writes
+the names and the refusals under one run of kind `match`, so one undo
+takes back both; "not <person>" refuses every face left. Naming a face
+as a person ends a refusal of them for it. The runs of kind `match` and
+the refusals are what step 5b will measure on.
+
+**The tab.** "who is this?" in the photos group of the Review page: a
+row a person, "probably <person> · N faces in M pictures", the field
+holding them, each face with how alike it is.
+
+Tests: `tests/test_face_matching.py` (6), one node test.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

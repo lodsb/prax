@@ -22,6 +22,8 @@ const DECIDE_LISTS = {
     about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back. Split…: cut a group before a burst of its photos, kept for every later pass; join takes a cut back." },
   faces: { title: "faces", view: (p) => viewFaces(p),
     about: "Every face the faces step found, as a small picture of it: the least sure first, to see what the detector takes for a face; the smallest, to see where recognition will struggle; or the surest. Alike shows the faces whose vectors are nearest to one, with how alike they are: a check of what the vectors say, not a decision. Nothing is named here yet." },
+  matches: { title: "who is this?", view: (p) => viewFaceMatches(p),
+    about: "Faces nobody has answered for yet that look like a person you named: each face against every face you named, so every name helps the next. The person whose answer settles the most pictures comes first, with a face you named of them beside. Click away a face that is not them and name the rest; the ones clicked away are not them, and are never offered as them again. Not them answers that for every face left. Nothing is named until you say so." },
   groups: { title: "face groups", view: (p) => viewFaceGroups(p),
     about: "Faces that are probably one person, grouped each night by how alike they look (the facegroups pass): the group with the most faces to name first. Click a face that is not them, then name the rest: a person the graph has (pick one as you type) or a new name. Each picture then depicts them, and a picture with a named face is kept from tokens that may not see personal documents. Naming two groups as one person joins them; a face clicked away stays to name. Not faces and nobody to name answer for the faces too. Every answer can be undone. Where a picture holds two of a group's faces, it is surely more than one person. Choose an event to name the faces of one occasion, those in no group too." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
@@ -33,7 +35,7 @@ const DECIDE_LISTS = {
 const DECIDE_GROUPS = [
   { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges"] },
   { title: "documents", what: "what each document is and is about", keys: ["genre"] },
-  { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces", "groups"] },
+  { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces", "groups", "matches"] },
 ];
 
 function decideTabs(current) {
@@ -339,6 +341,33 @@ async function viewFaceGroups(p) {
   bindNaming(box);
 }
 
+// AT step 5: the open faces that are probably a person already named
+async function viewFaceMatches(p) {
+  const list = DECIDE_LISTS.matches;
+  const limit = 20;
+  const offset = Number(p.offset || 0);
+  view.innerHTML = `${decideTabs("matches")}<p class="muted">${esc(list.about)}</p>
+    <p id="match-counts" class="muted"></p><div id="face-alike"></div>
+    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  const box = document.getElementById("decide-list");
+  const counts = document.getElementById("match-counts");
+  const person = p.person ? Number(p.person) : undefined;
+  let res;
+  try { res = await api("/faces/matches", { offset, limit, person }); } catch (err) { showError(box, err); return; }
+  const line = `at least ${Math.round(res.line * 100)}% alike and ${Math.round(res.margin * 100)} points nearer than anyone else (faces.match in prax.yaml)`;
+  counts.innerHTML = person
+    ? `<a href="#review?list=matches">every person</a> · ${line}`
+    : `${res.offered.toLocaleString()} of ${res.open.toLocaleString()} open faces look like ${res.total.toLocaleString()} people you named: ${line}`;
+  const page = (o) => `#review?${new URLSearchParams({ list: "matches", offset: o })}`;
+  const pager = person ? "" : `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  box.innerHTML = res.items.some((m) => m.faces.length)
+    ? res.items.map((m) => faceMatchRow(m, Boolean(person))).join("") + pager
+    : `<p class="muted">No face to offer: name some faces in the face groups tab first, and each one named is matched against the rest.</p>`;
+  bindAlike(box);
+  bindNaming(box);
+}
+
 // The name field's choices, the people the graph has, as one types: a
 // click (or Enter on one) puts a person in the field; an answer that
 // arrives after a later keystroke is dropped
@@ -383,19 +412,23 @@ function bindNaming(box) {
     const input = form.querySelector("input[name=who]");
     bindPersonField(input);
     const chosen = () => [...section.querySelectorAll(".face-tile[data-face]:not(.face-out):not(.face-done)")].map((t) => Number(t.dataset.face));
+    // a row of the matching's: the faces clicked away are not its person
+    const offered = section.dataset.person ? Number(section.dataset.person) : null;
+    const away = () => [...section.querySelectorAll(".face-tile[data-face].face-out:not(.face-done)")].map((t) => Number(t.dataset.face));
     const send = async (path, body, words) => {
       const faces = chosen();
+      const done = body.refused ? faces.concat(body.refused) : faces;
       if (!faces.length) { out.textContent = "every face is clicked away"; return; }
       form.querySelectorAll("button").forEach((b) => { b.disabled = true; });
       try {
         const r = await post(path, { faces, ...body });
-        faces.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.add("face-done"));
+        done.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.add("face-done"));
         out.innerHTML = `${esc(words(r))} · <a href="#" data-undo="${esc(r.run)}">undo</a>`;
         out.querySelector("[data-undo]").addEventListener("click", async (e) => {
           e.preventDefault();
           try {
             await post("/faces/unname", { run: r.run });
-            faces.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.remove("face-done"));
+            done.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.remove("face-done"));
             out.textContent = "taken back";
           } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
         });
@@ -406,10 +439,20 @@ function bindNaming(box) {
       e.preventDefault();
       const who = personChoice(input.value);
       if (!who) { out.textContent = "who is this? a name, or a person picked from the list"; return; }
-      send("/faces/name", who, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"} named ${r.name}${r.facts ? `, ${r.facts} picture${r.facts === 1 ? "" : "s"} depict them` : ""}`);
+      const body = { ...who };
+      if (offered != null) {
+        body.matched = true;
+        if (who.entity_id === offered && away().length) body.refused = away();
+      }
+      send("/faces/name", body, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"} named ${r.name}${r.facts ? `, ${r.facts} picture${r.facts === 1 ? "" : "s"} depict them` : ""}${r.refused ? `, ${r.refused} not them` : ""}`);
     });
-    form.querySelectorAll("button[type=button]").forEach((b) => b.addEventListener("click", () =>
-      send("/faces/judge", { verdict: b.value }, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"}: ${r.verdict === "nobody" ? "nobody to name" : "not faces"}`)));
+    form.querySelectorAll("button[type=button]").forEach((b) => b.addEventListener("click", () => {
+      if (b.value === "refuse") {
+        send("/faces/refuse", { entity_id: offered }, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"}: not them`);
+        return;
+      }
+      send("/faces/judge", { verdict: b.value }, (r) => `${r.faces} face${r.faces === 1 ? "" : "s"}: ${r.verdict === "nobody" ? "nobody to name" : "not faces"}`);
+    }));
   });
 }
 

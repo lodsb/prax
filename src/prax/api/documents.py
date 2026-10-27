@@ -284,10 +284,32 @@ def face_groups(
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/faces/matches")
+def face_matches(
+    request: Request, offset: int = 0, limit: int = 30, person: int | None = None
+) -> dict[str, Any]:
+    """The open faces that are probably someone already named, by person
+    (``store.face_matches``); with ``person``, that person's all. Not a
+    named token's route."""
+    try:
+        return store.face_matches(
+            _con(request), offset=offset, limit=limit, person=person
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 class FaceNameReq(BaseModel):
     faces: list[int]
     entity_id: int | None = None  # a person the graph has
     name: str | None = None  # or a new person's name
+    refused: list[int] | None = None  # faces offered as them that are not
+    matched: bool = False  # the faces were offered by the matching
+
+
+class FaceRefuseReq(BaseModel):
+    faces: list[int]
+    entity_id: int
 
 
 class FaceJudgeReq(BaseModel):
@@ -306,8 +328,25 @@ def face_name(req: FaceNameReq, request: Request) -> dict[str, Any]:
     (``store.name_faces``). Not a named token's route."""
     try:
         return store.name_faces(
-            _con(request), req.faces, entity_id=req.entity_id, name=req.name
+            _con(request),
+            req.faces,
+            entity_id=req.entity_id,
+            name=req.name,
+            refused=req.refused,
+            matched=req.matched,
         )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/faces/refuse")
+def face_refuse(req: FaceRefuseReq, request: Request) -> dict[str, Any]:
+    """These faces are not this person: never offered as them again
+    (``store.refuse_faces``). Not a named token's route."""
+    try:
+        return store.refuse_faces(_con(request), req.faces, entity_id=req.entity_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:

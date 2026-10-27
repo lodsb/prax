@@ -17,6 +17,13 @@ up any more. Nothing is deleted (invariant 8).
 A picture with a named face is ``suspected`` at least (the plan's wall):
 a rule's mark, so a person's own decision about the picture stands.
 
+Step 5 offers open faces as the person they are probably
+(``store.face_matches``). Naming those is naming as here, under a run
+of kind ``match``, so what was confirmed can be counted later; a face
+said not to be that person is a refusal (``face_refusals``, migration
+57), and the matching never offers it as them again. An action's
+refusals share its run, so its undo takes them back too.
+
 Faces are biometric. Nothing here reaches a model, and no named token's
 route reaches these writes.
 """
@@ -93,6 +100,36 @@ def _end_answers(con: sqlite3.Connection, face_ids: list[int], run: str) -> int:
     return ended
 
 
+def _end_refusals(
+    con: sqlite3.Connection, face_ids: list[int], entity_id: int | None = None
+) -> int:
+    """End the live refusals of these faces (of ``entity_id`` only, when
+    given). Returns how many."""
+    cur = con.execute(
+        "UPDATE face_refusals SET ended_at = ? WHERE ended_at IS NULL"
+        " AND face_id IN (SELECT value FROM json_each(?))"
+        " AND (? IS NULL OR entity_id = ?)",
+        (now(), json.dumps(face_ids), entity_id, entity_id),
+    )
+    return cur.rowcount
+
+
+def _refuse(
+    con: sqlite3.Connection, face_ids: list[int], entity_id: int, by: str, run: str
+) -> int:
+    """These faces are not ``entity_id``: a live refusal each, where the
+    face has none for them yet. Returns how many were written."""
+    written = 0
+    for face in face_ids:
+        written += con.execute(
+            "INSERT INTO face_refusals (face_id, entity_id, by, run, said_at)"
+            " SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM face_refusals"
+            " WHERE face_id = ? AND entity_id = ? AND ended_at IS NULL)",
+            (face, entity_id, by, run, now(), face, entity_id),
+        ).rowcount
+    return written
+
+
 def _person(
     con: sqlite3.Connection, entity_id: int | None, name: str | None
 ) -> tuple[str, str]:
@@ -144,17 +181,25 @@ def name_faces(
     entity_id: int | None = None,
     name: str | None = None,
     by: str = PERSON,
+    refused: list[int] | None = None,
+    matched: bool = False,
 ) -> dict[str, Any]:
     """These faces are one person: ``entity_id`` (a person the graph has)
     or a new person called ``name`` (a person of that name already there
     is that person: a name is the identity until stratification step 5).
     Each picture ``depicts`` them, written once a picture; an earlier
-    answer for a face is ended. Returns the ``run``, the person's
-    ``entity_id`` and ``name``, and how many ``faces``, ``pictures``,
-    new ``facts`` and newly ``suspected`` pictures."""
+    answer for a face is ended, and a refusal of this person for it.
+    ``refused`` are faces said not to be them, under the same run (step
+    5's "not them"); ``matched`` says the matching offered the faces,
+    which names the run's kind. Returns the ``run``, the person's
+    ``entity_id`` and ``name``, and how many ``faces``, ``pictures``, new
+    ``facts``, newly ``suspected`` pictures and ``refused`` faces."""
     faces = _faces(con, face_ids)
+    others = sorted(_faces(con, refused)) if refused else []
+    if set(others) & set(faces):
+        raise ValueError("a face is both named and refused")
     pname, ptype = _person(con, entity_id, name)
-    run = _run("faces")
+    run = _run("match" if matched else "faces")
     _end_answers(con, sorted(faces), run)
     by_doc: dict[int, list[int]] = {}
     for face, doc in faces.items():
@@ -201,6 +246,9 @@ def name_faces(
         " said_at) VALUES (?,?,?,?,?,?,?)",
         rows,
     )
+    assert person_id is not None
+    _end_refusals(con, sorted(faces), person_id)
+    said_not = _refuse(con, others, person_id, by, run) if others else 0
     con.commit()
     return {
         "run": run,
@@ -210,7 +258,30 @@ def name_faces(
         "pictures": len(by_doc),
         "facts": facts,
         "suspected": suspected,
+        "refused": said_not,
     }
+
+
+@_serialized
+def refuse_faces(
+    con: sqlite3.Connection, face_ids: list[int], *, entity_id: int, by: str = PERSON
+) -> dict[str, Any]:
+    """These faces are not ``entity_id`` (step 5's "none of them"): the
+    matching never offers them as that person again, and their answers
+    stay as they were. Returns the ``run``, the person's canonical
+    ``entity_id`` and how many ``faces`` were newly refused."""
+    faces = sorted(_faces(con, face_ids))
+    _person(con, entity_id, None)
+    person = int(
+        con.execute(
+            "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?",
+            (entity_id,),
+        ).fetchone()[0]
+    )
+    run = _run("match")
+    written = _refuse(con, faces, person, by, run)
+    con.commit()
+    return {"run": run, "entity_id": person, "faces": written}
 
 
 @_serialized
@@ -242,9 +313,10 @@ def unname_faces(
     run: str | None = None,
 ) -> dict[str, Any]:
     """Take answers back: those of these faces, or every answer of one
-    action (``run``). The faces are unanswered again, and a ``depicts``
-    edge no answer holds up is ended. A picture marked suspected stays so:
-    the face was named once. Returns how many ``faces`` and ``ended``."""
+    action (``run``), and the refusals with them. The faces are unanswered
+    again, and a ``depicts`` edge no answer holds up is ended. A picture
+    marked suspected stays so: the face was named once. Returns how many
+    ``faces``, ``ended`` edges and ``refusals`` ended."""
     if run is not None:
         ids = [
             int(r[0])
@@ -253,14 +325,26 @@ def unname_faces(
                 (run,),
             )
         ]
-        if not ids:
+        said_not = [
+            int(r[0])
+            for r in con.execute(
+                "SELECT face_id FROM face_refusals WHERE run = ? AND ended_at IS NULL",
+                (run,),
+            )
+        ]
+        if not ids and not said_not:
             raise KeyError(f"no live answers of run {run}")
-        _faces(con, ids)
+        _faces(con, ids + said_not)
+        refusals = con.execute(
+            "UPDATE face_refusals SET ended_at = ? WHERE run = ? AND ended_at IS NULL",
+            (now(), run),
+        ).rowcount
     else:
         ids = sorted(_faces(con, face_ids or []))
-    ended = _end_answers(con, ids, _run("unname"))
+        refusals = _end_refusals(con, ids)
+    ended = _end_answers(con, ids, _run("unname")) if ids else 0
     con.commit()
-    return {"faces": len(ids), "ended": ended}
+    return {"faces": len(ids), "ended": ended, "refusals": refusals}
 
 
 @_reading

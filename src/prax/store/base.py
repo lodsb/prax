@@ -816,6 +816,27 @@ def _get_vector(path: Path, key: int) -> Any:
         return main.get(key) if main is not None else None
 
 
+def _get_vectors(path: Path, keys: list[int]) -> dict[int, Any]:
+    """Many vectors at once, each the delta's when it has it: one taking
+    of ``_INDEX_LOCK`` for all of them. A key in neither is left out."""
+    out: dict[int, Any] = {}
+    with _INDEX_LOCK:
+        dpath = _delta_path(path)
+        delta = _indexes.get((str(dpath), True))
+        if delta is None and dpath.exists():
+            delta = _delta(path)
+        main = _open_index(path, writable=False)
+        for key in keys:
+            vec = None
+            if delta is not None and key in delta:
+                vec = delta.get(key)
+            elif main is not None and key in main:
+                vec = main.get(key)
+            if vec is not None:
+                out[key] = vec
+    return out
+
+
 def _has_vectors(path: Path) -> bool:
     if path.exists():
         return True

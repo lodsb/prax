@@ -27,6 +27,7 @@ from typing import Any
 
 from prax import config
 from prax.ml import faces as faces_ml
+from prax.ml import matching
 
 from ..base import (
     _INDEX_DIMS,
@@ -34,6 +35,7 @@ from ..base import (
     _archive_bytes,
     _delta_path,
     _get_vector,
+    _get_vectors,
     _knn,
     _reading,
     _serialized,
@@ -635,3 +637,197 @@ def face_group(con: sqlite3.Connection, group_id: int) -> dict[str, Any]:
         raise KeyError(f"no such face group: {group_id}")
     faces.sort(key=lambda f: f["verdict"] is not None)
     return {**_group_line(group_id, faces), "faces": faces}
+
+
+# AT step 5: whose face an open face probably is, against every named face
+MATCH_STRIP = 24  # suggested faces a person's row shows, the surest first
+# the last matching made, and the state it was made from: the door makes
+# it again once an answer, a refusal or a face's vector is new
+_MATCHED: list[Any] = [None, None]
+
+
+def _match_state(
+    con: sqlite3.Connection, hidden: frozenset[int], k: int, model: str
+) -> tuple[Any, ...]:
+    names = con.execute(
+        "SELECT max(id), count(*) FILTER (WHERE ended_at IS NULL) FROM face_names"
+    ).fetchone()
+    refusals = con.execute(
+        "SELECT max(id), count(*) FILTER (WHERE ended_at IS NULL) FROM face_refusals"
+    ).fetchone()
+    faces = con.execute(
+        "SELECT count(*), max(vector_at) FROM faces"
+        " WHERE gone_at IS NULL AND vector_model = ?",
+        (model,),
+    ).fetchone()
+    return (*names, *refusals, *faces, hash(hidden), k, model)
+
+
+def _matched(
+    con: sqlite3.Connection, hidden: frozenset[int], k: int, model: str
+) -> list[tuple[int, int, matching.Match, int]]:
+    """Every open face with a vector and its match (``prax.ml.matching``)
+    against the named faces, as ``(face, picture, match, like)``, ``like``
+    the named face nearest of that person. Hidden pictures' faces are
+    neither matched nor matched against."""
+    import numpy as np
+
+    state = _match_state(con, hidden, k, model)
+    if _MATCHED[0] == state:
+        return _MATCHED[1]  # type: ignore[no-any-return]
+    named = [
+        (int(r[0]), int(r[1]), int(r[2]))
+        for r in con.execute(
+            "SELECT f.id, f.doc_id, COALESCE(e.canonical_id, e.id) FROM face_names n"
+            " JOIN faces f ON f.id = n.face_id JOIN entities e ON e.id = n.entity_id"
+            " WHERE n.ended_at IS NULL AND n.verdict = 'person'"
+            " AND f.gone_at IS NULL AND f.vector_model = ? ORDER BY f.id",
+            (model,),
+        )
+        if int(r[1]) not in hidden
+    ]
+    asked = [
+        (int(r[0]), int(r[1]))
+        for r in con.execute(
+            "SELECT id, doc_id FROM faces WHERE gone_at IS NULL AND vector_model = ?"
+            " AND id NOT IN (SELECT face_id FROM face_names WHERE ended_at IS NULL)"
+            " ORDER BY id",
+            (model,),
+        )
+        if int(r[1]) not in hidden
+    ]
+    out: list[tuple[int, int, matching.Match, int]] = []
+    path = face_index_path(model)
+    vecs = _get_vectors(path, [f for f, _, _ in named]) if asked else {}
+    named = [n for n in named if n[0] in vecs]
+    qvecs = _get_vectors(path, [f for f, _ in asked]) if named else {}
+    asked = [a for a in asked if a[0] in qvecs]
+    if named and asked:
+        refused: dict[int, set[int]] = {}
+        for r in con.execute(
+            "SELECT x.face_id, COALESCE(e.canonical_id, e.id) FROM face_refusals x"
+            " JOIN entities e ON e.id = x.entity_id WHERE x.ended_at IS NULL"
+        ):
+            refused.setdefault(int(r[0]), set()).add(int(r[1]))
+        # a person named in a picture is not a second face of it
+        in_picture: dict[int, set[int]] = {}
+        for _, doc, person in named:
+            in_picture.setdefault(doc, set()).add(person)
+        found = matching.nearest_people(
+            matching.unit(np.stack([vecs[f] for f, _, _ in named])),
+            [p for _, _, p in named],
+            matching.unit(np.stack([qvecs[f] for f, _ in asked])),
+            k=k,
+            excluded={
+                i: refused.get(face, set()) | in_picture.get(doc, set())
+                for i, (face, doc) in enumerate(asked)
+            },
+        )
+        out = [
+            (face, doc, m, named[m.like][0])
+            for (face, doc), m in zip(asked, found, strict=True)
+            if m is not None
+        ]
+    _MATCHED[:] = [state, out]
+    return out
+
+
+@_reading
+def face_matches(
+    con: sqlite3.Connection,
+    *,
+    offset: int = 0,
+    limit: int = 30,
+    person: int | None = None,
+    model: str = FACE_MODEL,
+) -> dict[str, Any]:
+    """The open faces that are probably a person someone has named (AT
+    step 5), by person, the person whose answer settles the most pictures
+    first. A face is offered when its match (``prax.ml.matching``) is at
+    least ``faces.match.line`` alike and ``faces.match.margin`` nearer
+    than anyone else, both in prax.yaml (with the ``neighbours`` that
+    vote). Each person's row holds their surest faces (``MATCH_STRIP``,
+    or up to ``FACES_PAGE`` with ``person``), each with its ``similarity``
+    and the named face it is most like (``like``), and the person's
+    ``like`` face to show beside them. ``open`` counts the open faces
+    with a vector, ``offered`` those offered. Nothing is written: an
+    answer is ``name_faces`` or ``refuse_faces``."""
+    k = config.whole("faces.match.neighbours", default=5)
+    line = config.number("faces.match.line", default=0.45)
+    margin = config.number("faces.match.margin", default=0.05)
+    hidden = hidden_documents(con)
+    rows: dict[int, list[tuple[int, int, matching.Match, int]]] = {}
+    for item in _matched(con, hidden, k, model):
+        m = item[2]
+        if m.similarity >= line and m.margin >= margin:
+            rows.setdefault(m.person, []).append(item)
+    if person is not None:
+        canonical = con.execute(
+            "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (person,)
+        ).fetchone()
+        if canonical is None:
+            raise KeyError(f"no such entity: {person}")
+        rows = {int(canonical[0]): rows.get(int(canonical[0]), [])}
+
+    def pictures(p: int) -> int:
+        return len({doc for _, doc, _, _ in rows[p]})
+
+    order = sorted(rows, key=lambda p: (-pictures(p), p))
+    limit = max(1, min(limit, GROUPS_PAGE))
+    page = order if person is not None else order[max(0, offset) : offset + limit]
+    strip = FACES_PAGE if person is not None else MATCH_STRIP
+    shown = {
+        p: sorted(rows[p], key=lambda it: (-it[2].similarity, it[0]))[:strip]
+        for p in page
+    }
+    ids = {f for items in shown.values() for f, _, _, _ in items}
+    ids |= {items[0][3] for items in shown.values() if items}
+    tiles = {
+        int(r["id"]): r
+        for r in con.execute(
+            "SELECT f.id, f.doc_id, f.score, f.px, f.crop IS NOT NULL AS crop,"
+            " NULL AS verdict, NULL AS entity_id, NULL AS name FROM faces f"
+            " WHERE f.id IN (SELECT value FROM json_each(?))",
+            (json.dumps(sorted(ids)),),
+        )
+    }
+    names = {
+        int(r[0]): str(r[1])
+        for r in con.execute(
+            "SELECT id, name FROM entities"
+            " WHERE id IN (SELECT value FROM json_each(?))",
+            (json.dumps(page),),
+        )
+    }
+    items = []
+    for p in page:
+        items.append(
+            {
+                "entity_id": p,
+                "name": names.get(p, ""),
+                "open": len(rows[p]),
+                "pictures": pictures(p),
+                "like": _face_item(tiles[shown[p][0][3]]) if shown[p] else None,
+                "faces": [
+                    {
+                        **_face_item(tiles[f]),
+                        "similarity": round(m.similarity, 4),
+                        "margin": round(m.margin, 4),
+                        "like": like,
+                    }
+                    for f, _, m, like in shown[p]
+                ],
+            }
+        )
+    return {
+        "total": len(order),
+        "offered": sum(len(v) for v in rows.values()),
+        "open": con.execute(
+            "SELECT count(*) FROM faces WHERE gone_at IS NULL AND vector_model = ?"
+            " AND id NOT IN (SELECT face_id FROM face_names WHERE ended_at IS NULL)",
+            (model,),
+        ).fetchone()[0],
+        "line": line,
+        "margin": margin,
+        "items": items,
+    }

@@ -460,7 +460,8 @@ function faceTile(f, near, pick) {
   const img = f.crop ? `<img loading="lazy" src="/face/${f.id}/crop" alt="">` : `<span class="face-none">no crop yet</span>`;
   if (pick) {
     // a face to answer for: the crop toggles it, its picture is a link
-    return `<figure class="face-tile" data-face="${f.id}"><button type="button" class="face-pick" title="click: not them">${img}</button><figcaption class="muted"><a href="#doc/${f.doc_id}">picture</a> · ${f.px} px
+    const alike = f.similarity != null ? `${Math.round(f.similarity * 100)}% alike · ` : "";
+    return `<figure class="face-tile" data-face="${f.id}"><button type="button" class="face-pick" title="click: not them">${img}</button><figcaption class="muted">${alike}<a href="#doc/${f.doc_id}">picture</a> · ${f.px} px
       · <a href="#" data-alike="${f.id}" data-doc="${f.doc_id}" data-score="${f.score}" data-px="${f.px}">alike</a></figcaption></figure>`;
   }
   // a likeness as a number only: OpenCV's line for one pair (MATCH) is
@@ -496,6 +497,23 @@ function faceGroupRow(g, all) {
       <button name="act" value="nobody" type="button">nobody to name</button> <span class="msg"></span></form>` : "";
   return `<section class="face-group"><p>${title} · ${plural(open, "face")} to name in ${plural(g.pictures, "picture")}${doubled}${more}${named}</p>
     ${form}<div class="face-grid">${tiles.map((f) => faceTile(f, null, true)).join("")}</div></section>`;
+}
+// AT step 5: the open faces that are probably one person already named,
+// beside a face of theirs. The field holds them; a face clicked away is
+// "not them" once the rest are named, and never offered as them again
+function faceMatchRow(m, all) {
+  const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
+  const more = !all && m.open > m.faces.length
+    ? ` · <a href="#review?${new URLSearchParams({ list: "matches", person: m.entity_id })}">all ${m.open.toLocaleString()}</a>`
+    : "";
+  const like = m.like ? `<figure class="face-tile face-like"><a href="#doc/${m.like.doc_id}">${m.like.crop ? `<img loading="lazy" src="/face/${m.like.id}/crop" alt="">` : `<span class="face-none">no crop yet</span>`}</a><figcaption class="muted">named</figcaption></figure>` : "";
+  const form = m.faces.length ? `<form class="face-name">
+      <span class="person-field"><input name="who" placeholder="who is this?" autocomplete="off" value="${esc(personValue(m))}"><span class="person-choices" hidden></span></span>
+      <button name="act" value="name">name them</button> <button name="act" value="refuse" type="button">not ${esc(m.name)}</button>
+      <button name="act" value="not_face" type="button">not faces</button>
+      <button name="act" value="nobody" type="button">nobody to name</button> <span class="msg"></span></form>` : "";
+  return `<section class="face-group" data-person="${m.entity_id}"><p>probably <a href="#person/${m.entity_id}">${esc(m.name)}</a> · ${plural(m.open, "face")} in ${plural(m.pictures, "picture")}${more}</p>
+    ${form}<div class="face-grid">${like}${m.faces.map((f) => faceTile(f, null, true)).join("")}</div></section>`;
 }
 // A person in the name field: their name and id, which personChoice reads
 // back; anything else typed there is a new person's name
@@ -1069,5 +1087,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, personValue, personChoices, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

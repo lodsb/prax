@@ -710,6 +710,7 @@ table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 
 .face-group > p { margin: 0 0 .35rem; }
 .face-name { margin: 0 0 .5rem; }
 .face-name input { min-width: 14rem; }
+.face-like { outline: 2px solid var(--line); outline-offset: 2px; }
 .person-field { position: relative; display: inline-block; }
 .person-choices { position: absolute; left: 0; top: 100%; z-index: 20; min-width: 100%; max-height: 22rem; overflow-y: auto; background: var(--bg, Canvas); border: 1px solid var(--line); box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: .25rem 0; }
 .person-choices[hidden] { display: none; }

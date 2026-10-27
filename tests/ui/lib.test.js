@@ -692,6 +692,20 @@ test("the name field's choices: name, type, photos and facts", () => {
   assert.equal(lib.personChoices([]), "");
 });
 
+test("a row of the matching: the person in the field, the named face beside", () => {
+  const row = { entity_id: 7, name: "Ada <L>", open: 30, pictures: 25,
+    like: { id: 1, doc_id: 2, crop: true, score: 0.9, px: 90 },
+    faces: [{ id: 5, doc_id: 6, crop: true, score: 0.9, px: 60, similarity: 0.512 }] };
+  const html = lib.faceMatchRow(row, false);
+  assert.match(html, /data-person="7"/);
+  assert.match(html, /value="Ada &lt;L&gt; #7"/);
+  assert.match(html, /not Ada &lt;L&gt;/);
+  assert.match(html, /51% alike/);
+  assert.match(html, /face-like/);
+  assert.match(html, /all 30/);
+  assert.doesNotMatch(lib.faceMatchRow(row, true), /all 30/);
+});
+
 test("the name field: a person picked, or a new name", () => {
   assert.equal(lib.personValue({ id: 9, name: "Grace Hopper" }), "Grace Hopper #9");
   assert.deepEqual(lib.personChoice("Grace Hopper #9"), { entity_id: 9 });
