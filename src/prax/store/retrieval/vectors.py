@@ -25,6 +25,7 @@ from ..base import (
     _delta_path,
     _doc_index_path,
     _index,
+    _index_dim,
     _index_path,
     _indexes,
     _open_index,
@@ -318,7 +319,7 @@ def _merge_now(path: Path) -> dict[str, Any]:
         vecs = np.vstack([_present(delta.get(k)) for k in keys]) if keys else None
     taken = set(keys)
     # the build: a private in-memory copy of the main file, nobody's view
-    main = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
+    main = vectors_mod.VectorIndex(path, _index_dim(path), writable=True)
     if keys and vecs is not None:
         main.add(keys, vecs)
     tmp = path.with_suffix(path.suffix + ".merging")
@@ -328,7 +329,7 @@ def _merge_now(path: Path) -> dict[str, Any]:
     # outside the lock (seconds for a gigabyte), and installs the loaded
     # copy at the swap; a mapping door reopens at the swap (milliseconds)
     preloaded = (
-        vectors_mod.VectorIndex(tmp, VEC_DIM, writable=False)
+        vectors_mod.VectorIndex(tmp, _index_dim(path), writable=False)
         if vectors_mod.serve_in_memory()
         else None
     )

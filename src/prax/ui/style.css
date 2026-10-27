@@ -700,3 +700,10 @@ table.people td, table.people th { text-align: left; padding: .2rem .6rem .2rem 
 .face-frame .doc-image { display: block; margin-bottom: 0; }
 .faces-over { position: absolute; inset: 0; pointer-events: none; }
 .face-box { position: absolute; border: 2px solid var(--accent); border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .6); }
+/* the faces tab (view-decide.js, viewFaces) */
+.face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: .5rem; }
+.face-tile { margin: 0; }
+.face-tile img, .face-none { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--panel); border-radius: 2px; }
+.face-none { font-size: .75rem; display: flex; align-items: center; justify-content: center; }
+.face-tile figcaption { font-size: .78rem; margin-top: .15rem; }
+.face-alike { border: 1px solid var(--line); padding: .5rem; margin: .5rem 0 1rem; }

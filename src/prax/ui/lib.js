@@ -448,6 +448,20 @@ function faceBox(f) {
   const [x, y, w, h] = f.box.map((v) => (v * 100).toFixed(2));
   return `<span class="face-box" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%" title="face ${f.id} · ${Math.round(f.score * 100)}%"></span>`;
 }
+// The faces tab's counts (store.faces_page): how many, in how many
+// pictures, how many have a vector, by score and by size
+function faceCounts(res) {
+  const bands = (o) => Object.entries(o || {}).map(([k, n]) => `${esc(k)} ${Number(n).toLocaleString()}`).join(" · ");
+  return `${res.total.toLocaleString()} faces in ${res.pictures.toLocaleString()} pictures, ${res.vectored.toLocaleString()} with a vector<br>score: ${bands(res.by_score)}<br>size: ${bands(res.by_size)}`;
+}
+// One face as a tile: its crop, its picture a click away, its score and
+// size, or its likeness to the face asked about
+function faceTile(f, near) {
+  const img = f.crop ? `<img loading="lazy" src="/face/${f.id}/crop" alt="">` : `<span class="face-none">no crop yet</span>`;
+  const line = near ? `${Math.round(near.similarity * 100)}%${near.match ? " ✓" : ""}` : `${Math.round((f.score || 0) * 100)}% · ${f.px} px`;
+  return `<figure class="face-tile"><a href="#doc/${f.doc_id}">${img}</a><figcaption class="muted">${line}
+    ${near ? "" : ` · <a href="#" data-alike="${f.id}" data-doc="${f.doc_id}" data-score="${f.score}" data-px="${f.px}">alike</a>`}</figcaption></figure>`;
+}
 // The people list (view-people.js): a row a person, linked to their page.
 function peopleTable(rows) {
   return `<table class="people"><thead><tr><th>name</th><th>type</th><th>facts</th><th>photos</th></tr></thead><tbody>${rows.map((r) =>
@@ -1003,5 +1017,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, faceCounts, faceTile, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

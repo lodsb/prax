@@ -6713,6 +6713,56 @@ minute, 139 with a face, 267 faces.
 
 Tests: `tests/test_faces.py` (6), one node test.
 
+## 2026-10-27: AT step 2, what each face looks like
+
+The user, going to bed: "you can go on once the processing is finished".
+The plan agreed before it: a page of the faces to judge the detector by
+(step 0), and the vectors (step 2).
+
+**The recogniser.** SFace 2021dec from OpenCV Zoo, Apache 2.0, 37 MB,
+pinned and checked by sha256 like YuNet (`prax.ml.faces`). A face is
+aligned onto the five points SFace was trained with: the similarity
+transform of its landmarks (Umeyama), then a warp to 112 x 112. The
+vector is SFace's 128 numbers of the RGB face, scaled to length one.
+OpenCV's demo calls two faces one person's at a cosine of 0.363
+(`MATCH`); a library's own line is step 5's to measure.
+
+Measured against `cv2.FaceRecognizerSF` (its `alignCrop` and `feature`)
+on 300 random faces of the live library, read only, agreement printed:
+
+| | cosine to OpenCV's vector, median | worst | under 0.99 |
+|---|---|---|---|
+| first try | 0.9919 | 0.7976 | 139 |
+| half a pixel the wrong way | 0.9829 | 0.5411 | 193 |
+| Pillow's half pixel matched | 0.9996 | 0.9859 | 1 |
+
+The transform was OpenCV's to the last digit (a mean pixel difference
+of 0.0); the warp was not. Pillow's pixel x spans x to x + 1 where
+OpenCV's is centred on x, and the shift that makes the two warps one
+picture is measured, not guessed: a mean difference of 0.49 of 255
+against OpenCV's warp, where the other two signs gave 2.9 and 5.4.
+Faces under 40 px agree as well as the rest (0.9996). 21 ms a face.
+
+**The index.** `vectors-face-sface-2021dec.usearch` beside the text
+ones, keyed by face id, with its delta and its merge: the chunks' code,
+told its dimension (`base._INDEX_DIMS`, `base._index_dim`). The door
+writes the delta every 30 s and when nothing more is due, and at start
+forgets the rows whose vector a killed door lost
+(`store.reconcile_face_vectors`), as it does for chunks. Migration 54
+adds `vector_model`, `vector_at` and `crop` to `faces`. The crop is a
+square of 1.6 times the face's box, 160 px, JPEG, made by the worker
+and filed in the archive by its hash.
+
+**The faces tab** (Review, photos): every face as its crop, the least
+sure first, the smallest first or the surest first, with the counts by
+score and by size, and "alike": the 24 faces whose vectors are nearest
+(`store.similar_faces`, `GET /face/{id}/similar`), each with its
+similarity and a mark where it passes `MATCH`. Nothing is named there
+yet; the tab is what step 4 grows from.
+
+Tests: `tests/test_face_vectors.py` (6), one node test. Suite: 1,607
+passed, 4 skipped.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

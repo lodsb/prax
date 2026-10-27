@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import functools
 import importlib
+import io
 from dataclasses import dataclass
 from typing import Any
 
@@ -197,3 +198,122 @@ def detect(image: Any, *, score: float = SCORE) -> list[Face]:
             )
         )
     return faces
+
+
+# ------------------------------------------------------------ recognition
+# What a face looks like as 128 numbers (plan item AT step 2): SFace
+# (OpenCV Zoo, Apache 2.0, 37 MB of ONNX) over the face aligned to the
+# five points it was trained with, as OpenCV's ``FaceRecognizerSF`` aligns
+# it. Two faces are one person's when their cosine similarity reaches
+# ``MATCH``, the line OpenCV's demo uses; a library's own line is measured
+# in step 5 (``faces.match`` in prax.yaml), never fixed here.
+SFACE_REPO = "opencv/face_recognition_sface"
+SFACE_FILE = "face_recognition_sface_2021dec.onnx"
+SFACE_REVISION = "3d7082438a6e4551e840c9b2bb60b71e8da4b524"
+SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
+RECOGNIZER = "sface-2021dec"
+DIM = 128
+MATCH = 0.363
+ALIGNED_PX = 112
+# where the five landmarks lie in an aligned face of 112 x 112
+TEMPLATE = (
+    (38.2946, 51.6963),
+    (73.5318, 51.5014),
+    (56.0252, 71.7366),
+    (41.5493, 92.3655),
+    (70.7299, 92.2041),
+)
+CROP_PX = 160  # the face as the Review page shows it
+CROP_MARGIN = 1.6  # the square's side, in the face box's longer side
+CROP_QUALITY = 82
+
+
+@functools.cache
+def _recognizer() -> Any:
+    import hashlib
+
+    from prax.ml import fetch
+
+    path = fetch.model_file(SFACE_REPO, SFACE_FILE, revision=SFACE_REVISION)
+    if hashlib.sha256(path.read_bytes()).hexdigest() != SFACE_SHA256:
+        raise RuntimeError(f"{path} is not the SFace file prax was measured with")
+    import onnxruntime as ort
+
+    opts = ort.SessionOptions()
+    opts.log_severity_level = 3
+    return ort.InferenceSession(str(path), opts, providers=["CPUExecutionProvider"])
+
+
+def similarity_transform(src: Any, dst: Any) -> Any:
+    """The 2 x 3 matrix of rotation, uniform scale and shift that takes the
+    points ``src`` nearest to ``dst`` in least squares (Umeyama, 1991)."""
+    import numpy as np
+
+    src, dst = np.asarray(src, np.float64), np.asarray(dst, np.float64)
+    mu_s, mu_d = src.mean(axis=0), dst.mean(axis=0)
+    sc, dc = src - mu_s, dst - mu_d
+    var = (sc**2).sum() / len(src)
+    cov = dc.T @ sc / len(src)
+    u, s, vt = np.linalg.svd(cov)
+    d = np.ones(2)
+    if np.linalg.det(cov) < 0:
+        d[-1] = -1
+    rot = u @ np.diag(d) @ vt
+    scale = float((s * d).sum() / var) if var else 1.0
+    shift = mu_d - scale * rot @ mu_s
+    return np.hstack([scale * rot, shift[:, None]])
+
+
+def align(image: Any, landmarks: Any) -> Any:
+    """The face whose five ``landmarks`` (pixels of ``image``) are given,
+    turned and scaled onto ``TEMPLATE``: a 112 x 112 RGB image."""
+    import numpy as np
+    from PIL import Image
+
+    m = similarity_transform(landmarks, TEMPLATE)
+    a = m[:, :2]
+    inv = np.linalg.inv(a)
+    back = -inv @ m[:, 2]
+    # Pillow's pixel x spans x to x + 1 where OpenCV's is centred on x:
+    # the half-pixel shift that makes the two the same picture (a mean
+    # difference of 0.5 of 255 against OpenCV's warp, 2026-10-27)
+    back = back - inv @ np.array([0.5, 0.5]) + 0.5
+    data = (inv[0, 0], inv[0, 1], back[0], inv[1, 0], inv[1, 1], back[1])
+    return image.convert("RGB").transform(
+        (ALIGNED_PX, ALIGNED_PX),
+        Image.Transform.AFFINE,
+        data=tuple(float(v) for v in data),
+        resample=Image.Resampling.BILINEAR,
+    )
+
+
+def vector(aligned: Any) -> list[float]:
+    """An aligned face as SFace's 128 numbers, of length one."""
+    import numpy as np
+
+    rgb = np.asarray(aligned.convert("RGB"), dtype=np.float32)
+    blob = rgb.transpose(2, 0, 1)[None]  # RGB, 0 to 255, as OpenCV feeds it
+    session = _recognizer()
+    (out,) = session.run(None, {session.get_inputs()[0].name: blob})
+    v = out[0].astype(np.float64)
+    n = float(np.linalg.norm(v))
+    return [round(float(x) / n, 6) for x in v] if n else [0.0] * DIM
+
+
+def crop(image: Any, box: Any) -> bytes:
+    """The face with some of what is around it, square, as a small JPEG:
+    what the Review page shows of it. ``box`` is ``(x, y, w, h)`` in
+    fractions of ``image``."""
+    x, y, w, h = box
+    cx, cy = (x + w / 2) * image.width, (y + h / 2) * image.height
+    side = max(w * image.width, h * image.height) * CROP_MARGIN
+    region = (
+        round(cx - side / 2),
+        round(cy - side / 2),
+        round(cx + side / 2),
+        round(cy + side / 2),
+    )
+    out = image.convert("RGB").crop(region).resize((CROP_PX, CROP_PX))
+    buf = io.BytesIO()
+    out.save(buf, "JPEG", quality=CROP_QUALITY)
+    return buf.getvalue()

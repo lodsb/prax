@@ -1133,11 +1133,18 @@ not done.
             the detector's stamp; a later reading ends the earlier faces
             (`gone_at`). `meta.faces`, `GET /doc/{id}/faces`, the boxes
             over a picture on its page.
-      - [ ] **Step 2, the vectors.** A recognition model (SFace, Apache
+      - [x] (2026-10-27) **Step 2, the vectors.** A recognition model (SFace, Apache
             2.0; 128 or 512 dimensions by model) gives each face a
             vector. It goes into an index of its own,
             `vectors-face-<model>.usearch` beside the text ones
             (invariant 1's pattern: a main file, a delta, a merge).
+            Built: the watched `facevectors` step (SFace 2021dec, 128
+            numbers, aligned as OpenCV's `FaceRecognizerSF` aligns, a
+            crop of each face filed in the archive; migration 54),
+            `store.similar_faces`, and the Review page's faces tab
+            (least sure, smallest or surest first, "alike"). Faces
+            under 40 px are read like the rest; whether they are read
+            again from the original is left to step 3's measurement.
             InsightFace's models are more accurate, and Immich uses
             them, but their weights are licensed for non-commercial use
             only, so prax does not ship them. A host may name one in

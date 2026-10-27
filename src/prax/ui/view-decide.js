@@ -20,6 +20,8 @@ const DECIDE_LISTS = {
     about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about; the level in bold comes with them. Tick a level alone when nothing under it fits. A subject may be left out. \"to check\" holds a model's labels, the least sure first: save them as they are, or change the ticks first. \"decided a domain\" is the part of it a domain rule placed by those labels, where a wrong one costs the most. The documents come from each source in turn. About 150 is the aim." },
   events: { title: "events", view: (p) => viewEvents(p),
     about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back. Split…: cut a group before a burst of its photos, kept for every later pass; join takes a cut back." },
+  faces: { title: "faces", view: (p) => viewFaces(p),
+    about: "Every face the faces step found, as a small picture of it: the least sure first, to see what the detector takes for a face; the smallest, to see where recognition will struggle; or the surest. Alike shows the faces that look most like one, a check of what the vectors say. Nothing is named here yet." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -29,7 +31,7 @@ const DECIDE_LISTS = {
 const DECIDE_GROUPS = [
   { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges"] },
   { title: "documents", what: "what each document is and is about", keys: ["genre"] },
-  { title: "photos", what: "pictures grouped into events, and later the people in them", keys: ["events"] },
+  { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces"] },
 ];
 
 function decideTabs(current) {
@@ -295,4 +297,39 @@ async function viewEvents(p) {
     const undo = row.querySelector("[data-event-undo]");
     if (undo) undo.addEventListener("click", () => send(`/graph/events/${id}/undo`, {}, (r) => `open again${r.ended ? `, ${r.ended} facts ended` : ""}`));
   });
+}
+
+// The faces the faces step found (AT steps 1 and 2): crops in an order,
+// the counts by score and size, and for a face the faces most like it
+async function viewFaces(p) {
+  const list = DECIDE_LISTS.faces;
+  const order = ["smallest", "surest"].includes(p.order) ? p.order : "least";
+  const limit = 120;
+  const offset = Number(p.offset || 0);
+  const link = (o, label) => o === order ? `<b>${label}</b>` : `<a href="#review?${new URLSearchParams({ list: "faces", order: o })}">${label}</a>`;
+  view.innerHTML = `${decideTabs("faces")}<p class="muted">${esc(list.about)}</p>
+    <p>${link("least", "least sure first")} · ${link("smallest", "smallest first")} · ${link("surest", "surest first")}</p>
+    <p id="face-counts" class="muted"></p><div id="face-alike"></div>
+    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  const box = document.getElementById("decide-list");
+  let res;
+  try { res = await api("/faces", { order, offset, limit }); } catch (err) { showError(box, err); return; }
+  document.getElementById("face-counts").innerHTML = faceCounts(res);
+  const page = (o) => `#review?${new URLSearchParams({ list: "faces", order, offset: o })}`;
+  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  box.innerHTML = res.items.length ? `<div class="face-grid">${res.items.map(faceTile).join("")}</div>${pager}` : `<p class="muted">No face found yet: the faces step reads the photos' previews.</p>`;
+  const alike = document.getElementById("face-alike");
+  box.querySelectorAll("[data-alike]").forEach((b) => b.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const id = b.dataset.alike;
+    alike.innerHTML = `<p class="muted">looking…</p>`;
+    let near;
+    try { near = await api(`/face/${id}/similar`, { k: 24 }); } catch (err) { showError(alike, err); return; }
+    alike.innerHTML = `<section class="face-alike"><p>Most like face ${esc(id)} <a href="#" data-alike-close>close</a></p>
+      <div class="face-grid">${faceTile({ id: Number(id), doc_id: Number(b.dataset.doc), crop: true, score: Number(b.dataset.score), px: Number(b.dataset.px) })}${near.map((f) => faceTile({ ...f, crop: true }, f)).join("")}</div>
+      ${near.length ? "" : `<p class="muted">No vector for it yet: the facevectors step makes them.</p>`}</section>`;
+    alike.querySelector("[data-alike-close]").addEventListener("click", (ev) => { ev.preventDefault(); alike.innerHTML = ""; });
+    alike.scrollIntoView({ block: "nearest" });
+  }));
 }

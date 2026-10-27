@@ -707,6 +707,18 @@ def _doc_index_path(model: str) -> Path:
     return config.data_dir() / f"vectors-doc-{model}.usearch"
 
 
+# the dimension of an index other than the text ones (``VEC_DIM``), by its
+# main file: the face vectors (``retrieval.faces``) are 128 numbers each
+_INDEX_DIMS: dict[str, int] = {}
+
+
+def _index_dim(path: Path) -> int:
+    """The dimension of the index at ``path``, its delta or a merge's
+    temporary file: ``VEC_DIM`` unless its main file was registered."""
+    main = str(path).removesuffix(".merging").replace(".delta.usearch", ".usearch")
+    return _INDEX_DIMS.get(main, VEC_DIM)
+
+
 def _open_index(path: Path, *, writable: bool) -> vectors.VectorIndex | None:
     key = (str(path), writable)
     with _INDEX_LOCK:
@@ -714,7 +726,7 @@ def _open_index(path: Path, *, writable: bool) -> vectors.VectorIndex | None:
         if idx is None:
             if not writable and not path.exists():
                 return None
-            idx = vectors.VectorIndex(path, VEC_DIM, writable=writable)
+            idx = vectors.VectorIndex(path, _index_dim(path), writable=writable)
             _indexes[key] = idx
         return idx
 

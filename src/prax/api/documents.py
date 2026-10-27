@@ -237,6 +237,40 @@ def photo_faces(doc_id: int, request: Request) -> list[dict[str, Any]]:
     return store.faces_of(_con(request), doc_id)
 
 
+@router.get("/faces")
+def faces_page(
+    request: Request, order: str = "least", offset: int = 0, limit: int = 100
+) -> dict[str, Any]:
+    """Faces to look at with their crops, and their counts by score and
+    size (``store.faces_page``). Not a named token's route."""
+    try:
+        return store.faces_page(_con(request), order=order, offset=offset, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/face/{face_id}/crop")
+def face_crop(face_id: int, request: Request) -> FileResponse:
+    """A face as a small square JPEG, made by the facevectors step."""
+    path = store.face_crop(_con(request), face_id)
+    if path is None:
+        raise HTTPException(404, "no crop of that face yet")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.get("/face/{face_id}/similar")
+def face_similar(face_id: int, request: Request, k: int = 12) -> list[dict[str, Any]]:
+    """The faces that look most like this one (``store.similar_faces``)."""
+    try:
+        return store.similar_faces(_con(request), face_id, k=max(1, min(k, 60)))
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 def _photo_copy(request: Request, doc_id: int, which: str) -> FileResponse:
     path = store.photo_copy(_con(request), doc_id, which)
     if path is None:

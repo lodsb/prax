@@ -42,6 +42,7 @@ CORE_STEPS = (
     "photos",
     "geocode",
     "faces",
+    "facevectors",
 )
 STEPS = CORE_STEPS + tuple(_packs.step_homes())
 
@@ -79,6 +80,9 @@ WATCHED_STEPS = (
     # where the faces in a picture are (2026-10-27, the user's word: AT
     # step 1): YuNet on the worker's CPU, its preview read through the door
     "faces",
+    # what each face looks like (2026-10-27, AT step 2): SFace's vector of
+    # it on the worker's CPU, into the face index the door holds
+    "facevectors",
 ) + _packs.watched()
 
 # the rest: named on the command line, and the paid ones want --spend
@@ -120,6 +124,7 @@ _HOMES = {
     "photos": "photos",
     "geocode": "photos",
     "faces": "faces",
+    "facevectors": "faces",
     **_packs.step_homes(),  # a pack's: the module's full name
 }
 

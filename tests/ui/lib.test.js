@@ -650,3 +650,17 @@ test("a picture's faces: the count, and each a box in percent", () => {
   assert.match(box, /left:10\.00%;top:25\.00%;width:5\.00%;height:7\.50%/);
   assert.match(box, /face 4 · 93%/);
 });
+
+test("the faces tab's tiles and counts", () => {
+  const tile = lib.faceTile({ id: 3, doc_id: 9, crop: true, score: 0.912, px: 48 });
+  assert.match(tile, /src="\/face\/3\/crop"/);
+  assert.match(tile, /91% · 48 px/);
+  assert.match(tile, /data-alike="3"/);
+  const near = lib.faceTile({ id: 4, doc_id: 9, crop: true }, { similarity: 0.52, match: true });
+  assert.match(near, /52% ✓/);
+  assert.doesNotMatch(near, /data-alike/);
+  assert.match(lib.faceTile({ id: 5, doc_id: 1, crop: false, score: 0.8, px: 10 }), /no crop yet/);
+  const counts = lib.faceCounts({ total: 1200, pictures: 400, vectored: 30, by_score: { "under 0.9": 5 }, by_size: { "under 40 px": 7 } });
+  assert.match(counts, /1,200 faces in 400 pictures, 30 with a vector/);
+  assert.match(counts, /under 0\.9 5/);
+});

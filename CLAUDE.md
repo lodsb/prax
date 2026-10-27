@@ -27,7 +27,9 @@ revisit threshold, under "Decision thresholds" below.
    documents too. WAL mode is always on. The vectors themselves live in
    two usearch HNSW files per model next to the database:
    `data/vectors-<model>.usearch` keyed by chunk id and
-   `data/vectors-doc-<model>.usearch` keyed by document id. The serving
+   `data/vectors-doc-<model>.usearch` keyed by document id, and the
+   faces' in `data/vectors-face-<model>.usearch` keyed by face id (128
+   numbers, plan item AT; `faces.vector_model` is its record). The serving
    path memory-maps them. Each has a small writable delta file beside
    it (`…delta.usearch`) that takes new vectors. A merge folds the delta
    into the main file: the merged file is built beside it outside the
@@ -445,8 +447,11 @@ reference `docs/ask.md`.
   YuNet on the worker's CPU) finds them in the photos step's preview:
   a box and five landmarks as fractions of the upright picture, and
   the score. A later reading ends the earlier faces (`gone_at`) and
-  never deletes them. Faces are biometric: never to a paid model or an
-  API, and no named token's route.
+  never deletes them. The `facevectors` step aligns each face as OpenCV's
+  recogniser does and gives it SFace's 128 numbers (the face index,
+  invariant 1) and a small crop filed in the archive; `similar_faces` is
+  the nearest-neighbour search over them. Faces are biometric: never to a
+  paid model or an API, and no named token's route.
 - Embeddings are 384-dimensional (bge-small-class ONNX). Vectors are
   keyed by chunk id in the usearch file. Changing the model means
   re-embedding into a new file. Another dimension means a new file and

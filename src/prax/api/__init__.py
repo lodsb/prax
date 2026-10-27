@@ -63,6 +63,13 @@ def _warm() -> None:
                     logging.getLogger("prax.door").info(
                         "vectors lost at the last stop, to embed again: %s", got
                     )
+            if store.vectors_available():
+                # the same for the face vectors (plan item AT step 2)
+                got = store.reconcile_face_vectors(con)
+                if got["forgotten"]:
+                    logging.getLogger("prax.door").info(
+                        "face vectors lost at the last stop, to read again: %s", got
+                    )
             store.warm_fts(con)
         finally:
             con.close()

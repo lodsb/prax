@@ -29,6 +29,7 @@ ORDER = (
     "vectors",
     "fusion",
     "similar",
+    "faces",
 )
 
 from .compounds import (  # noqa: F401
@@ -47,6 +48,18 @@ from .compounds import (  # noqa: F401
     forms,
     split,
     term_documents,
+)
+from .faces import (  # noqa: F401
+    FACE_MODEL,
+    FACE_ORDERS,
+    apply_face_vectors,
+    face_crop,
+    face_index_path,
+    face_vectors_due,
+    faces_page,
+    reconcile_face_vectors,
+    save_face_vectors,
+    similar_faces,
 )
 from .fusion import (  # noqa: F401
     _FOLD,
