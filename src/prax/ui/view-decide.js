@@ -21,7 +21,7 @@ const DECIDE_LISTS = {
   events: { title: "events", view: (p) => viewEvents(p),
     about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back. Split…: cut a group before a burst of its photos, kept for every later pass; join takes a cut back." },
   faces: { title: "faces", view: (p) => viewFaces(p),
-    about: "Every face the faces step found, as a small picture of it: the least sure first, to see what the detector takes for a face; the smallest, to see where recognition will struggle; or the surest. Alike shows the faces that look most like one, a check of what the vectors say. Nothing is named here yet." },
+    about: "Every face the faces step found, as a small picture of it: the least sure first, to see what the detector takes for a face; the smallest, to see where recognition will struggle; or the surest. Alike shows the faces whose vectors are nearest to one, with how alike they are: a check of what the vectors say, not a decision. Nothing is named here yet." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -318,7 +318,7 @@ async function viewFaces(p) {
   const page = (o) => `#review?${new URLSearchParams({ list: "faces", order, offset: o })}`;
   const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
     ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
-  box.innerHTML = res.items.length ? `<div class="face-grid">${res.items.map(faceTile).join("")}</div>${pager}` : `<p class="muted">No face found yet: the faces step reads the photos' previews.</p>`;
+  box.innerHTML = res.items.length ? `<div class="face-grid">${res.items.map((f) => faceTile(f)).join("")}</div>${pager}` : `<p class="muted">No face found yet: the faces step reads the photos' previews.</p>`;
   const alike = document.getElementById("face-alike");
   box.querySelectorAll("[data-alike]").forEach((b) => b.addEventListener("click", async (e) => {
     e.preventDefault();

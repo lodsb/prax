@@ -6763,6 +6763,63 @@ yet; the tab is what step 4 grows from.
 Tests: `tests/test_face_vectors.py` (6), one node test. Suite: 1,607
 passed, 4 skipped.
 
+## 2026-10-27: the first read of the faces, and what the vectors say
+
+The faces step read all 13,741 pictures from 03:00Z to 03:55Z: 8,916
+faces in 3,719 of them, at most 34 in one. The facevectors step gave
+every one of them a vector by 04:55Z. The face index is 2.3 MB with a
+0.7 MB delta.
+
+| detector's score | faces | | width in the preview | faces |
+|---|---|---|---|---|
+| 0.95 and over | 33 | | under 40 px | 3,765 |
+| 0.9 to 0.95 | 3,664 | | 40 to 80 px | 2,264 |
+| under 0.9 | 5,219 | | 80 px and over | 2,887 |
+
+The median face is 48 px wide. 59% of the faces score under 0.9, the
+line OpenCV's demo keeps faces at; prax keeps 0.8. How many of those
+are no face at all is the owner's to judge on the faces tab ("least
+sure first"): the faces are personal, and no one else looked at them.
+
+**Two failures of the first passes.** The first two faces passes
+reported 456 and 492 pictures "not read", with no reason in the log.
+Five of the 2,022 pictures then waiting had a landmark a little past
+the picture's edge (to -0.016 and 1.025), which the door's check
+refused, and the whole picture with it. The check now keeps a landmark
+within a quarter of the picture outside its edge where the detector put
+it, since the alignment needs it there, and a pass names its first
+error in its line. The other failures were not found: a batch run by
+hand through the door, and every preview fetched by hand, went
+through, and after the door and the worker were restarted the next
+pass read 1,388 pictures with none failing.
+
+**What the vectors say**, read only over the index: for each face its
+nearest face in another picture.
+
+| faces | nearest elsewhere, median | passing 0.363 | passing 0.5 |
+|---|---|---|---|
+| all (8,916) | 0.597 | 99% | 72% |
+| under 40 px | 0.543 | 99% | 66% |
+| 40 to 80 px | 0.594 | 99% | 69% |
+| 80 px and over | 0.712 | 99% | 83% |
+| score under 0.85 | 0.529 | 100% | 65% |
+| score 0.9 and over | 0.720 | 99% | 82% |
+
+OpenCV's line, 0.363, is for one pair of faces held side by side. Over
+a library almost every face has some face past it, so it says nothing
+here, and the faces tab no longer marks a neighbour as passing it: it
+shows how alike, as a number. Linking every pair at 0.5 and over chains
+4,636 faces into one group, with 79 more groups of five or more beside
+it (the largest 42). So step 3 is a clustering of density (HDBSCAN, as
+planned), not a line, and step 5's line is measured on faces the owner
+names. Small faces sit lower (0.543 against 0.712 for 80 px and over):
+reading them again from the original is worth measuring once there are
+named faces to measure it with.
+
+The faces tab was checked on YuNet's public example picture on a
+throwaway store, which caught a tile that read a list's index as a
+likeness ("NaN% alike").
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

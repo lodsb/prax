@@ -452,13 +452,16 @@ function faceBox(f) {
 // pictures, how many have a vector, by score and by size
 function faceCounts(res) {
   const bands = (o) => Object.entries(o || {}).map(([k, n]) => `${esc(k)} ${Number(n).toLocaleString()}`).join(" · ");
-  return `${res.total.toLocaleString()} faces in ${res.pictures.toLocaleString()} pictures, ${res.vectored.toLocaleString()} with a vector<br>score: ${bands(res.by_score)}<br>size: ${bands(res.by_size)}`;
+  return `${res.total.toLocaleString()} face${res.total === 1 ? "" : "s"} in ${res.pictures.toLocaleString()} picture${res.pictures === 1 ? "" : "s"}, ${res.vectored.toLocaleString()} with a vector<br>score: ${bands(res.by_score)}<br>size: ${bands(res.by_size)}`;
 }
 // One face as a tile: its crop, its picture a click away, its score and
 // size, or its likeness to the face asked about
 function faceTile(f, near) {
   const img = f.crop ? `<img loading="lazy" src="/face/${f.id}/crop" alt="">` : `<span class="face-none">no crop yet</span>`;
-  const line = near ? `${Math.round(near.similarity * 100)}%${near.match ? " ✓" : ""}` : `${Math.round((f.score || 0) * 100)}% · ${f.px} px`;
+  // a likeness as a number only: OpenCV's line for one pair (MATCH) is
+  // passed by 99% of a library's faces' nearest (2026-10-27), so a mark
+  // at it would say nothing; step 5 measures a line of the library's own
+  const line = near ? `${Math.round(near.similarity * 100)}% alike` : `${Math.round((f.score || 0) * 100)}% · ${f.px} px`;
   return `<figure class="face-tile"><a href="#doc/${f.doc_id}">${img}</a><figcaption class="muted">${line}
     ${near ? "" : ` · <a href="#" data-alike="${f.id}" data-doc="${f.doc_id}" data-score="${f.score}" data-px="${f.px}">alike</a>`}</figcaption></figure>`;
 }

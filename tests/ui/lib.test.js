@@ -657,7 +657,7 @@ test("the faces tab's tiles and counts", () => {
   assert.match(tile, /91% · 48 px/);
   assert.match(tile, /data-alike="3"/);
   const near = lib.faceTile({ id: 4, doc_id: 9, crop: true }, { similarity: 0.52, match: true });
-  assert.match(near, /52% ✓/);
+  assert.match(near, /52% alike/);
   assert.doesNotMatch(near, /data-alike/);
   assert.match(lib.faceTile({ id: 5, doc_id: 1, crop: false, score: 0.8, px: 10 }), /no crop yet/);
   const counts = lib.faceCounts({ total: 1200, pictures: 400, vectored: 30, by_score: { "under 0.9": 5 }, by_size: { "under 40 px": 7 } });
