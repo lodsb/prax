@@ -352,6 +352,10 @@ async function viewEvents(p) {
 }
 
 // The face groups (AT step 3): a strip of faces a group, or one group whole
+// faces a page of one group or one person's matches shows: a group of
+// 500 drawn whole was 500 crops and one form for all of them
+const FACE_PAGE = 60;
+
 async function viewFaceGroups(p) {
   const list = DECIDE_LISTS.groups;
   const limit = 30;
@@ -366,7 +370,10 @@ async function viewFaceGroups(p) {
     let g;
     try { g = await api(`/faces/groups/${Number(p.group)}`); } catch (err) { showError(box, err); return; }
     counts.innerHTML = `<a href="#review?list=groups">all groups</a>`;
-    box.innerHTML = faceGroupRow(g, true);
+    const open = g.faces.filter((f) => f.verdict == null);
+    const page = (o) => `#review?${new URLSearchParams({ list: "groups", group: g.id, offset: o })}`;
+    box.innerHTML = faceGroupRow({ ...g, faces: open.slice(offset, offset + FACE_PAGE) }, true)
+      + pagerHtml(open.length, offset, FACE_PAGE, page);
   } else {
     let res;
     try { res = await api("/faces/groups", { offset, limit, event }); } catch (err) { showError(box, err); return; }
@@ -400,13 +407,16 @@ async function viewFaceMatches(p) {
   const counts = document.getElementById("match-counts");
   const person = p.person ? Number(p.person) : undefined;
   let res;
-  try { res = await api("/faces/matches", { offset, limit, person }); } catch (err) { showError(box, err); return; }
+  try { res = await api("/faces/matches", { offset, limit: person ? FACE_PAGE : limit, person }); } catch (err) { showError(box, err); return; }
   const line = `at least ${Math.round(res.line * 100)}% alike and ${Math.round(res.margin * 100)} points nearer than anyone else (faces.match in prax.yaml)`;
   counts.innerHTML = person
     ? `<a href="#review?list=matches">every person</a> · ${line}`
     : `${res.offered.toLocaleString()} of ${res.open.toLocaleString()} open faces look like ${res.total.toLocaleString()} people you named: ${line}`;
-  const page = (o) => `#review?${new URLSearchParams({ list: "matches", offset: o })}`;
-  const pager = person ? "" : pagerHtml(res.total, offset, limit, page);
+  const page = (o) => `#review?${new URLSearchParams({ list: "matches", offset: o, ...(person ? { person } : {}) })}`;
+  // one person's: the offset steps through their faces (FACES_PAGE a page)
+  const pager = person
+    ? pagerHtml((res.items[0] || { open: 0 }).open, offset, FACE_PAGE, page)
+    : pagerHtml(res.total, offset, limit, page);
   box.innerHTML = res.items.some((m) => m.faces.length)
     ? res.items.map((m) => faceMatchRow(m, Boolean(person))).join("") + pager
     : `<p class="muted">No face to offer: name some faces in the face groups tab first, and each one named is matched against the rest.</p>`;
@@ -469,7 +479,12 @@ function bindNaming(box) {
       try {
         const r = await post(path, { faces, ...body });
         done.forEach((id) => section.querySelector(`.face-tile[data-face="${id}"]`).classList.add("face-done"));
-        out.innerHTML = `${esc(words(r))} · <a href="#" data-undo="${esc(r.run)}">undo</a>`;
+        // the whole page answered: what is still open moves up into it
+        const next = section.querySelector(".face-tile[data-face]:not(.face-done)") || !box.querySelector(".pager-pages")
+          ? "" : ` · <a href="#" data-next>the next faces</a>`;
+        out.innerHTML = `${esc(words(r))} · <a href="#" data-undo="${esc(r.run)}">undo</a>${next}`;
+        const more = out.querySelector("[data-next]");
+        if (more) more.addEventListener("click", (e) => { e.preventDefault(); render(); });
         out.querySelector("[data-undo]").addEventListener("click", async (e) => {
           e.preventDefault();
           try {

@@ -587,7 +587,8 @@ def face_matches(
     least ``faces.match.line`` alike and ``faces.match.margin`` nearer
     than anyone else, both in prax.yaml (with the ``neighbours`` that
     vote). Each person's row holds their surest faces (``MATCH_STRIP``,
-    or up to ``FACES_PAGE`` with ``person``), each with its ``similarity``
+    or with ``person`` a page of their faces: ``limit`` of them, at most
+    ``FACES_PAGE``, from ``offset``), each with its ``similarity``
     and the named face it is most like (``like``), and the person's
     ``like`` face to show beside them. ``open`` counts the open faces
     with a vector, ``offered`` those offered. Nothing is written: an
@@ -614,13 +615,14 @@ def face_matches(
     order = sorted(rows, key=lambda p: (-pictures(p), p))
     limit = max(1, min(limit, GROUPS_PAGE))
     page = order if person is not None else order[max(0, offset) : offset + limit]
-    strip = FACES_PAGE if person is not None else MATCH_STRIP
-    shown = {
-        p: sorted(rows[p], key=lambda it: (-it[2].similarity, it[0]))[:strip]
-        for p in page
+    ranked = {
+        p: sorted(rows[p], key=lambda it: (-it[2].similarity, it[0])) for p in page
     }
+    start = max(0, offset) if person is not None else 0
+    strip = max(1, min(limit, FACES_PAGE)) if person is not None else MATCH_STRIP
+    shown = {p: ranked[p][start : start + strip] for p in page}
     ids = {f for items in shown.values() for f, _, _, _ in items}
-    ids |= {items[0][3] for items in shown.values() if items}
+    ids |= {items[0][3] for items in ranked.values() if items}
     tiles = {
         int(r["id"]): r
         for r in con.execute(
@@ -646,7 +648,7 @@ def face_matches(
                 "name": names.get(p, ""),
                 "open": len(rows[p]),
                 "pictures": pictures(p),
-                "like": _face_item(tiles[shown[p][0][3]]) if shown[p] else None,
+                "like": _face_item(tiles[ranked[p][0][3]]) if ranked[p] else None,
                 "faces": [
                     {
                         **_face_item(tiles[f]),

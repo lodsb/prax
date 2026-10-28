@@ -114,6 +114,23 @@ def test_open_faces_offered_as_who_they_look_like(con: sqlite3.Connection) -> No
 
 
 @pytestmark_vectors
+def test_one_persons_faces_a_page_at_a_time(con: sqlite3.Connection) -> None:
+    a = [f for _, f in _grouped(con)["a"]]
+    ada = store.name_faces(con, a[:3], name="Ada Lovelace")["entity_id"]
+    whole = store.face_matches(con, person=ada)["items"][0]
+    pages = [
+        store.face_matches(con, person=ada, offset=o, limit=2)["items"][0]
+        for o in range(0, whole["open"], 2)
+    ]
+    seen = [f["id"] for page in pages for f in page["faces"]]
+    assert len(pages) > 2 and all(len(page["faces"]) <= 2 for page in pages)
+    assert seen == [f["id"] for f in whole["faces"]]  # in order, each once
+    assert set(a[3:]) <= set(seen)
+    assert {page["open"] for page in pages} == {whole["open"]}
+    assert {page["like"]["id"] for page in pages} == {whole["like"]["id"]}
+
+
+@pytestmark_vectors
 def test_a_hidden_picture_neither_offered_nor_matched_against(
     con: sqlite3.Connection,
 ) -> None:

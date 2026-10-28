@@ -9233,3 +9233,24 @@ test renames a region between two placements
 
 The graph's panel of a person, an event or a place also has "its
 photos" now, the gallery of `#photos`, for the administrator.
+
+## 2026-10-29: a face group and a person's matches, a page at a time
+
+The Review page's lists already used the gallery's pager. Two views did
+not. A group opened whole (`#review?list=groups&group=N`) drew every open
+face of it under one "name them" form; the live store's largest groups
+hold 500, 300, 292 and 284. A person's matches (`?list=matches&person=N`)
+had no pager at all, and `store.face_matches` returned at most
+`FACES_PAGE` (200) of their faces, so the rest could only be reached by
+naming and coming back.
+
+Both now show 60 faces a page (`FACE_PAGE` in `view-decide.js`). With
+`person`, `face_matches` takes `offset` and `limit` as a page of that
+person's faces, the surest first, and `like` stays their surest face's
+match on every page (`tests/test_face_matching.py`). The form still
+names the faces on the page. Naming a page moves the faces still open up
+into it, so once every face on the page is answered the message offers
+"the next faces", which draws the same page again.
+
+Not looked at in a browser: faces are biometric, and the throwaway
+store's generated pictures have none.
