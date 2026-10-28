@@ -296,8 +296,17 @@ def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
     its device and inode), and anything deeper than ``max_depth``.
     ``stats`` counts what was walked and what was left out."""
     stats = stats if stats is not None else {}
-    for key in ("folders", "files", "bytes", "left_out"):
+    for key in ("folders", "files", "bytes", "left_out", "unlisted"):
         stats.setdefault(key, 0)
+
+    def unlisted(exc):
+        # a folder os.walk could not list is counted, not passed over
+        stats["unlisted"] += 1
+        if progress is not None:
+            progress.done()
+        where = fs_text(exc.filename or "")
+        print("cannot list %s: %s" % (where, exc), file=sys.stderr)
+
     leave = SKIP_DIRS | WINDOWS_PROFILE | SYSTEM_DIRS | set(skip)
     for root in roots:
         root = os.path.abspath(root)
@@ -307,7 +316,7 @@ def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
             continue
         base = len(root.rstrip(os.sep).split(os.sep))
         visited = set()
-        for here, dirs, files in os.walk(root):
+        for here, dirs, files in os.walk(root, onerror=unlisted):
             stats["folders"] += 1
             if progress is not None:
                 progress.show(
@@ -453,6 +462,22 @@ class State(object):
             self.out.write(json.dumps(item) + "\n")
         except (IOError, OSError):
             self.path = None  # nowhere to keep it: the run goes on without
+
+    def hash_with_stat(self, path, read=None):
+        """``hash_of`` with the stat it is true for: ``OSError`` when the
+        file's size or mtime changed while it was read (a phone's sync
+        still writing it), so no place is recorded under a hash its bytes
+        no longer have."""
+        before = os.stat(path)
+        digest = self.hash_of(path, read)
+        after = os.stat(path)
+        if (before.st_size, int(before.st_mtime)) != (
+            after.st_size,
+            int(after.st_mtime),
+        ):
+            self.seen.pop(fs_text(path), None)
+            raise OSError("it changed while it was read")
+        return digest, before
 
     def hash_of(self, path, read=None):
         """The sha256 of the file, from the journal when its size and mtime
@@ -741,16 +766,21 @@ def places(opts, top, door, state):
         if not batch or opts.dry_run:
             return
         if not opts.reference:
-            door.post("/places", {"root": name, "entries": batch})
-            return
-        payload = {"root": name, "entries": batch, "by": "send"}
-        for key in ("domains", "tags"):
-            value = getattr(opts, key)
-            if value:
-                payload[key] = [v.strip() for v in value.split(",") if v.strip()]
-        out = door.post("/ingest/reference", payload)
-        counts["referenced"] += out.get("created", 0)
-        counts["known"] += out.get("known", 0)
+            out = door.post("/places", {"root": name, "entries": batch})
+        else:
+            payload = {"root": name, "entries": batch, "by": "send"}
+            for key in ("domains", "tags"):
+                value = getattr(opts, key)
+                if value:
+                    payload[key] = [v.strip() for v in value.split(",") if v.strip()]
+            out = door.post("/ingest/reference", payload)
+            counts["referenced"] += out.get("created", 0)
+            counts["known"] += out.get("known", 0)
+        # a name the door cannot take (a ':' in it) is a file not recorded:
+        # the crawl stays open, as for a file that could not be read
+        for path in out.get("refused") or []:
+            counts["failed"] += 1
+            say(opts, "the door cannot name %s" % path)
 
     say(
         opts,
@@ -763,8 +793,7 @@ def places(opts, top, door, state):
                 files = sorted(files, key=lambda f: (clip_last(f[0]), f[0]))
             for path, _size in files:
                 try:
-                    digest = state.hash_of(path, read)
-                    st = os.stat(path)
+                    digest, st = state.hash_with_stat(path, read)
                 except (IOError, OSError) as exc:
                     counts["failed"] += 1
                     say(opts, "cannot read %s: %s" % (fs_text(path), exc))
@@ -784,6 +813,8 @@ def places(opts, top, door, state):
                     state.save()
                     batch = []
         post(batch)
+        # a folder that could not be listed is files not seen, not gone
+        counts["failed"] += walked.get("unlisted", 0)
         if since is not None and not counts["failed"]:
             out = door.post(
                 "/places/done", {"root": name, "since": since, "prefix": under}

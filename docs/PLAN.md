@@ -1230,9 +1230,10 @@ not done.
             shows it, so the wall hides it wherever the picture is.
       - **The wall.** A face vector is biometric data. Faces, their
         vectors and their names never leave the host: no paid model, no
-        vision API. A `face` chunk and a `depicts` edge to a person are
-        hidden from a named token without `--personal`, and a picture
-        with a named face is `suspected` at least. A referenced picture
+        vision API. A picture with a named face is hidden from a named
+        token without `--personal`, with its `depicts` and `attended`
+        facts, even when a person opened it (`store.hidden_documents`,
+        decided 2026-10-28), and it is `suspected` at least. A referenced picture
         or recording is `suspected` from its registration already
         (`private.referenced`, the user's choice of 2026-10-23).
       - **Measured before step 5 is on by default:** on a sample the

@@ -224,6 +224,38 @@ class DocumentMeta(TypedDict, total=False):
 MetaLike = DocumentMeta | dict[str, Any]
 
 
+# the keys only the door's own passes write: what a client sends in its
+# meta is never one of them, since several name a file of the archive or
+# decide what the wall shows (the review of 2026-10-28)
+DOOR_WRITTEN_META = frozenset(
+    {
+        "photo",
+        "taken",
+        "place",
+        "faces",
+        "retired",
+        "sensitivity",
+        "private",
+        "reading",
+        "ocr",
+        "page",
+        "asks",
+        "extraction",
+        "extraction_stale",
+        "references",
+        "text_source",
+        "quality",
+        "profile",
+        "markup",
+    }
+)
+
+
+def door_written(meta: MetaLike | None) -> list[str]:
+    """The keys of a client's ``meta`` that only the door may write."""
+    return sorted(k for k in meta or {} if k in DOOR_WRITTEN_META)
+
+
 def undeclared_meta(meta: MetaLike) -> list[str]:
     """The top-level keys of ``meta`` that ``DocumentMeta`` does not name."""
     return sorted(k for k in meta if k not in DocumentMeta.__annotations__)
@@ -566,6 +598,10 @@ def _hidden_read(con: sqlite3.Connection, viewer: Viewer) -> frozenset[int]:
                 "SELECT id FROM documents WHERE sensitivity IS NOT NULL"
             )
         }
+        # a picture a person named a face in, even one they opened: who a
+        # face is (and so who was where) is for a token with personal only
+        # (plan item AT's wall; decided 2026-10-28)
+        out |= {int(r[0]) for r in con.execute(_NAMED_FACES)}
     if viewer.domains is not None:
         unset = UNASSIGNED in viewer.domains
         for doc_id, raw in con.execute(
@@ -574,6 +610,25 @@ def _hidden_read(con: sqlite3.Connection, viewer: Viewer) -> frozenset[int]:
             if not holds_domain(raw, viewer.domains, unset=unset):
                 out.add(int(doc_id))
     return frozenset(out)
+
+
+# the pictures a person named a face in (``hidden_documents``)
+_NAMED_FACES = (
+    "SELECT DISTINCT f.doc_id FROM face_names n JOIN faces f ON f.id = n.face_id"
+    " WHERE n.ended_at IS NULL AND n.verdict = 'person'"
+)
+
+
+def _names_a_face(con: sqlite3.Connection, doc_id: int) -> bool:
+    return (
+        con.execute(
+            "SELECT 1 FROM face_names n JOIN faces f ON f.id = n.face_id"
+            " WHERE f.doc_id = ? AND n.ended_at IS NULL AND n.verdict = 'person'"
+            " LIMIT 1",
+            (doc_id,),
+        ).fetchone()
+        is not None
+    )
 
 
 def document_hidden(con: sqlite3.Connection, doc_id: int) -> bool:
@@ -589,6 +644,8 @@ def document_hidden(con: sqlite3.Connection, doc_id: int) -> bool:
     if row is None:
         return False  # not there at all: the read says so itself
     if row[0] is not None and not viewer.personal:
+        return True
+    if not viewer.personal and _names_a_face(con, int(doc_id)):
         return True
     if viewer.domains is not None:
         unset = UNASSIGNED in viewer.domains
@@ -924,9 +981,22 @@ def _drop_legacy_vec_table(con: sqlite3.Connection) -> None:
         pass
 
 
+# what an archive name is: a sha256, or a figure's shorter reference
+_DIGEST = re.compile(r"[0-9a-f]{16,64}")
+
+
+def is_digest(value: object) -> bool:
+    """Whether ``value`` can name a file of the archive."""
+    return isinstance(value, str) and _DIGEST.fullmatch(value) is not None
+
+
 def archive_path(digest: str) -> Path:
     """Where an original or a text artifact lives: the one place that says
-    so, for the day the archive gains a second level (CLAUDE.md)."""
+    so, for the day the archive gains a second level (CLAUDE.md). Anything
+    but a digest is refused: a path in its place would name a file outside
+    the archive (the review of 2026-10-28)."""
+    if not is_digest(digest):
+        raise ValueError(f"not an archive digest: {str(digest)[:80]!r}")
     return config.archive_dir() / digest[:2] / digest
 
 

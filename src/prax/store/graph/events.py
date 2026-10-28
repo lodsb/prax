@@ -221,7 +221,11 @@ def replace_event_candidates(
 ) -> dict[str, int]:
     """The open candidates replaced by ``groups``. A group half of whose
     photos are in a decided candidate is that candidate's, and is left
-    out: what a person decided is asked again only when they undo it."""
+    out: what a person decided is asked again only when they undo it. A
+    group of the same photos as an open candidate keeps its id, and a new
+    one takes an id no candidate ever had, so a page shown before the
+    groups were found again decides the photos it showed or none (the
+    review of 2026-10-28)."""
     decided = {
         int(r[0])
         for r in con.execute(
@@ -229,13 +233,38 @@ def replace_event_candidates(
             " ON c.id = p.candidate_id WHERE c.state != 'open'"
         )
     }
-    con.execute("DELETE FROM event_candidates WHERE state = 'open'")
+    held: dict[frozenset[int], int] = {}
+    for r in con.execute(
+        "SELECT c.id, json_group_array(p.doc_id) FROM event_candidates c"
+        " JOIN event_candidate_photos p ON p.candidate_id = c.id"
+        " WHERE c.state = 'open' GROUP BY c.id"
+    ):
+        held[frozenset(json.loads(r[1]))] = int(r[0])
+    mark = con.execute(
+        "SELECT last FROM id_marks WHERE name = 'event_candidates'"
+    ).fetchone()
+    top = con.execute("SELECT coalesce(max(id), 0) FROM event_candidates").fetchone()
+    fresh = max(int(mark[0]) if mark else 0, int(top[0])) + 1
+    kept: set[int] = set()
     at = now()
     found = skipped = 0
+    rows: list[tuple[int | None, dict[str, Any]]] = []
     for g in groups:
         if sum(d in decided for d in g["docs"]) * 2 >= len(g["docs"]):
             skipped += 1
             continue
+        same = held.get(frozenset(g["docs"]))
+        if same is not None and same not in kept:
+            kept.add(same)
+            rows.append((same, g))
+        else:
+            rows.append((None, g))
+    con.execute(
+        "DELETE FROM event_candidates WHERE state = 'open'"
+        " AND id NOT IN (SELECT value FROM json_each(?))",
+        (json.dumps(sorted(kept)),),
+    )
+    for same, g in rows:
         cues = {
             "place": g["place"],
             "where": g["where"],
@@ -243,10 +272,19 @@ def replace_event_candidates(
             "placed": g["placed"],
             "cut": g.get("cut", ""),
         }
-        cur = con.execute(
-            "INSERT INTO event_candidates (first_taken, last_taken, photos,"
-            " suggestion, cues, found_at) VALUES (?, ?, ?, ?, ?, ?)",
+        if same is not None:
+            con.execute(
+                "UPDATE event_candidates SET suggestion = ?, cues = ?, found_at = ?"
+                " WHERE id = ?",
+                (g["suggestion"], json.dumps(cues), at, same),
+            )
+            found += 1
+            continue
+        con.execute(
+            "INSERT INTO event_candidates (id, first_taken, last_taken, photos,"
+            " suggestion, cues, found_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
+                fresh,
                 g["first"],
                 g["last"],
                 len(g["docs"]),
@@ -257,9 +295,15 @@ def replace_event_candidates(
         )
         con.executemany(
             "INSERT INTO event_candidate_photos (candidate_id, doc_id) VALUES (?, ?)",
-            [(cur.lastrowid, d) for d in g["docs"]],
+            [(fresh, d) for d in g["docs"]],
         )
+        fresh += 1
         found += 1
+    con.execute(
+        "INSERT INTO id_marks (name, last) VALUES ('event_candidates', ?)"
+        " ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)",
+        (fresh - 1,),
+    )
     con.commit()
     return {"candidates": found, "decided_before": skipped}
 

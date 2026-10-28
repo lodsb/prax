@@ -306,6 +306,10 @@ def test_the_web_page_with_a_named_token(client: TestClient) -> None:
     con = client.app.state.con
     lib = _library(con, client)
     bank, page, paper = lib["bank"], lib["page"], lib["paper"]
+    # the statement has copies, so a 404 for them can only be the guard's
+    copies = {"thumb": b"thumb of it", "preview": b"preview of it"}
+    for doc in (bank, paper):
+        store.apply_photo(con, doc, facts={}, copies=copies, version=1, by="t")
     assert client.post("/session", json={"token": "prax_nobody"}).status_code == 401
     signed = client.post("/session", json={"token": lib["secret"]})
     assert signed.status_code == 200
@@ -322,6 +326,7 @@ def test_the_web_page_with_a_named_token(client: TestClient) -> None:
         assert client.get(path).status_code == 404, path
     assert client.get(f"/doc/{paper}/text").status_code == 200
     assert client.get(f"/doc/{paper}/chunks").json()
+    assert client.get(f"/doc/{paper}/thumb").content == b"thumb of it"
     assert client.get(f"/graph/document/{bank}").json()["edges"] == []
     assert client.get(f"/graph/document/{paper}").json()["edges"]
     pages = client.get("/pages").json()
@@ -339,8 +344,11 @@ def test_the_web_page_with_a_named_token(client: TestClient) -> None:
     assert not _says(overview, "Landlord Smith", "Bank statement")
     changes = client.get("/changes", params={"doc": bank}).json()
     assert changes["doc"] is None and "stamp" in changes
-    for path in ("/ontology", "/genres", "/ask/config", "/domains/counts"):
+    for path in ("/ontology", "/genres", "/ask/config"):
         assert client.get(path).status_code == 200, path
+    # the domain menu counts what the token sees: the paper, not the
+    # statement or the page (all three in no module)
+    unassigned = client.get("/domains/counts").json()["unassigned"]
     # the administrator's views stay refused
     assert client.get("/people").status_code == 403
     assert client.get("/communities").status_code == 403
@@ -348,6 +356,8 @@ def test_the_web_page_with_a_named_token(client: TestClient) -> None:
     assert client.post("/session", json={"token": ADMIN}).json()["admin"] is True
     assert client.get("/session").json() == {"admin": True}
     assert client.get(f"/doc/{bank}/text").status_code == 200
+    assert client.get(f"/doc/{bank}/preview").content == b"preview of it"
+    assert client.get("/domains/counts").json()["unassigned"] == unassigned + 2
     overview = client.get("/graph/overview", params={"min_shared": 1})
     assert overview.json()["nodes"][0]["docs"] == 2  # the statement's too
 

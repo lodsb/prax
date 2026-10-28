@@ -51,6 +51,8 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
     # review of 2026-10-04)
     if req.sensitivity not in (None, "personal"):
         raise HTTPException(400, "sensitivity on a write is personal, or none")
+    if kept := store.door_written(req.meta):
+        raise HTTPException(400, f"meta keys only the door writes: {kept}")
     try:
         store._check_domains(req.domains or [])
     except ValueError as exc:

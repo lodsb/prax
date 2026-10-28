@@ -13,7 +13,9 @@ published. A person's date is never replaced.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,7 @@ from ..base import (
     _reading,
     _serialized,
     archive_path,
+    is_digest,
     now,
 )
 from .meta import _put_meta, _refresh_document_field, get_meta
@@ -32,6 +35,12 @@ from .places import _place_file, place_roots
 
 # the copies a photo has, by the key ``meta.photo`` keeps each one's hash
 PHOTO_COPIES = ("thumb", "preview")
+
+
+# a referenced picture whose file on a mounted root is not the one hashed
+# is passed over this long before it is looked at again
+UNREACHED_REST = 3600.0
+_UNREACHED: dict[int, float] = {}
 
 
 @_reading
@@ -45,30 +54,37 @@ def photos_due(
     """Pictures with no reading of ``version`` (or a later one), held or
     referenced, oldest first, whose original this door reaches now: a
     referenced one whose share is not mounted waits for it, rather than
-    failing and being marked. A root whose directory is absent is passed
-    over whole; a mounted one is looked at file by file, at most four
-    times ``limit`` files a call."""
+    failing and being marked. A picture with no live place on a root whose
+    directory is here is passed over in the query; one whose file on a
+    mounted root is not the one hashed (moved, or touched since the
+    crawl) is looked at once and then passed over for ``UNREACHED_REST``
+    seconds, so a run of them never hides the pictures after them (the
+    review of 2026-10-28)."""
     roots = {n: p for n, p in place_roots().items() if p.is_dir()}
     out: list[int] = []
-    checks = 0
+    clock = time.monotonic()
     rows = con.execute(
-        "SELECT id, hash, mime, held FROM documents"
+        "SELECT id, hash, mime, held FROM documents d"
         " WHERE mime LIKE 'image/%' AND json_extract(meta, '$.retired') IS NULL"
         " AND coalesce(json_extract(meta, '$.photo.v'), 0) < ?"
-        + ("" if roots else " AND held = 1")
-        + " ORDER BY id",
-        (version,),
+        " AND (held = 1 OR EXISTS (SELECT 1 FROM places p WHERE p.sha256 = d.hash"
+        "  AND p.gone IS NULL AND p.root IN (SELECT value FROM json_each(?))))"
+        " ORDER BY id",
+        (version, json.dumps(sorted(roots))),
     )
     for r in rows:
-        if len(out) >= limit or checks >= 4 * limit:
+        if len(out) >= limit:
             break
-        if r["id"] in skip or not mimes.is_picture(r["mime"]):
+        doc = int(r["id"])
+        if doc in skip or not mimes.is_picture(r["mime"]):
             continue
         if not r["held"]:
-            checks += 1
-            if _place_file(con, r["hash"], roots) is None:
+            if _UNREACHED.get(doc, 0.0) > clock:
                 continue
-        out.append(int(r["id"]))
+            if _place_file(con, r["hash"], roots) is None:
+                _UNREACHED[doc] = clock + UNREACHED_REST
+                continue
+        out.append(doc)
     return out
 
 
@@ -109,6 +125,8 @@ def apply_photo(
     for key in ("camera", "lens", "gps", "width", "height"):
         if facts.get(key) not in (None, ""):
             photo[key] = facts[key]
+    if "gps" in photo and not _a_position(photo["gps"]):
+        del photo["gps"]
     for key in PHOTO_COPIES:
         if copies.get(key):
             photo[key] = _archive_bytes(copies[key])
@@ -120,6 +138,15 @@ def apply_photo(
     _refresh_document_field(con, doc_id)
     con.commit()
     return "read"
+
+
+def _a_position(gps: Any) -> bool:
+    """Whether a worker's ``gps`` is a position: finite degrees in range."""
+    try:
+        lat, lon = float(gps["lat"]), float(gps["lon"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return math.isfinite(lat + lon) and abs(lat) <= 90 and abs(lon) <= 180
 
 
 @_serialized
@@ -146,7 +173,7 @@ def photo_copy(con: sqlite3.Connection, doc_id: int, which: str) -> Path | None:
         "SELECT json_extract(meta, '$.photo.' || ?) FROM documents WHERE id = ?",
         (which, doc_id),
     ).fetchone()
-    if row is None or not row[0]:
+    if row is None or not is_digest(row[0]):
         return None
     path = archive_path(str(row[0]))
     return path if path.exists() else None
@@ -239,6 +266,82 @@ def _checked_face(face: dict[str, Any]) -> tuple[str, str, float, int]:
     return json.dumps(box), json.dumps(marks), score, max(0, int(face["px"]))
 
 
+# how much a new face's box must cover an old one's to be the same face
+# read again: past it, what a person said of the old face moves to it
+SAME_FACE_IOU = 0.4
+
+
+def _iou(a: list[float], b: list[float]) -> float:
+    """The overlap of two ``x, y, w, h`` boxes over their union."""
+    w = max(0.0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
+    h = max(0.0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
+    inter = w * h
+    union = a[2] * a[3] + b[2] * b[3] - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _successors(
+    old: dict[int, list[float]], new: dict[int, list[float]]
+) -> dict[int, int]:
+    """Each old face the new reading found again, with its new face: the
+    pairs of most overlap first, each face in one pair at most."""
+    pairs = sorted(
+        ((_iou(ob, nb), o, n) for o, ob in old.items() for n, nb in new.items()),
+        reverse=True,
+    )
+    out: dict[int, int] = {}
+    taken: set[int] = set()
+    for iou, o, n in pairs:
+        if iou < SAME_FACE_IOU:
+            break
+        if o not in out and n not in taken:
+            out[o] = n
+            taken.add(n)
+    return out
+
+
+def _carry_answers(con: sqlite3.Connection, moves: dict[int, int], at: str) -> int:
+    """What a person said of each old face, said of its successor: the
+    live answer and refusals ended on the old face and written again on
+    the new one with their run, person, edge and time, so an undo of
+    their action takes them back as before. Returns the faces carried."""
+    carried = 0
+    for old, new in moves.items():
+        for r in con.execute(
+            "SELECT * FROM face_names WHERE face_id = ? AND ended_at IS NULL", (old,)
+        ).fetchall():
+            con.execute(
+                "UPDATE face_names SET ended_at = ? WHERE id = ?", (at, r["id"])
+            )
+            con.execute(
+                "INSERT INTO face_names (face_id, verdict, entity_id, edge_id, by,"
+                " run, said_at) VALUES (?,?,?,?,?,?,?)",
+                (
+                    new,
+                    r["verdict"],
+                    r["entity_id"],
+                    r["edge_id"],
+                    r["by"],
+                    r["run"],
+                    r["said_at"],
+                ),
+            )
+            carried += 1
+        for r in con.execute(
+            "SELECT * FROM face_refusals WHERE face_id = ? AND ended_at IS NULL",
+            (old,),
+        ).fetchall():
+            con.execute(
+                "UPDATE face_refusals SET ended_at = ? WHERE id = ?", (at, r["id"])
+            )
+            con.execute(
+                "INSERT INTO face_refusals (face_id, entity_id, by, run, said_at)"
+                " VALUES (?,?,?,?,?)",
+                (new, r["entity_id"], r["by"], r["run"], r["said_at"]),
+            )
+    return carried
+
+
 @_serialized
 def apply_faces(
     con: sqlite3.Connection,
@@ -253,20 +356,39 @@ def apply_faces(
 ) -> str:
     """A picture's faces reading: the faces an earlier reading found ended
     (``gone_at``), the new ones written, and ``meta.faces`` saying which
-    reading, of which copy at what size, and how many. Returns ``found``
-    or ``none``."""
+    reading, of which copy at what size, and how many. What a person said
+    of an old face moves to the new face whose box covers it
+    (``SAME_FACE_IOU``); an answer whose face was not found again stays on
+    the ended face, its ``depicts`` fact with it, and its action's undo
+    still takes it back. A reading older than the one the picture holds
+    changes nothing (a worker's post after its lease ran out). Returns
+    ``found``, ``none`` or ``stale``."""
     checked = [_checked_face(f) for f in faces]
     meta = get_meta(con, doc_id)
+    if int((meta.get("faces") or {}).get("v") or 0) > version:
+        return "stale"
     at = now()
+    old = {
+        int(r[0]): json.loads(r[1])
+        for r in con.execute(
+            "SELECT id, box FROM faces WHERE doc_id = ? AND gone_at IS NULL",
+            (doc_id,),
+        )
+    }
     con.execute(
         "UPDATE faces SET gone_at = ? WHERE doc_id = ? AND gone_at IS NULL",
         (at, doc_id),
     )
-    con.executemany(
-        "INSERT INTO faces (doc_id, box, landmarks, score, px, detector, found_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(doc_id, box, marks, score, px, by, at) for box, marks, score, px in checked],
-    )
+    new: dict[int, list[float]] = {}
+    for box, marks, score, px in checked:
+        cur = con.execute(
+            "INSERT INTO faces (doc_id, box, landmarks, score, px, detector, found_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, box, marks, score, px, by, at),
+        )
+        new[int(cur.lastrowid or 0)] = json.loads(box)
+    if old and new:
+        _carry_answers(con, _successors(old, new), at)
     meta["faces"] = {
         "v": version,
         "by": by,

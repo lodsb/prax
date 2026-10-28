@@ -17,6 +17,7 @@ as a failure would be marked and never tried again.
 from __future__ import annotations
 
 import io
+import math
 from datetime import datetime
 from typing import Any
 
@@ -83,27 +84,32 @@ def _taken(stamp: str, offset: str) -> str | None:
     return iso
 
 
-def _degrees(value: Any, ref: str) -> float | None:
+def _degrees(value: Any, ref: str, most: float) -> float | None:
+    """An EXIF position's degrees, minutes and seconds as signed degrees,
+    or None: a rational of ``0/0`` (a camera with no fix) reads as NaN."""
     try:
         d, m, s = (float(v) for v in value)
     except (TypeError, ValueError, ZeroDivisionError):
         return None
     out = d + m / 60 + s / 3600
+    if not math.isfinite(out) or abs(out) > most:
+        return None
     return round(-out if ref.upper() in ("S", "W") else out, 6)
 
 
 def _gps(gps: Any) -> dict[str, float] | None:
     if not gps:
         return None
-    lat = _degrees(gps.get(_GPS_LAT), _text(gps.get(_GPS_LAT_REF)))
-    lon = _degrees(gps.get(_GPS_LON), _text(gps.get(_GPS_LON_REF)))
+    lat = _degrees(gps.get(_GPS_LAT), _text(gps.get(_GPS_LAT_REF)), 90)
+    lon = _degrees(gps.get(_GPS_LON), _text(gps.get(_GPS_LON_REF)), 180)
     if lat is None or lon is None or (lat == 0 and lon == 0):
         return None
     out: dict[str, float] = {"lat": lat, "lon": lon}
     try:
         alt = float(gps[_GPS_ALT])
         below = gps.get(_GPS_ALT_REF) in (1, b"\x01")
-        out["alt"] = round(-alt if below else alt, 1)
+        if math.isfinite(alt):
+            out["alt"] = round(-alt if below else alt, 1)
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         pass
     return out
@@ -152,23 +158,24 @@ def read(data: bytes) -> dict[str, Any]:
     """A photo's facts and its two copies: ``{"facts": …, "thumb": bytes,
     "preview": bytes}``. Raises ``ValueError`` for bytes that are not a
     picture Pillow can open."""
-    from PIL import ImageOps, UnidentifiedImageError
+    from PIL import ImageOps
 
+    # the bytes are anyone's: a picture past Pillow's pixel limit (a
+    # DecompressionBombError, no OSError), a broken EXIF block, a decoder's
+    # own failure are each this picture's, never the pass's
     try:
         img = _open(data)
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        found = facts(img)
+        shown = ImageOps.exif_transpose(img)
+        if shown.mode not in ("RGB", "L"):
+            shown = shown.convert("RGB")
+        thumb = _jpeg(shown, THUMB_PX, THUMB_QUALITY)
+        preview = _jpeg(shown, PREVIEW_PX, PREVIEW_QUALITY)
+    except Exception as exc:
         raise ValueError(
-            f"not a picture this host reads ({type(exc).__name__})"
+            f"not a picture this host reads ({type(exc).__name__}: {str(exc)[:120]})"
         ) from exc
-    found = facts(img)
-    shown = ImageOps.exif_transpose(img)
-    if shown.mode not in ("RGB", "L"):
-        shown = shown.convert("RGB")
-    return {
-        "facts": found,
-        "thumb": _jpeg(shown, THUMB_PX, THUMB_QUALITY),
-        "preview": _jpeg(shown, PREVIEW_PX, PREVIEW_QUALITY),
-    }
+    return {"facts": found, "thumb": thumb, "preview": preview}
 
 
 def stamp() -> str:

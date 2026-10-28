@@ -106,11 +106,13 @@ def place_roots() -> dict[str, Path]:
 
 def _parts(path: str) -> list[str] | None:
     """A place's path as its parts; None when it is not a relative path with
-    ``/`` separators that stays inside its root."""
+    ``/`` separators that stays inside its root. A ``:`` anywhere is
+    refused: on a Windows door ``b:x.jpg`` is a path on drive B, and
+    ``x:y`` a file's alternate stream (the review of 2026-10-28)."""
     if not path or path.startswith("/") or "\\" in path or "\0" in path:
         return None
     parts = path.split("/")
-    if any(p in ("", ".", "..") or p.endswith(":") for p in parts):
+    if any(p in ("", ".", "..") or ":" in p for p in parts):
         return None
     return parts
 
@@ -232,21 +234,24 @@ def unreachable_originals(
 @_serialized
 def record_places(
     con: sqlite3.Connection, root: str, entries: list[dict[str, Any]]
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """What a crawl saw at ``root``: each entry's ``path``, ``size``,
     ``mtime`` (seconds) and ``sha256``. A place seen again is seen now and
     not gone; one whose file changed starts over as a new file. The root
-    need not be mapped on this host. Returns ``{"recorded"}``."""
+    need not be mapped on this host. An entry whose path this door cannot
+    name a file by (``_parts``) or whose hash is no sha256 is left out and
+    listed, and the rest are recorded: one odd name on a share must not
+    stop every crawl at it. Returns ``{"recorded", "refused"}``."""
     if not ROOT_NAME.fullmatch(root or ""):
         raise ValueError(f"root: a lower-case name, not {root!r}")
     at = now()
     rows = []
+    refused: list[str] = []
     for e in entries:
         path, digest = str(e.get("path") or ""), str(e.get("sha256") or "").lower()
-        if _parts(path) is None:
-            raise ValueError(f"path: relative to its root with '/', not {path!r}")
-        if not _SHA256.fullmatch(digest):
-            raise ValueError(f"sha256: 64 hex digits, not {digest!r}")
+        if _parts(path) is None or not _SHA256.fullmatch(digest):
+            refused.append(path[:300])
+            continue
         rows.append((root, path, int(e["size"]), int(e["mtime"]), digest, at, at))
     con.executemany(
         "INSERT INTO places (root, path, size, mtime, sha256, first_seen, last_seen)"
@@ -259,7 +264,7 @@ def record_places(
         rows,
     )
     con.commit()
-    return {"recorded": len(rows)}
+    return {"recorded": len(rows), "refused": refused}
 
 
 def _prefix(prefix: str) -> str:

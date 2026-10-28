@@ -322,13 +322,13 @@ def test_the_personal_list_sets_the_referenced_photos_aside(
 
 def test_a_reference_is_refused_a_bad_root_path_or_hash(client: TestClient) -> None:
     good = {"path": "a.mp4", "size": 3, "mtime": 0, "sha256": "a" * 64}
-    for root, entry in (
-        ("NAS", good),
-        ("nas", {**good, "path": "../a.mp4"}),
-        ("nas", {**good, "sha256": "xyz"}),
-    ):
-        got = client.post("/ingest/reference", json={"root": root, "entries": [entry]})
-        assert got.status_code == 400, (root, entry)
+    got = client.post("/ingest/reference", json={"root": "NAS", "entries": [good]})
+    assert got.status_code == 400
+    # a bad entry is left out and named, never recorded or made a document
+    for entry in ({**good, "path": "../a.mp4"}, {**good, "sha256": "xyz"}):
+        got = client.post("/ingest/reference", json={"root": "nas", "entries": [entry]})
+        assert got.json()["refused"] == [entry["path"]], entry
+        assert got.json()["created"] == 0
     many = [{**good, "path": f"{i}.mp4"} for i in range(store.KNOWN_BATCH + 1)]
     got = client.post("/ingest/reference", json={"root": "nas", "entries": many})
     assert got.status_code == 413

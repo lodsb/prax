@@ -183,9 +183,12 @@ def test_the_step_writes_where_each_photo_was_taken(
         ("Aldmouth", "located_in", "Lower Vale", None),
         ("Lower Vale", "located_in", "Ardenia", None),
     ]
-    # the second photo is its own node, and finds the town's facts standing
+    # the second photo is its own node, and states where the town is too,
+    # so ending the first photo's facts leaves the town in its region
     assert _live(con, two) == [
-        (f"IMG_0001.JPG (#{two})", "taken_in", "Aldmouth", "2019-07-01")
+        (f"IMG_0001.JPG (#{two})", "taken_in", "Aldmouth", "2019-07-01"),
+        ("Aldmouth", "located_in", "Lower Vale", None),
+        ("Lower Vale", "located_in", "Ardenia", None),
     ]
     assert _live(con, sea) == []
     meta = store.get_meta(con, one)

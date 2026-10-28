@@ -88,14 +88,14 @@ def test_a_place_whose_file_changed_is_not_the_original(
 def test_a_place_stays_inside_its_root(con: sqlite3.Connection) -> None:
     digest = "a" * 64
     for bad in ("../etc/passwd", "/etc/passwd", "a//b", "a\\b", "c:/x", "./a", ""):
-        with pytest.raises(ValueError):
-            store.record_places(
-                con, "nas", [{"path": bad, "size": 1, "mtime": 0, "sha256": digest}]
-            )
-    with pytest.raises(ValueError):
-        store.record_places(
-            con, "nas", [{"path": "a", "size": 1, "mtime": 0, "sha256": "f00"}]
+        got = store.record_places(
+            con, "nas", [{"path": bad, "size": 1, "mtime": 0, "sha256": digest}]
         )
+        assert got == {"recorded": 0, "refused": [bad]}
+    got = store.record_places(
+        con, "nas", [{"path": "a", "size": 1, "mtime": 0, "sha256": "f00"}]
+    )
+    assert got["refused"] == ["a"]
     with pytest.raises(ValueError):
         store.record_places(con, "NAS share", [])
 
@@ -229,7 +229,8 @@ def test_the_door_records_and_answers_where(client: TestClient) -> None:
     since = client.post("/places/start", json={"root": "nas"}).json()["since"]
     entry = _entry("memo.m4a", data)
     assert client.post("/places", json={"root": "nas", "entries": [entry]}).json() == {
-        "recorded": 1
+        "recorded": 1,
+        "refused": [],
     }
     done = client.post("/places/done", json={"root": "nas", "since": since})
     assert done.json() == {"gone": 0}
@@ -239,7 +240,7 @@ def test_the_door_records_and_answers_where(client: TestClient) -> None:
     assert client.get("/places", params={"hash": "f" * 64}).status_code == 404
     assert client.get("/places").status_code == 400
     bad = {"root": "nas", "entries": [{**entry, "path": "../x"}]}
-    assert client.post("/places", json=bad).status_code == 400
+    assert client.post("/places", json=bad).json()["refused"] == ["../x"]
     many = {"root": "nas", "entries": [entry] * (store.KNOWN_BATCH + 1)}
     assert client.post("/places", json=many).status_code == 413
     assert client.post("/places/start", json={"root": "My NAS"}).status_code == 400

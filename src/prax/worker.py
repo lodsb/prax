@@ -83,12 +83,23 @@ def run_once(
 
     p = Pass(door, scope, limit, workers, session, spend, log_)
     out: dict[str, Any] = {}
+    failed: Exception | None = None
     for step in steps:
-        line = steps_mod.get(step).run(p)
+        # one step's failure costs that step: the steps after it still run,
+        # and the pass then fails with it, so a failure that repeats is
+        # still counted (watch, GIVE_UP_AFTER)
+        try:
+            line = steps_mod.get(step).run(p)
+        except Exception as exc:  # noqa: BLE001
+            say(log_, f"{step}: failed: {type(exc).__name__}: {exc}")
+            failed = failed or exc
+            continue
         if line is None:
             continue
         out[step] = line
         say(log_, f"{step}: {line}")
+    if failed is not None:
+        raise failed
     return out
 
 

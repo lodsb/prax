@@ -42,6 +42,7 @@ from ..base import (
     archive_path,
     document_hidden,
     hidden_documents,
+    is_digest,
     now,
 )
 from .vectors import RECONCILE_SLACK, _index_has, _save_delta
@@ -198,7 +199,7 @@ def face_crop(con: sqlite3.Connection, face_id: int) -> Path | None:
     if _face_doc(con, face_id) is None:
         return None
     row = con.execute("SELECT crop FROM faces WHERE id = ?", (face_id,)).fetchone()
-    if not row or not row[0]:
+    if not row or not is_digest(row[0]):
         return None
     path = archive_path(str(row[0]))
     return path if path.exists() else None
@@ -661,7 +662,15 @@ def _match_state(
         " WHERE gone_at IS NULL AND vector_model = ?",
         (model,),
     ).fetchone()
-    return (*names, *refusals, *faces, hash(hidden), k, model)
+    # who the named and refused entities are now: a merge or its undo
+    # changes a canonical id and nothing above (the review of 2026-10-28)
+    folded = con.execute(
+        "SELECT count(canonical_id), total(canonical_id) FROM entities WHERE id IN"
+        " (SELECT entity_id FROM face_names WHERE ended_at IS NULL"
+        "  AND entity_id IS NOT NULL"
+        "  UNION SELECT entity_id FROM face_refusals WHERE ended_at IS NULL)"
+    ).fetchone()
+    return (*names, *refusals, *faces, *folded, hash(hidden), k, model)
 
 
 def _matched(

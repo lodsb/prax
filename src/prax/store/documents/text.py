@@ -89,7 +89,7 @@ def register_references(
     (``live_photo_clip``). Returns the counts (``created``, ``known``,
     ``held_kinds``, ``clips``) and ``documents``, each entry's ``path``
     with its ``doc_id`` and ``created``."""
-    record_places(con, root, entries)
+    refused = set(record_places(con, root, entries)["refused"])
     check_meta(meta or {})
     private = referenced_private()
     out: dict[str, Any] = {
@@ -98,10 +98,13 @@ def register_references(
         "held_kinds": 0,
         "clips": 0,
         "documents": [],
+        "refused": sorted(refused),
     }
     made: list[int] = []
     for e in entries:
         path, digest = str(e["path"]), str(e["sha256"]).lower()
+        if path in refused:
+            continue
         name = path.rsplit("/", 1)[-1]
         mime = str(e.get("mime") or "")
         if not mime or mime == "application/octet-stream":

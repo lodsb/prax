@@ -10,8 +10,15 @@ GeoNames) and the door writes what that says:
   the picture was taken (``meta.taken``), so a walk at a date finds where
   the camera was;
 - the town ``located_in`` its region and the region in its country,
-  EXTRACTED from the gazetteer, written once: a later picture of the same
-  town finds the fact standing.
+  EXTRACTED from the gazetteer, stated by each picture: a picture placed
+  again or retired ends its own statement, never another picture's, and
+  the wall shows the fact wherever one picture that states it is seen.
+
+A place is a node by its name until a second place of that name comes:
+GeoNames' Paris in Texas is not the Paris a picture placed earlier, and
+a transitive ``located_in`` through one node would put each in the
+other's country. The second becomes ``Paris, Texas`` (``_place_node``),
+and a region named as a country is (Georgia, United States) likewise.
 
 Every fact has the picture as its source, so the wall hides it with the
 picture: a photo no viewer may see says to that viewer nowhere it was
@@ -29,7 +36,7 @@ from prax.text import mimes
 
 from ..base import _reading, _serialized, now
 from ..documents import _put_meta, _refresh_document_field, get_meta
-from .edges import Edge, document_node, end_edges, find_edges, link
+from .edges import Edge, document_edges_of, document_node, end_edges, link
 
 PLACE_PRODUCER = "geonames"
 
@@ -86,6 +93,44 @@ def place_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
     return {"placed": row[0] or 0, "nowhere": row[1] or 0, "waiting": row[2] or 0}
 
 
+def _gazetteer_ends(con: sqlite3.Connection, name: str) -> tuple[set[str], bool]:
+    """What the gazetteer's facts say a place node ``name`` is inside, and
+    whether any place is said to be inside it."""
+    outer = {
+        str(r[0])
+        for r in con.execute(
+            "SELECT t.name FROM edges e JOIN entities s ON s.id = e.src"
+            " JOIN entities t ON t.id = e.dst WHERE s.name = ? AND s.type = 'place'"
+            " AND e.rel = 'located_in' AND e.producer = ? AND e.valid_to IS NULL",
+            (name, PLACE_PRODUCER),
+        )
+    }
+    inner = con.execute(
+        "SELECT 1 FROM edges e JOIN entities t ON t.id = e.dst"
+        " WHERE t.name = ? AND t.type = 'place' AND e.rel = 'located_in'"
+        " AND e.producer = ? AND e.valid_to IS NULL LIMIT 1",
+        (name, PLACE_PRODUCER),
+    ).fetchone()
+    return outer, inner is not None
+
+
+def _place_node(con: sqlite3.Connection, name: str, parent: str) -> str:
+    """The node a gazetteer place of ``name`` inside ``parent`` is: its
+    own name, unless the gazetteer already put a node of that name
+    elsewhere (inside another place, or as a country, which is inside
+    nothing and holds places), when it is ``name, parent``. A country
+    (no ``parent``) a node of its name is inside something is ``name
+    (country)``."""
+    if not name:
+        return name
+    outer, holds = _gazetteer_ends(con, name)
+    if not parent:
+        return f"{name} (country)" if outer else name
+    if outer - {parent} or (holds and not outer):
+        return f"{name}, {parent}"
+    return name
+
+
 def _within(
     con: sqlite3.Connection,
     inner: str,
@@ -95,12 +140,13 @@ def _within(
     run: str,
     evidence: str,
 ) -> int:
-    """``inner`` located_in ``outer``, unless it stands already or the two
-    are one name (Singapore the town in Singapore the country)."""
+    """``inner`` located_in ``outer`` as the picture ``doc_id`` states it,
+    unless it states it already or the two are one name (Singapore the
+    town in Singapore the country)."""
     if not inner or not outer or inner == outer:
         return 0
     edge = Edge(inner, "place", "located_in", outer, "place")
-    if find_edges(con, edge):
+    if document_edges_of(con, edge, doc_id):
         return 0
     link(
         con,
@@ -163,9 +209,19 @@ def apply_place(
     gps = (meta.get("photo") or {}).get("gps") or {}
     taken = str((meta.get("taken") or {}).get("date") or "")[:10]
     name, dtype = document_node(con, doc_id)
+    # the nodes, outermost first, so each is told the node it is inside
+    held_in = region if region and region != country else ""
+    country_node = _place_node(con, country, "") if country else ""
+    region_node = _place_node(con, held_in, country_node) if held_in else ""
+    if held_in and town == held_in:
+        town_node = region_node  # a town that is its region (a city state)
+    elif town == country:
+        town_node = country_node
+    else:
+        town_node = _place_node(con, town, region_node or country_node)
     link(
         con,
-        Edge(name, dtype, "taken_in", town, "place"),
+        Edge(name, dtype, "taken_in", town_node, "place"),
         confidence="INFERRED",
         source_doc=doc_id,
         evidence=(
@@ -177,9 +233,9 @@ def apply_place(
         world_from=taken if len(taken) == 10 else None,
     )
     said = f"GeoNames {gid}: {', '.join(x for x in (town, region, country) if x)}"
-    if region and region != country:
-        _within(con, town, region, doc_id=doc_id, run=run, evidence=said)
-        _within(con, region, country, doc_id=doc_id, run=run, evidence=said)
+    if region_node:
+        _within(con, town_node, region_node, doc_id=doc_id, run=run, evidence=said)
+        _within(con, region_node, country_node, doc_id=doc_id, run=run, evidence=said)
     else:
-        _within(con, town, country, doc_id=doc_id, run=run, evidence=said)
+        _within(con, town_node, country_node, doc_id=doc_id, run=run, evidence=said)
     return "placed"

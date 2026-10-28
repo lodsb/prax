@@ -24,7 +24,7 @@ from prax.graph import gazetteer
 from prax.parsers import photos
 
 from . import leases
-from .base import HandOut, Pass, Step, TakeIn
+from .base import HandOut, Pass, Step, TakeIn, ready, resting
 
 # a worker's pass asks for batch after batch for this long: one batch of
 # ten a pass read 14,000 photos of a first crawl at some ten a minute
@@ -103,8 +103,8 @@ class Photos(Step):
             return {**out, "error": f"fetch: {exc}"}
         try:
             got = photos.read(data)
-        except ValueError as exc:
-            return {**out, "unreadable": str(exc)}
+        except Exception as exc:  # noqa: BLE001 - a hostile file is that file's
+            return {**out, "unreadable": str(exc)[:300]}
         return {
             **out,
             "facts": got["facts"],
@@ -146,8 +146,10 @@ class Geocode(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        if not gazetteer.available():
+        if not gazetteer.available() or resting(self.name):
             return None  # offline and no files: nothing to name a place by
+        if (trouble := ready(self.name, _gazetteer)) is not None:
+            return trouble
         start = time.monotonic()
         tally = {"applied": 0, "placed": 0, "nowhere": 0, "errors": 0}
         while time.monotonic() - start < RUN_SECONDS:

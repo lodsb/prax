@@ -8870,3 +8870,100 @@ Tests: three in `tests/test_rules.py` (the chain on suspected pictures,
 hidden with them and ended with the name; a chain across two open
 documents; the lint of a chain).
 
+## 2026-10-28: the clean-up of the crawl, and the safety and correctness review
+
+**The clean-up.** The user: "the cleanup for admin is probably okay to
+do". Both rules of 2026-10-26 applied through the door: `unreadable`
+retired 139 documents (every one a JPEG) and `clips` 25 (every one a
+QuickTime clip), none holding a fact. Each is a run of its own on the
+Admin page's clean-up tab, with its restore.
+
+**The review.** The user: "I'd suggest doing another engineering/software
+quality investigation", and then both reviews as workflows. The safety
+and correctness review read everything since `a5aac19` (2026-10-19): 49
+Python files, some 7,000 lines. Twelve agents: six reviewers by area and
+a skeptic for each. 33 findings confirmed and one refuted, 28 distinct
+defects. `docs/eval/safety-review-2026-10-28.md` has each with its
+scenario, its evidence and what was done. Before the fixes, a read-only
+count on the live store found no answer on an ended face and no picture
+copy that was not a digest: neither high finding had struck.
+
+The user's word on the fixes: "yeah fix it, your suggestions are fine".
+All 28 are fixed, but for half of one (below). Each fix has a test that
+fails on the code the review read, in `tests/test_review_2026_10_28.py`
+or beside the code it changed.
+
+The two that mattered most:
+
+- A contributor could make `/doc/N/thumb` serve any file the door can
+  read, the database included: `meta.photo.thumb` came from the client's
+  meta and went into `archive_path` unchecked. `archive_path` now refuses
+  anything but a digest, and `POST /ingest` refuses the meta keys only
+  the door writes (`store.DOOR_WRITTEN_META`).
+- A faces reading again (a new detector version, a late post) ended the
+  named faces and left their answers and `depicts` facts live on ended
+  faces, where no undo reached them. `apply_faces` now carries each
+  answer and refusal to the new face whose box covers the old one
+  (`SAME_FACE_IOU`, 0.4), refuses a post older than the picture's
+  reading, and the undo of an action reaches an answer left on an ended
+  face.
+
+The worker:
+
+- One step's failure no longer ends the pass. `worker.run_once` runs
+  every step and fails the pass with the first failure afterwards, so
+  `GIVE_UP_AFTER` still counts a failure that repeats.
+- A step whose model or data cannot be had rests an hour
+  (`steps.base.ready`). A download cut short raises and keeps its part,
+  a model file that fails its checksum is deleted, a GeoNames zip that
+  is not one too.
+- A picture's bytes can fail only that picture: a GPS value of `0/0`
+  (NaN, which the worker could not post), a picture past Pillow's pixel
+  limit, a broken EXIF block.
+
+Places, events and people:
+
+- A crawl leaves out a file name the door cannot take (a `:` in it,
+  which on a Windows door names another drive or a stream) and lists it
+  as `refused`, instead of refusing its whole batch. `prax_send` counts
+  it as failed, as it now does a folder it could not list. A file that
+  changes while it is hashed is not recorded.
+- `photos_due` leaves out pictures with no place on a mounted root, and
+  rests a picture whose file was touched since the crawl, so a run of
+  either no longer hides the pictures after it.
+- Each picture states where its town is, so retiring or placing again
+  the first picture of a town leaves the town in its region. A second
+  place of a name is a node of its own (`Paris, Texas`;
+  `geo._place_node`), so the transitive closure puts no place in
+  another's country. The gazetteer reading is version 2, and every
+  picture is placed again.
+- An event candidate keeps its id when its photos are found again, and
+  no id is given twice (`id_marks`, migration 59), so a page shown
+  before a re-find never decides another group's photos.
+- Undoing "same person as…" points back what the merge's flattening
+  moved (`merge_moves`, migration 60). The face suggestions follow a
+  merge at once. Renaming someone back to an old name works, and a
+  person may take the name of someone folded into them.
+
+The wall:
+
+- A picture with a named face is hidden from a named token without
+  `--personal`, even one a person opened (`hidden_documents`,
+  `document_hidden`): the user's choice on the review's question.
+- A name search no longer finds a person by a name only a hidden
+  document gave.
+- `/get` gives a named token how many copies of a referenced file
+  there are, not where they lie.
+
+The small ones: the person page's timeline is capped at 100 with its
+total; `prax token role NAME` needs `--role`; three tests that could not
+fail now can (the wall's thumbnail and preview, its domain counts, the
+chain rule across a hidden and an open document). media-by-reference.md,
+architecture.md, PLAN.md's wall paragraph and CLAUDE.md say what the
+code does.
+
+Left: a rename marks the old name's label with the rename's run, so
+undoing an older rename after a newer one leaves the newer one's old
+name. The person page offers each undo right after its action, which is
+the order that works.
+

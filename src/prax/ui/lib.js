@@ -599,7 +599,7 @@ function personHtml(got) {
     : `<p class="muted">No photo depicts them yet: the faces step (plan item AT) names the people in pictures.</p>`;
   const dated = got.timeline.length
     ? `<section><h2>In time</h2><ul class="person-time">${got.timeline.map((f) => `<li><span class="when">${esc(f.world_from || "")}${f.world_to ? ` – ${esc(f.world_to)}` : ""}</span>
-        ${personRelation(f.rel, f.dir, name)} ${personOther(f)}${doc(f)}</li>`).join("")}</ul></section>`
+        ${personRelation(f.rel, f.dir, name)} ${personOther(f)}${doc(f)}</li>`).join("")}${(got.timeline_total || 0) > got.timeline.length ? `<li class="muted">and ${(got.timeline_total - got.timeline.length).toLocaleString()} more</li>` : ""}</ul></section>`
     : "";
   const rels = got.relations.map((r) => `<h3>${personRelation(r.rel, r.dir, name)} <span class="muted">${r.count.toLocaleString()}</span></h3>
       <ul>${r.facts.map((f) => `<li>${personOther(f)}${doc(f)}</li>`).join("")}${r.count > r.facts.length ? `<li class="muted">and ${(r.count - r.facts.length).toLocaleString()} more</li>` : ""}</ul>`).join("");

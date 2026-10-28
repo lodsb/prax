@@ -925,8 +925,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument(
         "--role",
         choices=("reader", "contributor"),
-        default="reader",
-        help="what it may do (default: reader; with role: the role it gets now)",
+        default=None,
+        help="what it may do (add: default reader; role: the role it gets now)",
     )
     s.set_defaults(func=tokens.token, needs_door=True)
 

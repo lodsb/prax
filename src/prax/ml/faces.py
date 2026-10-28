@@ -82,6 +82,7 @@ def _session() -> Any:
     path = fetch.model_file(REPO, FILE, revision=REVISION)
     data = path.read_bytes()
     if hashlib.sha256(data).hexdigest() != SHA256:
+        path.unlink(missing_ok=True)  # fetched again next time
         raise RuntimeError(f"{path} is not the YuNet file prax was measured with")
     import onnx
     import onnxruntime as ort
@@ -236,6 +237,7 @@ def _recognizer() -> Any:
 
     path = fetch.model_file(SFACE_REPO, SFACE_FILE, revision=SFACE_REVISION)
     if hashlib.sha256(path.read_bytes()).hexdigest() != SFACE_SHA256:
+        path.unlink(missing_ok=True)  # fetched again next time
         raise RuntimeError(f"{path} is not the SFace file prax was measured with")
     import onnxruntime as ort
 

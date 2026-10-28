@@ -55,6 +55,10 @@ def get(
     # recording or picture (AQ stage 3); a held one says nothing
     if not doc.get("held", 1):
         places = store.places_in_brief(con, str(doc["hash"]))
+        if places is not None and store.VIEWER.get() is not None:
+            # a path can be as personal as the file (api.places): a named
+            # token learns how many copies there are, never where
+            places = {k: v for k, v in places.items() if k != "places"}
         if places is not None:
             doc["places"] = places
     if brief:

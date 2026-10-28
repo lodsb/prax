@@ -45,10 +45,13 @@ FACE_NAME_CHARS = 120
 FACES_AT_ONCE = 2000  # faces one action may answer for
 
 
-def _faces(con: sqlite3.Connection, face_ids: list[int]) -> dict[int, int]:
+def _faces(
+    con: sqlite3.Connection, face_ids: list[int], *, gone: bool = False
+) -> dict[int, int]:
     """The live faces asked about, each with its picture: ValueError for
-    none, too many, or one that is gone, unknown or in a picture the
-    viewer may not see (as if absent)."""
+    none, too many, or one that is gone (unless ``gone``: an undo may take
+    back an answer a later reading left on an ended face), unknown or in a
+    picture the viewer may not see (as if absent)."""
     ids = sorted({int(f) for f in face_ids})
     if not ids:
         raise ValueError("no faces given")
@@ -57,9 +60,9 @@ def _faces(con: sqlite3.Connection, face_ids: list[int]) -> dict[int, int]:
     found = {
         int(r[0]): int(r[1])
         for r in con.execute(
-            "SELECT id, doc_id FROM faces WHERE gone_at IS NULL"
+            "SELECT id, doc_id FROM faces WHERE (gone_at IS NULL OR ?)"
             " AND id IN (SELECT value FROM json_each(?))",
-            (json.dumps(ids),),
+            (gone, json.dumps(ids)),
         )
     }
     for face in ids:
@@ -334,7 +337,7 @@ def unname_faces(
         ]
         if not ids and not said_not:
             raise KeyError(f"no live answers of run {run}")
-        _faces(con, ids + said_not)
+        _faces(con, ids + said_not, gone=True)
         refusals = con.execute(
             "UPDATE face_refusals SET ended_at = ? WHERE run = ? AND ended_at IS NULL",
             (now(), run),
@@ -415,7 +418,7 @@ def rename_person(
         return {"entity_id": eid, "name": old, "was": old, "run": None}
     other = con.execute(
         "SELECT COALESCE(canonical_id, id) FROM entities"
-        " WHERE name = ? AND type = ? AND id != ?",
+        " WHERE name = ? AND type = ? AND COALESCE(canonical_id, id) != ?",
         (title, row["type"], eid),
     ).fetchone()
     if other is not None:
@@ -424,6 +427,18 @@ def rename_person(
             " are one person, say so with 'same person as'"
         )
     run = _run("rename")
+    # a name only an entity folded into this person shows: it is theirs,
+    # so the folded one's cached name steps aside (its label stays, and a
+    # link of that name lands on the person, who answers to it)
+    for alias in con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = ? AND canonical_id = ?",
+        (title, row["type"], eid),
+    ).fetchall():
+        aid = int(alias[0])
+        add_label(con, aid, title, producer=by)
+        con.execute(
+            "UPDATE entities SET name = ? WHERE id = ?", (f"{title} (#{aid})", aid)
+        )
     marked = con.execute(
         "UPDATE entity_labels SET was = 1, run = ?"
         " WHERE entity_id = ? AND label = ? COLLATE NOCASE",

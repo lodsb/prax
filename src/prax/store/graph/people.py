@@ -30,6 +30,7 @@ from .edges import hidden_by_premise
 PERSON_TYPE = "person"
 DEPICTS = "depicts"  # picture -> person: AT's faces write it
 PERSON_FACTS_PER_RELATION = 12  # undated facts shown per relation
+PERSON_TIMELINE = 100  # dated facts shown, the earliest first
 PERSON_DOCUMENTS = 30
 PERSON_PHOTOS = 24  # thumbnails on the page
 PERSON_TOP = 12  # events, places and people photographed with them
@@ -230,7 +231,8 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
         "name": name,
         "type": row["type"],
         "labels": list(labels.values()),
-        "timeline": dated,
+        "timeline": dated[:PERSON_TIMELINE],
+        "timeline_total": len(dated),
         "relations": relations,
         "facts": len(facts),
         "documents": documents,

@@ -76,7 +76,9 @@ def download(
 ) -> Path:
     """Stream ``url`` into ``dest`` through ``dest.part``; a partial file
     from an interrupted run is resumed with a Range request when the
-    server allows, started over otherwise."""
+    server allows, started over otherwise. A stream that ends short of
+    the length the server announced raises ``OSError`` and leaves the
+    part for the next run: a connection closed early reads as an end."""
     if offline():
         raise Offline(f"{dest} is missing and downloading is off (PRAX_OFFLINE)")
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -112,6 +114,8 @@ def download(
                 done += len(buf)
                 if progress:
                     progress(done, total)
+    if total is not None and done != total:
+        raise OSError(f"{url}: {done} of {total} bytes, the rest next time")
     part.replace(dest)
     return dest
 

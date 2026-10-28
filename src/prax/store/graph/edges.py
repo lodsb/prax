@@ -88,10 +88,45 @@ def find_entities(
         if hidden and not _said_openly(con, int(row["id"]), hidden):
             continue  # only documents the viewer may not see name it
         # the name itself matched: nothing to explain
-        if pattern.strip("%") in row["name"].lower():
+        if q.lower() in row["name"].lower():
             row.pop("as", None)
+        elif hidden:
+            # found by another name: only a name the viewer could have
+            # read somewhere answers (the review of 2026-10-28: a folded
+            # entity's name, or a label a hidden document gave)
+            said = _open_label(con, int(row["id"]), q.lower(), hidden)
+            if said is None:
+                continue
+            row["as"] = said
         out.append(row)
     return out
+
+
+def _open_label(
+    con: sqlite3.Connection, entity_id: int, q: str, hidden: frozenset[int]
+) -> str | None:
+    """A name of the entity's that holds ``q`` and that a viewer kept from
+    ``hidden`` may know: one no hidden document gave, whose entity (the
+    folded one it came from, or the entity itself) has a fact the viewer
+    sees. None when every such name came from what they may not see."""
+    for r in con.execute(
+        "SELECT l.label, l.source_doc, COALESCE(l.from_entity, l.entity_id)"
+        " FROM entity_labels l JOIN entities e ON e.id = l.entity_id"
+        " WHERE COALESCE(e.canonical_id, e.id) = ? ORDER BY l.label",
+        (entity_id,),
+    ):
+        label, doc, owner = str(r[0]), r[1], int(r[2])
+        if q not in label.lower() or (doc is not None and doc in hidden):
+            continue
+        for end in ("src", "dst"):
+            for (src_doc,) in con.execute(
+                f"SELECT DISTINCT source_doc FROM edges WHERE {end} = ?"
+                " AND valid_to IS NULL",
+                (owner,),
+            ):
+                if src_doc is None or src_doc not in hidden:
+                    return label
+    return None
 
 
 def _said_openly(

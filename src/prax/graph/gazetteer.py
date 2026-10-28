@@ -29,8 +29,10 @@ BASE = "https://download.geonames.org/export/dump/"
 CITIES = "cities1000"
 ADMIN1 = "admin1CodesASCII.txt"
 COUNTRIES = "countryInfo.txt"
-# what a reading is: another source, another reach, is a new version
-VERSION = 1
+# what a reading is: another source, another reach, is a new version.
+# 2 (2026-10-28): placed again so each picture states where its town is,
+# and a second town of a name is a node of its own (store.apply_place)
+VERSION = 2
 REACH_KM = 30.0
 # not a town of its own: a section of a city (Lisbon's Intendente,
 # Berlin's Mitte, which were the nearest "towns" to their centres), and
@@ -184,11 +186,15 @@ def load() -> Gazetteer:
         if not dest.exists():
             fetch.download(BASE + name, dest)
         paths[name] = dest
-    with (
-        zipfile.ZipFile(paths[f"{CITIES}.zip"]) as z,
-        io.TextIOWrapper(z.open(f"{CITIES}.txt"), encoding="utf-8") as f,
-    ):
-        towns = parse_towns(f)
+    try:
+        with (
+            zipfile.ZipFile(paths[f"{CITIES}.zip"]) as z,
+            io.TextIOWrapper(z.open(f"{CITIES}.txt"), encoding="utf-8") as f,
+        ):
+            towns = parse_towns(f)
+    except (zipfile.BadZipFile, KeyError) as exc:
+        paths[f"{CITIES}.zip"].unlink(missing_ok=True)  # fetched again next time
+        raise OSError(f"{CITIES}.zip is not GeoNames' file: {exc}") from exc
     return Gazetteer(
         towns,
         parse_regions(paths[ADMIN1].read_text("utf-8")),

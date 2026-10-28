@@ -309,8 +309,12 @@ it was taken in and the camera ("taken 2019 05 may 2019-05-03 Apple
 iPhone 12"). A picture the reader cannot open is `meta.photo.error` at
 that version and is not asked again; a fetch that failed is released
 and handed out again. `GET /doc/N/thumb` and `/doc/N/preview` serve the
-copies, guarded like the document (`store.photo_copy`), for the
-administrator's token. The document page shows the preview where there
+copies, guarded like the document (`store.photo_copy`), to any token that
+sees it: both are reader routes since 2026-10-27, and the guard is what
+keeps a suspected or personal picture out. A copy is named by its sha256
+and nothing else (`store.archive_path` refuses any other value), and
+`meta.photo` is a key only the door writes (`store.DOOR_WRITTEN_META`).
+The document page shows the preview where there
 is one, so a HEIC shows in every browser and a photo shows with its
 share offline.
 

@@ -72,6 +72,14 @@ def merge_entities(
     survivor = rows[into_id]["canonical_id"] or into_id
     if survivor == duplicate_id:
         raise ValueError("that merge would form a cycle")
+    if run is not None:
+        # the entities folded into the duplicate before, which the
+        # flattening below points at the survivor: an undo points them back
+        con.execute(
+            "INSERT INTO merge_moves (run, entity_id, was)"
+            " SELECT ?, id, canonical_id FROM entities WHERE canonical_id = ?",
+            (run, duplicate_id),
+        )
     con.execute(
         "UPDATE entities SET canonical_id = ? WHERE id = ? OR canonical_id = ?",
         (survivor, duplicate_id, duplicate_id),
@@ -311,17 +319,23 @@ def add_label(
     # without this a rename left two rows differing only in `lang`, and
     # the `languages` backfill would collide on the unique index trying
     # to place the first (2026-09-24)
-    if lang is not None:
-        con.execute(
-            "UPDATE entity_labels SET lang = ? WHERE entity_id = ? AND label = ?"
-            " AND lang IS NULL",
-            (lang, entity_id, label),
-        )
     if kind == "pref" and lang is not None:
         con.execute(
             "UPDATE entity_labels SET kind = 'alt'"
             " WHERE entity_id = ? AND lang = ? AND kind = 'pref' AND label != ?",
             (entity_id, lang, label),
+        )
+    if lang is not None:
+        # a preferred name of no language that takes one where another is
+        # preferred already is an alternative there: one preferred name a
+        # language (renaming someone back to an old name, 2026-10-28)
+        con.execute(
+            "UPDATE entity_labels SET lang = ?, kind = CASE WHEN kind = 'pref'"
+            " AND EXISTS (SELECT 1 FROM entity_labels o WHERE o.entity_id = ?"
+            " AND o.lang = ? AND o.kind = 'pref' AND o.label != ?)"
+            " THEN 'alt' ELSE kind END"
+            " WHERE entity_id = ? AND label = ? AND lang IS NULL",
+            (lang, entity_id, lang, label, entity_id, label),
         )
     cur = con.execute(
         "INSERT OR IGNORE INTO entity_labels (entity_id, label, lang, kind,"
@@ -561,6 +575,14 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
             " merged_run = NULL WHERE id = ? OR canonical_id = ?",
             (entity_id, entity_id),
         )
+    # what the round's flattening moved goes back to the entity it was
+    # folded into, which stands on its own again
+    con.execute(
+        "UPDATE entities SET canonical_id = (SELECT m.was FROM merge_moves m"
+        " WHERE m.run = ? AND m.entity_id = entities.id)"
+        " WHERE id IN (SELECT entity_id FROM merge_moves WHERE run = ?)",
+        (run, run),
+    )
     renamed = con.execute(
         "SELECT entity_id, label FROM entity_labels WHERE run = ? AND was = 1",
         (run,),

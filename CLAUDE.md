@@ -452,7 +452,9 @@ reference `docs/ask.md`.
   YuNet on the worker's CPU) finds them in the photos step's preview:
   a box and five landmarks as fractions of the upright picture, and
   the score. A later reading ends the earlier faces (`gone_at`) and
-  never deletes them. The `facevectors` step aligns each face as OpenCV's
+  never deletes them; what a person said of a face moves to the new face
+  whose box covers it (`SAME_FACE_IOU`), and an answer whose face was not
+  found again stays, with its `depicts`, for its undo. The `facevectors` step aligns each face as OpenCV's
   recogniser does and gives it SFace's 128 numbers (the face index,
   invariant 1) and a small crop filed in the archive; `similar_faces` is
   the nearest-neighbour search over them. The `facegroups` pass of `prax
@@ -466,7 +468,9 @@ reference `docs/ask.md`.
   `human`, sourced to the picture), or `not_face`, or `nobody`. One live
   answer a face; a new answer or an undo ends the old one and the
   `depicts` edge no answer holds up any more. A picture with a named face
-  is `suspected` unless a person decided about it. An open face is offered
+  is `suspected` unless a person decided about it, and hidden from a
+  named token without `--personal` even then (`store.hidden_documents`):
+  who a face is goes no further. An open face is offered
   as the person most of its nearest named faces are (`prax.ml.matching`,
   `store.face_matches`, the "who is this?" tab, `faces.match` in
   prax.yaml), computed on request and never written: a person confirms it,

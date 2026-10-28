@@ -20,7 +20,7 @@ from prax import store
 from prax.ml import faces
 
 from . import leases
-from .base import HandOut, Pass, Step, TakeIn
+from .base import HandOut, Pass, Step, TakeIn, ready, resting
 
 # a worker's pass asks for batch after batch for this long, as the photos
 # step does: a preview is read in some 45 ms (2026-10-27)
@@ -63,8 +63,10 @@ class Faces(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        if not faces.available():
+        if not faces.available() or resting(self.name):
             return None
+        if (trouble := ready(self.name, faces._session)) is not None:
+            return trouble
         start = time.monotonic()
         tally = {"applied": 0, "found": 0, "none": 0, "errors": 0}
         first = ""
@@ -170,8 +172,10 @@ class FaceVectors(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        if not faces.available():
+        if not faces.available() or resting(self.name):
             return None
+        if (trouble := ready(self.name, faces._recognizer)) is not None:
+            return trouble
         start = time.monotonic()
         tally = {"applied": 0, "faces": 0, "errors": 0}
         first = ""

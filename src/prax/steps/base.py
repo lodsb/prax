@@ -190,6 +190,33 @@ class Step:
         raise NotImplementedError
 
 
+# a step whose model or data could not be had rests this long before it
+# tries again, so a host that cannot fetch it does not try on every pass
+REST_SECONDS = 3600.0
+_resting: dict[str, float] = {}
+
+
+def resting(step: str) -> bool:
+    """Whether ``step`` is resting after its resource could not be had."""
+    return time.monotonic() < _resting.get(step, 0.0)
+
+
+def ready(step: str, load: Callable[[], Any]) -> str | None:
+    """Load what ``step`` needs before anything is fetched: None when it is
+    here, or the pass's line when it cannot be had (offline, a download
+    cut short, a file that fails its checksum), after which the step
+    rests ``REST_SECONDS``. A missing model is the step's trouble, not the
+    pass's: the steps after it still run."""
+    try:
+        load()
+    except Exception as exc:  # noqa: BLE001 - any failure to load rests the step
+        _resting[step] = time.monotonic() + REST_SECONDS
+        why = f"{type(exc).__name__}: {str(exc)[:160]}"
+        return f"not run: {why}; tried again in an hour"
+    _resting.pop(step, None)
+    return None
+
+
 def paid_refusal(step: str, spec: models.ModelSpec | None) -> str | None:
     """Why a worker will not run a step whose model costs money, or None
     when it may. Asked before anything is fetched: a batch fetched and

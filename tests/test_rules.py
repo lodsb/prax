@@ -404,6 +404,23 @@ def test_a_chain_across_two_open_documents(con: sqlite3.Connection) -> None:
     assert _attended(con) == {("Ada", "A trip"): None}
 
 
+def test_no_chain_across_a_hidden_and_an_open_document(
+    con: sqlite3.Connection,
+) -> None:
+    """One premise from a suspected picture and one from an open document
+    make nothing: no one document would hide the fact, and with no source
+    every token would read what the picture says."""
+    shown = _picture(con, "the picture", personal=True)
+    told = _picture(con, "a note", personal=False)
+    node = store.document_node(con, shown)
+    store.link(con, E(node[0], node[1], "depicts", "Ada", "person"), source_doc=shown)
+    store.link(
+        con, E(node[0], node[1], "recorded_at", "A trip", "event"), source_doc=told
+    )
+    store.derive_rules(con)
+    assert _attended(con) == {}
+
+
 def test_a_chain_names_two_known_relations() -> None:
     bad = ontology.parse_module(
         "module: m\nversion: 1\nrelation_types:\n"

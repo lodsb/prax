@@ -43,6 +43,11 @@ def token(door: Door, a: Any) -> int:
         out.say(f"removed {a.name}: its secret opens nothing any more")
         return 0
     if a.action == "role":
+        if a.role is None:
+            out.fail(
+                "which role?", f"prax token role {a.name} --role reader|contributor"
+            )
+            return 2
         door.put_json(f"/tokens/{a.name}", {"role": a.role})
         out.say(f"{a.name} is a {a.role} now; its secret stays the same")
         return 0
@@ -52,14 +57,15 @@ def token(door: Door, a: Any) -> int:
             "name": a.name,
             "domains": a.domain or None,
             "personal": a.personal,
-            "role": a.role,
+            "role": a.role or "reader",
         },
     )
     if a.json:
         print(json.dumps(got, indent=1))
         return 0
     out.say(
-        f"token {out.bold(got['name'])} made, a {a.role}. Its secret, shown this once:"
+        f"token {out.bold(got['name'])} made, a {a.role or 'reader'}."
+        " Its secret, shown this once:"
     )
     print(got["secret"])
     out.say(
