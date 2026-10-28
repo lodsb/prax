@@ -9127,3 +9127,18 @@ data leaves the library under any token.
 Counted on the live store, read-only: 32,919 documents (all hashes
 distinct), 263,645 entities (48,861 folded), 526,980 edges (328,237
 live, 106,700 INFERRED, 527 with no source document).
+
+## 2026-10-28: four complex functions split
+
+Four functions had grown to ruff's ceiling of 21 since 2026-10-06. Each
+is split, and each gives the same output before and after:
+
+| function | before | after | compared on |
+|---|---|---|---|
+| `text.chunking._elements` | 21 | a `_Reader` with one `_read_*` per kind of block | the elements of the live store's first 2,996 texts, read-only |
+| `ml.clusters.group` | 21 | `_condense`, `_select`, `_strength` | 900 groupings of seeded random neighbour lists |
+| `store.pages.write_page` | 19 | `_new_page`, `_next_revision`, `_rename_page`, `_annotate`, `_link_project` | the page tests |
+| `store.documents.meta.document_field` | 19 | `_kind_words`, `_folder_words`, `_record_words`, `_what_it_shows` | the field of each of the live store's 32,919 documents, read-only |
+
+The most complex functions are now at 18: `refresh_blocks`, `lint`,
+`venues.read`, `request_of` and `cite_link`.

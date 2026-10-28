@@ -947,7 +947,13 @@ not done.
       2,704 venues); the top is now 18: `refresh_blocks`, `read`,
       `request_of`, `cite_link`; then 17: `apply` (resolution),
       `_command`, `hand_out`, `_elements`. Split when touched, as the
-      item says.)
+      item says.) (2026-10-28: four had grown to the ceiling since,
+      `chunking._elements` and `clusters.group` at 21, `write_page` and
+      `document_field` at 19; each split, the same output before and
+      after: the elements of 2,996 of the live store's texts, 900 seeded
+      groupings, every one of its 32,919 documents' fields. The top is
+      18 again: `refresh_blocks`, `lint`, `venues.read`, `request_of`,
+      `cite_link`.)
 - [x] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests

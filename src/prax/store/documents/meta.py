@@ -495,6 +495,83 @@ def _genre_words(meta: dict[str, Any]) -> list[str]:
     return out
 
 
+_VISION_SOURCES = ("claude-vision", "vision/")
+_PAGE_KIND_WORDS = {
+    "addendum": "note page",
+    "project": "project page",
+    "synthesis": "synthesis page",
+}
+
+
+def _kind_words(
+    meta: dict[str, Any], mime: str, first_kind: str | None, source: str
+) -> list[str]:
+    """What kind of document it is, in the words a person searches by:
+    its medium, a note, a wiki page, source code, an image description,
+    its genres."""
+    words: list[str] = []
+    if mimes.is_picture(mime):
+        words.append("image")
+    elif mime in mimes.DOCUMENT_IMAGES:
+        words.append("scanned document")
+    elif mime in _KIND_WORDS:
+        words.append(_KIND_WORDS[mime])
+    elif mime.startswith("audio/"):
+        words.append("audio recording")
+    elif mime.startswith("video/"):
+        words.append("video")
+    if (meta.get("zotero") or {}).get("kind") == "note":
+        words.append("note")
+    page = meta.get("page") or {}
+    if page.get("kind"):
+        words.append(_PAGE_KIND_WORDS.get(page["kind"], "wiki page"))
+    if first_kind == "code":
+        words.append("source code")
+    if source.startswith(_VISION_SOURCES):
+        words.append("image description")
+    return words + [w for w in _genre_words(meta) if w not in words]
+
+
+def _folder_words(con: sqlite3.Connection, sha256: str) -> str:
+    """A referenced file has no text until something reads it: the folders
+    it lies in are what a person would search for it by."""
+    place = con.execute(
+        "SELECT path FROM places WHERE sha256 = ? AND gone IS NULL"
+        " ORDER BY last_seen DESC LIMIT 1",
+        (sha256,),
+    ).fetchone()
+    if place and "/" in place[0]:
+        return str(place[0].rsplit("/", 1)[0].replace("/", " "))
+    return ""
+
+
+def _record_words(meta: dict[str, Any]) -> list[str]:
+    """Its record's creators, and its venue with the year."""
+    out = []
+    creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
+    if creators:
+        out.append("by " + ", ".join(creators[:6]))
+    fields = meta.get("fields") or {}
+    venue = fields.get("publicationTitle") or fields.get("proceedingsTitle")
+    bits = [b for b in (venue, str(meta.get("date") or "")[:4]) if b]
+    if bits:
+        out.append(" ".join(bits))
+    return out
+
+
+def _what_it_shows(con: sqlite3.Connection, doc_id: int) -> str:
+    """A vision reading's "What it shows" section, capped."""
+    shows = con.execute(
+        "SELECT text FROM chunks WHERE doc_id = ?"
+        " AND heading LIKE '%What it shows%' ORDER BY seq LIMIT 1",
+        (doc_id,),
+    ).fetchone()
+    if not shows:
+        return ""
+    lines = [ln for ln in shows["text"].splitlines() if not ln.startswith("#")]
+    return " ".join(lines).strip()[:1200]
+
+
 @_guards("doc", lambda: None)
 def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     """The retrieval field of a document, or None when it does not exist."""
@@ -512,67 +589,17 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     meta = json.loads(row["meta"] or "{}")
     if meta.get("retired"):
         return None  # a retired document has no retrieval field
-    mime = row["mime"] or ""
-    words: list[str] = []
-    if mimes.is_picture(mime):
-        words.append("image")
-    elif mime in mimes.DOCUMENT_IMAGES:
-        words.append("scanned document")
-    elif mime in _KIND_WORDS:
-        words.append(_KIND_WORDS[mime])
-    elif mime.startswith("audio/"):
-        words.append("audio recording")
-    elif mime.startswith("video/"):
-        words.append("video")
-    z = meta.get("zotero") or {}
-    if z.get("kind") == "note":
-        words.append("note")
-    page = meta.get("page") or {}
-    if page.get("kind"):
-        words.append(
-            {
-                "addendum": "note page",
-                "project": "project page",
-                "synthesis": "synthesis page",
-            }.get(page["kind"], "wiki page")
-        )
-    if row["first_kind"] == "code":
-        words.append("source code")
     source = str(meta.get("text_source") or "")
-    if source.startswith(("claude-vision", "vision/")):
-        words.append("image description")
-    words += [w for w in _genre_words(meta) if w not in words]
+    words = _kind_words(meta, row["mime"] or "", row["first_kind"], source)
     parts = [row["title"] or "", " ".join(words)]
     if not row["held"]:
-        # a referenced file has no text until something reads it: the
-        # folders it lies in are what a person would search for it by
-        place = con.execute(
-            "SELECT path FROM places WHERE sha256 = ? AND gone IS NULL"
-            " ORDER BY last_seen DESC LIMIT 1",
-            (row["hash"],),
-        ).fetchone()
-        if place and "/" in place[0]:
-            parts.append(place[0].rsplit("/", 1)[0].replace("/", " "))
+        parts.append(_folder_words(con, row["hash"]))
     parts.append(_photo_words(meta))
-    creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
-    if creators:
-        parts.append("by " + ", ".join(creators[:6]))
-    fields = meta.get("fields") or {}
-    venue = fields.get("publicationTitle") or fields.get("proceedingsTitle")
-    bits = [b for b in (venue, str(meta.get("date") or "")[:4]) if b]
-    if bits:
-        parts.append(" ".join(bits))
+    parts += _record_words(meta)
     if meta.get("summary"):
         parts.append(str(meta["summary"]))
-    if source.startswith(("claude-vision", "vision/")):
-        shows = con.execute(
-            "SELECT text FROM chunks WHERE doc_id = ?"
-            " AND heading LIKE '%What it shows%' ORDER BY seq LIMIT 1",
-            (doc_id,),
-        ).fetchone()
-        if shows:
-            lines = [ln for ln in shows["text"].splitlines() if not ln.startswith("#")]
-            parts.append(" ".join(lines).strip()[:1200])
+    if source.startswith(_VISION_SOURCES):
+        parts.append(_what_it_shows(con, doc_id))
     parts.extend(_section_lines(meta))
     return "\n".join(p for p in parts if p.strip())
 

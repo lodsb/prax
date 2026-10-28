@@ -218,104 +218,143 @@ def _ask_regions(text: str) -> dict[int, tuple[int, blocks.Block]]:
     return out
 
 
+_Lines = list[tuple[int, int, str]]
+_Read = tuple[_Element, int] | None
+
+
+class _Reader:
+    """The text being cut into elements: its lines with their offsets and
+    its ask blocks by the offset of their head line. Each ``_read_*`` takes
+    the line ``i`` a block may start on and answers with the element and
+    the line after it, or None when the block is not one of its kind."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.lines: _Lines = _lines_with_offsets(text)
+        self.n = len(self.lines)
+        self.asks = _ask_regions(text)
+
+    def element(self, kind: str, start: int, end: int, **kw: Any) -> _Element:
+        return _Element(kind, start, end, self.text[start:end], **kw)
+
+    def _read_picture(self, i: int, stripped: str) -> _Read:
+        if stripped != markup.PICTURE_START:
+            return None
+        j = i
+        while j < self.n and markup.PICTURE_END not in self.lines[j][2]:
+            j += 1
+        if j == self.n:  # a block that never closes is left to the prose
+            return None
+        return self.element("figure-text", self.lines[i][0], self.lines[j][1]), j + 1
+
+    def _read_ask(self, i: int, stripped: str) -> _Read:
+        start = self.lines[i][0]
+        if start not in self.asks:
+            return None
+        aend, block = self.asks[start]
+        while i < self.n and self.lines[i][0] < aend:
+            i += 1
+        return self.element("ask", start, aend, block=block), i
+
+    def _read_page(self, i: int, stripped: str) -> _Read:
+        m = _PAGE_MARK.match(stripped)
+        if not m:
+            return None
+        start, end, body = self.lines[i]
+        return _Element("page", start, end, body, page=int(m.group(1))), i + 1
+
+    def _read_code(self, i: int, stripped: str) -> _Read:
+        if not stripped.startswith(_FENCE):
+            return None
+        j = i + 1
+        while j < self.n and not self.lines[j][2].strip().startswith(_FENCE):
+            j += 1
+        j = min(j, self.n - 1)
+        return self.element("code", self.lines[i][0], self.lines[j][1]), j + 1
+
+    def _read_heading(self, i: int, stripped: str) -> _Read:
+        m = _HEADING.match(stripped)
+        if not m:
+            return None
+        start, end, _ = self.lines[i]
+        title = _EMPHASIS.sub("", m.group(2)).strip()
+        return _Element("heading", start, end, title, level=len(m.group(1))), i + 1
+
+    def _read_formula(self, i: int, stripped: str) -> _Read:
+        if not _is_formula(stripped):
+            return None
+        j = i + 1
+        while j < self.n and _READ_BY.match(self.lines[j][2].strip()):
+            j += 1
+        return self.element("formula", self.lines[i][0], self.lines[j - 1][1]), j
+
+    def table_starts(self, i: int, stripped: str) -> bool:
+        return (
+            stripped.startswith("|")
+            and i + 1 < self.n
+            and bool(_TABLE_SEP.match(self.lines[i + 1][2].strip()))
+        )
+
+    def _read_table(self, i: int, stripped: str) -> _Read:
+        if not self.table_starts(i, stripped):
+            return None
+        j = i
+        while j < self.n and self.lines[j][2].strip().startswith("|"):
+            j += 1
+        return self.element("table", self.lines[i][0], self.lines[j - 1][1]), j
+
+    def ends_paragraph(self, i: int, j: int) -> bool:
+        """Whether line ``j`` ends the paragraph that began on line ``i``:
+        a blank line, or one that starts a structural block."""
+        s = self.lines[j][2].strip()
+        if (
+            not s
+            or _PAGE_MARK.match(s)
+            or _HEADING.match(s)
+            or s.startswith(_FENCE)
+            or self.lines[j][0] in self.asks
+            or self.table_starts(j, s)
+        ):
+            return True
+        return j > i and (_is_formula(s) or s == markup.PICTURE_START)
+
+    def _read_paragraph(self, i: int, stripped: str) -> tuple[_Element, int]:
+        """Consecutive non-blank lines that are not structural."""
+        j = i
+        while j < self.n and not self.ends_paragraph(i, j):
+            j += 1
+        start, pend = self.lines[i][0], self.lines[j - 1][1]
+        ptext = self.text[start:pend]
+        kind = "figure" if _FIGURE.match(stripped) else "para"
+        return _Element(kind, start, pend, ptext, time=_time_of(kind, ptext)), j
+
+    def read(self, i: int, stripped: str) -> tuple[_Element, int]:
+        for kind in (
+            self._read_picture,
+            self._read_ask,
+            self._read_page,
+            self._read_code,
+            self._read_heading,
+            self._read_formula,
+            self._read_table,
+        ):
+            found = kind(i, stripped)
+            if found is not None:
+                return found
+        return self._read_paragraph(i, stripped)
+
+
 def _elements(text: str) -> list[_Element]:
-    lines = _lines_with_offsets(text)
+    reader = _Reader(text)
     els: list[_Element] = []
-    asks = _ask_regions(text)
     i = 0
-    n = len(lines)
-    while i < n:
-        start, end, body = lines[i]
-        stripped = body.strip()
+    while i < reader.n:
+        stripped = reader.lines[i][2].strip()
         if not stripped:
             i += 1
             continue
-        if stripped == markup.PICTURE_START:
-            j = i
-            while j < n and markup.PICTURE_END not in lines[j][2]:
-                j += 1
-            if j < n:  # a block that never closes is left to the prose
-                pend = lines[j][1]
-                els.append(_Element("figure-text", start, pend, text[start:pend]))
-                i = j + 1
-                continue
-        if start in asks:
-            aend, block = asks[start]
-            els.append(_Element("ask", start, aend, text[start:aend], block=block))
-            while i < n and lines[i][0] < aend:
-                i += 1
-            continue
-        m = _PAGE_MARK.match(stripped)
-        if m:
-            els.append(_Element("page", start, end, body, page=int(m.group(1))))
-            i += 1
-            continue
-        if stripped.startswith(_FENCE):
-            j = i + 1
-            while j < n and not lines[j][2].strip().startswith(_FENCE):
-                j += 1
-            j = min(j, n - 1)
-            els.append(_Element("code", start, lines[j][1], text[start : lines[j][1]]))
-            i = j + 1
-            continue
-        m = _HEADING.match(stripped)
-        if m:
-            title = _EMPHASIS.sub("", m.group(2)).strip()
-            els.append(_Element("heading", start, end, title, level=len(m.group(1))))
-            i += 1
-            continue
-        if _is_formula(stripped):
-            j = i + 1
-            while j < n and _READ_BY.match(lines[j][2].strip()):
-                j += 1
-            els.append(
-                _Element(
-                    "formula", start, lines[j - 1][1], text[start : lines[j - 1][1]]
-                )
-            )
-            i = j
-            continue
-        if (
-            stripped.startswith("|")
-            and i + 1 < n
-            and _TABLE_SEP.match(lines[i + 1][2].strip())
-        ):
-            j = i
-            while j < n and lines[j][2].strip().startswith("|"):
-                j += 1
-            els.append(
-                _Element("table", start, lines[j - 1][1], text[start : lines[j - 1][1]])
-            )
-            i = j
-            continue
-        # paragraph: consecutive non-blank lines that are not structural
-        j = i
-        while j < n:
-            s = lines[j][2].strip()
-            if (
-                not s
-                or _PAGE_MARK.match(s)
-                or _HEADING.match(s)
-                or s.startswith(_FENCE)
-                or lines[j][0] in asks
-            ):
-                break
-            if (
-                s.startswith("|")
-                and j + 1 < n
-                and _TABLE_SEP.match(lines[j + 1][2].strip())
-            ):
-                break
-            if j > i and _is_formula(s):
-                break
-            if j > i and s == markup.PICTURE_START:
-                break
-            j += 1
-        pend = lines[j - 1][1]
-        ptext = text[start:pend]
-        kind = "figure" if _FIGURE.match(stripped) else "para"
-        els.append(_Element(kind, start, pend, ptext, time=_time_of(kind, ptext)))
-        i = j
+        el, i = reader.read(i, stripped)
+        els.append(el)
     _assign_pages(els)
     return els
 

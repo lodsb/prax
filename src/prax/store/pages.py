@@ -319,45 +319,12 @@ def write_page(
     )
     created = existing is None
     if created:
-        title = title or slug.replace("-", " ").capitalize()
-        reg = register(
-            con,
-            _page_original(slug, text),
-            mime="text/markdown",
-            title=title,
-            meta={"source": "wiki", "page": {"slug": slug, "kind": kind}},
-        )
-        doc_id = reg["doc_id"]
-        con.execute(
-            "INSERT INTO pages (doc_id, slug, kind) VALUES (?, ?, ?)",
-            (doc_id, slug, kind),
-        )
-        revision = 1
+        doc_id, revision = _new_page(con, slug, text, title=title, kind=kind)
     else:
-        doc_id = existing["doc_id"]
-        kind = existing["kind"]
-        last = con.execute(
-            "SELECT revision, author FROM page_revisions WHERE doc_id = ?"
-            " ORDER BY revision DESC LIMIT 1",
-            (doc_id,),
-        ).fetchone()
-        if last and last["author"] == "human" and author == "agent" and not force:
-            raise PermissionError(
-                f"page {slug!r} was last written by a person; append_page adds"
-                " a section, force=True overwrites"
-            )
-        revision = (last["revision"] if last else 0) + 1
+        doc_id, kind = int(existing["doc_id"]), existing["kind"]
+        revision = _next_revision(con, existing, slug, author=author, force=force)
         if title and title != existing["title"]:
-            # a rename: the page's entity in the graph goes with it, so
-            # its edges stay its own (merged into a namesake if one exists)
-            con.execute("UPDATE documents SET title = ? WHERE id = ?", (title, doc_id))
-            page_type = "project" if kind == "project" else "page"
-            row = con.execute(
-                "SELECT id FROM entities WHERE name = ? AND type = ?",
-                (existing["title"], page_type),
-            ).fetchone()
-            if row is not None:
-                rename_entity(con, row["id"], title)
+            _rename_page(con, doc_id, existing["title"], title, kind)
     if sensitivity is not None:
         set_sensitivity(con, doc_id, sensitivity, by=author)
     indexed = index_text(con, doc_id, text, text_source=f"page/{author}")
@@ -384,47 +351,14 @@ def write_page(
     # which `annotates` does not take: a project page linking a paper was
     # refused outright until the graph-file tests wrote one (2026-09-27)
     source_rel = "synthesizes" if kind in ("synthesis", "project") else "annotates"
+    page = (page_title, page_type)
     for target in annotates or []:
-        try:
-            # one node per document, whatever links it (``document_node``)
-            target_name, target_type = document_node(con, target)
-        except KeyError:
-            raise KeyError(f"no such document to annotate: {target}") from None
-        edge = Edge(page_title, page_type, source_rel, target_name, target_type)
-        if kind == "synthesis" and target_type != "page":
-            _set_promote(con, target, by="page", reason=f"source of synthesis {slug}")
-        if not find_edges(con, edge):
-            link(
-                con,
-                edge,
-                confidence="EXTRACTED",
-                source_doc=doc_id,
-                evidence=f"page {slug} revision {revision}",
-                producer="page",
-                run=f"{slug}@{revision}",
-            )
+        _annotate(con, page, source_rel, target, doc_id, slug, revision, kind)
     _link_edges(
         con, doc_id, slug, revision, text, page_title, page_type, source_rel, annotates
     )
     if part_of:
-        project = con.execute(
-            "SELECT d.title FROM pages p JOIN documents d ON d.id = p.doc_id"
-            " WHERE p.slug = ? AND p.kind = 'project'",
-            (slugify(part_of),),
-        ).fetchone()
-        if project is None:
-            raise KeyError(f"no project page {part_of!r}")
-        edge = Edge(page_title, page_type, "part_of", project[0], "project")
-        if not find_edges(con, edge):
-            link(
-                con,
-                edge,
-                confidence="EXTRACTED",
-                source_doc=doc_id,
-                evidence=f"page {slug} revision {revision}",
-                producer="page",
-                run=f"{slug}@{revision}",
-            )
+        _link_project(con, page, part_of, doc_id, slug, revision)
     under = parent or (part_of if _parent_of(con, doc_id) is None else None)
     if under:
         above = page_id(con, under)
@@ -434,6 +368,121 @@ def write_page(
             set_page_parent(con, doc_id, above, by=author)
     con.commit()
     return {"doc_id": doc_id, "slug": slug, "revision": revision, "created": created}
+
+
+def _new_page(
+    con: sqlite3.Connection, slug: str, text: str, *, title: str | None, kind: str
+) -> tuple[int, int]:
+    """A new page's document row and its ``pages`` row; its revision is 1."""
+    title = title or slug.replace("-", " ").capitalize()
+    reg = register(
+        con,
+        _page_original(slug, text),
+        mime="text/markdown",
+        title=title,
+        meta={"source": "wiki", "page": {"slug": slug, "kind": kind}},
+    )
+    doc_id = int(reg["doc_id"])
+    con.execute(
+        "INSERT INTO pages (doc_id, slug, kind) VALUES (?, ?, ?)",
+        (doc_id, slug, kind),
+    )
+    return doc_id, 1
+
+
+def _next_revision(
+    con: sqlite3.Connection,
+    existing: sqlite3.Row,
+    slug: str,
+    *,
+    author: str,
+    force: bool,
+) -> int:
+    """The revision a write over an existing page makes; an agent's over a
+    person's is refused unless ``force``."""
+    last = con.execute(
+        "SELECT revision, author FROM page_revisions WHERE doc_id = ?"
+        " ORDER BY revision DESC LIMIT 1",
+        (existing["doc_id"],),
+    ).fetchone()
+    if last and last["author"] == "human" and author == "agent" and not force:
+        raise PermissionError(
+            f"page {slug!r} was last written by a person; append_page adds"
+            " a section, force=True overwrites"
+        )
+    return int(last["revision"] if last else 0) + 1
+
+
+def _rename_page(
+    con: sqlite3.Connection, doc_id: int, old: str, title: str, kind: str
+) -> None:
+    """A rename: the page's entity in the graph goes with it, so its edges
+    stay its own (merged into a namesake if one exists)."""
+    con.execute("UPDATE documents SET title = ? WHERE id = ?", (title, doc_id))
+    page_type = "project" if kind == "project" else "page"
+    row = con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = ?", (old, page_type)
+    ).fetchone()
+    if row is not None:
+        rename_entity(con, row["id"], title)
+
+
+def _page_link(
+    con: sqlite3.Connection, edge: Edge, doc_id: int, slug: str, revision: int
+) -> None:
+    """One of a page's own edges, written once."""
+    if not find_edges(con, edge):
+        link(
+            con,
+            edge,
+            confidence="EXTRACTED",
+            source_doc=doc_id,
+            evidence=f"page {slug} revision {revision}",
+            producer="page",
+            run=f"{slug}@{revision}",
+        )
+
+
+def _annotate(
+    con: sqlite3.Connection,
+    page: tuple[str, str],
+    rel: str,
+    target: int,
+    doc_id: int,
+    slug: str,
+    revision: int,
+    kind: str,
+) -> None:
+    """The page's edge (``page``: its name and type) to a document it
+    annotates or draws on (``rel``)."""
+    try:
+        # one node per document, whatever links it (``document_node``)
+        target_name, target_type = document_node(con, target)
+    except KeyError:
+        raise KeyError(f"no such document to annotate: {target}") from None
+    edge = Edge(*page, rel, target_name, target_type)
+    if kind == "synthesis" and target_type != "page":
+        _set_promote(con, target, by="page", reason=f"source of synthesis {slug}")
+    _page_link(con, edge, doc_id, slug, revision)
+
+
+def _link_project(
+    con: sqlite3.Connection,
+    page: tuple[str, str],
+    part_of: str,
+    doc_id: int,
+    slug: str,
+    revision: int,
+) -> None:
+    project = con.execute(
+        "SELECT d.title FROM pages p JOIN documents d ON d.id = p.doc_id"
+        " WHERE p.slug = ? AND p.kind = 'project'",
+        (slugify(part_of),),
+    ).fetchone()
+    if project is None:
+        raise KeyError(f"no project page {part_of!r}")
+    edge = Edge(*page, "part_of", project[0], "project")
+    _page_link(con, edge, doc_id, slug, revision)
 
 
 def _refuse_write(
