@@ -9100,3 +9100,30 @@ versions`). A search folds it under the latest when both come up
 (`versions` on the hit, "1 older version" in the list). `get` carries
 `versions`, and the document page says which version it is. `traverse`
 from the work reaches each version by `example_of`.
+
+## 2026-10-28: AP's design note
+
+Plan item AP, the design only: `docs/global-ids.md`. Nothing is built.
+
+The integer keys stay. Beside them each row gets a `gid`, written once:
+
+- A document's is its existing `hash`.
+- An entity's is 128 random bits, minted when the row is made. It is not
+  derived from the name, because names change and two libraries' equal
+  names are not one thing. A merge keeps both rows, so a folded twin's
+  `gid` is its alias with no table of its own.
+- An edge's names the claim: the sha256 of the source document's hash,
+  the relation and the two ends' `gid`s. It is not unique. On the live
+  store 50,007 (src, rel, dst, document) combinations are held by more
+  than one row, one per extraction.
+
+`prax-graph/2` carries the `gid`s and leaves out rule-derived edges. An
+import keeps what it decided about another library's entity in
+`foreign_entities`, so a re-import of the same file writes nothing and a
+person's decision holds for the next file. `prax export --as <token>`
+puts the export under a named token's view of the wall, and no face
+data leaves the library under any token.
+
+Counted on the live store, read-only: 32,919 documents (all hashes
+distinct), 263,645 entities (48,861 folded), 526,980 edges (328,237
+live, 106,700 INFERRED, 527 with no source document).
