@@ -32,7 +32,9 @@ Every fact has the picture as its source, so the wall hides it with the
 picture: a photo no viewer may see says to that viewer nowhere it was
 taken, and a town only ever reached through hidden photos is not there
 (``_said_openly``). The producer is ``geonames`` and the run names the
-reading's version; a picture placed again ends what it said before.
+reading's version; a picture placed again ends what it said before,
+unless the new reading names the same town, region and country: then its
+facts stand, and only its stamp and the places' names are new.
 """
 
 from __future__ import annotations
@@ -223,6 +225,13 @@ def apply_place(
     town. Returns ``placed`` or ``nowhere``."""
     meta = get_meta(con, doc_id)
     run = place_run(version)
+    if _same_answer(con, doc_id, meta.get("place") or {}, place):
+        assert place is not None
+        meta["place"] = {**meta["place"], "v": version, "by": by, "at": now()}
+        _put_meta(con, doc_id, meta)
+        con.commit()
+        _name_any(con, place, run=run)
+        return "placed"
     before = [
         int(r[0])
         for r in con.execute(
@@ -257,16 +266,9 @@ def apply_place(
     gps = (meta.get("photo") or {}).get("gps") or {}
     taken = str((meta.get("taken") or {}).get("date") or "")[:10]
     name, dtype = document_node(con, doc_id)
-    # the nodes, outermost first, so each is told the node it is inside
-    held_in = region if region and region != country else ""
-    country_node = _place_node(con, country, "") if country else ""
-    region_node = _place_node(con, held_in, country_node) if held_in else ""
-    if held_in and town == held_in:
-        town_node = region_node  # a town that is its region (a city state)
-    elif town == country:
-        town_node = country_node
-    else:
-        town_node = _place_node(con, town, region_node or country_node)
+    nodes = _place_nodes(con, town, region, country)
+    town_node, region_node = nodes["town"], nodes["region"]
+    country_node = nodes["country"]
     link(
         con,
         Edge(name, dtype, "taken_in", town_node, "place"),
@@ -286,9 +288,74 @@ def apply_place(
         _within(con, region_node, country_node, doc_id=doc_id, run=run, evidence=said)
     else:
         _within(con, town_node, country_node, doc_id=doc_id, run=run, evidence=said)
-    # named once its nodes are there
-    names = place.get("names") or {}
-    if isinstance(names, dict) and names:
-        nodes = {"town": town_node, "region": region_node, "country": country_node}
-        _name_place(con, nodes, names, run=run)
+    _name_any(con, place, run=run, nodes=nodes)  # once its nodes are there
     return "placed"
+
+
+def _place_nodes(
+    con: sqlite3.Connection, town: str, region: str, country: str
+) -> dict[str, str]:
+    """The nodes of a reading's town, region and country, outermost
+    first, so each is told the node it is inside; ``region`` is empty
+    when the reading's region is its country."""
+    held_in = region if region and region != country else ""
+    country_node = _place_node(con, country, "") if country else ""
+    region_node = _place_node(con, held_in, country_node) if held_in else ""
+    if held_in and town == held_in:
+        town_node = region_node  # a town that is its region (a city state)
+    elif town == country:
+        town_node = country_node
+    else:
+        town_node = _place_node(con, town, region_node or country_node)
+    return {"town": town_node, "region": region_node, "country": country_node}
+
+
+def _same_answer(
+    con: sqlite3.Connection,
+    doc_id: int,
+    old: dict[str, Any],
+    place: dict[str, Any] | None,
+) -> bool:
+    """Whether a new reading names what the picture's live facts already
+    say: the same town by its geonameid, region and country, and the
+    picture still ``taken_in`` the node that town is."""
+    if not place or not place.get("name") or not old.get("name"):
+        return False
+    if (
+        str(place["name"]) != old["name"]
+        or str(place.get("region") or "") != old.get("region")
+        or str(place.get("country") or "") != old.get("country")
+        or int(place.get("geonameid") or 0) != old.get("id")
+    ):
+        return False
+    nodes = _place_nodes(
+        con, old["name"], str(old.get("region")), str(old.get("country"))
+    )
+    town = entity_answering(con, nodes["town"], "place")
+    held = con.execute(
+        "SELECT 1 FROM edges WHERE source_doc = ? AND rel = 'taken_in'"
+        " AND producer = ? AND valid_to IS NULL AND dst = ?",
+        (doc_id, PLACE_PRODUCER, town),
+    ).fetchone()
+    return town is not None and held is not None
+
+
+def _name_any(
+    con: sqlite3.Connection,
+    place: dict[str, Any],
+    *,
+    run: str,
+    nodes: dict[str, str] | None = None,
+) -> int:
+    """The reading's names of its places, when it carries any."""
+    names = place.get("names") or {}
+    if not isinstance(names, dict) or not names:
+        return 0
+    if nodes is None:
+        nodes = _place_nodes(
+            con,
+            str(place["name"]),
+            str(place.get("region") or ""),
+            str(place.get("country") or ""),
+        )
+    return _name_place(con, nodes, names, run=run)

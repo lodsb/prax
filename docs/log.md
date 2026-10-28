@@ -9197,3 +9197,19 @@ place in the text, a phone's width.
   the 59 groups made since 2026-10-09 (job 1497), one run that
   `unmerge_run` takes back. The check finds none now. The plan's line
   that still said 783 waiting was the count from before the first run.
+
+## 2026-10-28: the places' names for the pictures placed before them
+
+The quality review's fix 13 named a picture's places in the library's
+languages from GeoNames' alternate names, for pictures placed from then
+on. The 1,800 pictures placed before it (77 towns) had none: no
+`entity_labels` row of producer `geonames` on the live store.
+
+Placing them again was the way, except that `store.apply_place` ended
+every fact of a picture and wrote it again, a new edge row per fact for
+an unchanged answer. Now a reading that names the same town (geonameid,
+region and country) while the picture is still `taken_in` that town's
+node keeps the facts. Only `meta.place`'s stamp and the names are new.
+The gazetteer reading is version 3, so the `geocode` step hands the
+1,800 out again. A reading that names another town ends and re-writes,
+as before. The test is in `tests/test_review_2026_10_28.py`.

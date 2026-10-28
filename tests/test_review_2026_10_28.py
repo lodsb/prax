@@ -521,3 +521,34 @@ def test_a_named_face_is_for_a_token_with_personal_only(client: TestClient) -> N
     assert "Ada" not in client.get(f"/graph/document/{doc}", headers=reader).text
     assert client.get(f"/get/{doc}", headers=reader).status_code == 404
     assert "Ada" in client.get(f"/graph/document/{doc}", headers=_as(friend)).text
+
+
+def test_a_reading_that_names_the_same_town_keeps_its_facts(con: Any) -> None:
+    from tests.test_geocode import _photo_with
+
+    doc = _photo_with(con, "a.jpg", 45.5, 10.2, "2018-05-03T10:00:00", 1)
+    _placed(con, doc, "Aldmouth", "Lower Vale", "Ardenia")
+    live = "SELECT id FROM edges WHERE source_doc = ? AND valid_to IS NULL"
+    before = {r[0] for r in con.execute(live, (doc,))}
+    names = {"de": {"town": "Aldmünde", "country": "Ardenien"}}
+    store.apply_place(
+        con,
+        doc,
+        place={
+            "name": "Aldmouth",
+            "region": "Lower Vale",
+            "country": "Ardenia",
+            "geonameid": 7,
+            "names": names,
+        },
+        version=3,
+        by="t",
+    )
+    assert {r[0] for r in con.execute(live, (doc,))} == before
+    assert store.get_meta(con, doc)["place"]["v"] == 3
+    assert store.entity_answering(con, "Aldmünde", "place") == (
+        store.entity_answering(con, "Aldmouth", "place")
+    )
+    # another town: the facts move
+    _placed(con, doc, "Brinby", "Lower Vale", "Ardenia")
+    assert {r[0] for r in con.execute(live, (doc,))}.isdisjoint(before)

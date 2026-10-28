@@ -237,10 +237,11 @@ The user asked on 2026-10-28 for every one to be fixed.
       (18), one premise policy (19), the person page's events from
       `attended` (20), face group ids from `id_marks` (21), the people
       list kept (22), the matching vectorised and per picture (23).
-- [ ] Pictures placed before 2026-10-28 have no names in other
-      languages until they are placed again. Bump the gazetteer reading
-      when there is another reason to place every picture again, or add
-      a pass that only adds the labels.
+- [x] (2026-10-28: the gazetteer reading is 3, and a reading that names
+      the same town keeps the picture's facts, so placing the 1,800
+      pictures again writes only the names and the stamps) Pictures placed
+      before 2026-10-28 have no names in other languages until they are
+      placed again.
 
 ## Stages
 
