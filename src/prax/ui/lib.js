@@ -729,7 +729,7 @@ function privateRules(r) {
     ...(added.strong || []).map((x) => `strong: ${esc(x)}`),
     ...(added.weak || []).map((x) => `weak: ${esc(x)}`),
   ].filter(Boolean);
-  return `<details class="same-rule"><summary>The rules: ${d.suspected || 0} suspected, ${d.personal || 0} personal, ${d.released || 0} released by you</summary>
+  return `<details class="same-rule"><summary>The rules: ${d.suspected || 0} suspected, ${d.personal || 0} personal, ${d.released || 0} released by you${d.named_faces ? `, ${d.named_faces} hidden for a named face` : ""}</summary>
     <p class="muted">A strong word marks a document alone; weak ones count only ${r.weak_needed} together (words that say one thing count once); a path marks everything under it. The rules read the title, the paths and the first ${r.head} characters, and never overrule your answer. Edit them in prax.yaml, under private:.</p>
     <div class="decide-pair"><div><h4>Strong</h4><p>${(r.strong || []).map(esc).join(", ")}</p></div>
     <div><h4>Weak</h4><p>${(r.weak || []).map((g) => g.map(esc).join(" / ")).join("; ")}</p></div></div>

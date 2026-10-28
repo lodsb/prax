@@ -57,10 +57,10 @@ def test_the_recogniser_file_must_be_the_one_measured(
     wrong = tmp_path / "sface.onnx"
     wrong.write_bytes(b"not the model")
     monkeypatch.setattr(fetch, "model_file", lambda *a, **k: wrong)
-    faces._recognizer.cache_clear()
-    with pytest.raises(RuntimeError, match="not the SFace file"):
+    faces._recognizer_session.cache_clear()
+    with pytest.raises(RuntimeError, match="not the sface-2021dec file"):
         faces._recognizer()
-    faces._recognizer.cache_clear()
+    faces._recognizer_session.cache_clear()
 
 
 def _jpeg(size: tuple[int, int], shade: int) -> bytes:
@@ -124,12 +124,12 @@ def test_the_step_makes_vectors_and_alike_faces_are_found(
     # else: the stand-in answers in the order the faces are read
     looks = {0: _unit(1, 0.1), 1: _unit(1, 0.12), 2: _unit(0, 1)}
 
-    def vector(aligned: Any) -> list[float]:
+    def vector(aligned: Any, model: str) -> list[float]:
         return looks[vector.calls.pop(0)]
 
     vector.calls = [0, 1, 2]  # type: ignore[attr-defined]
     monkeypatch.setattr(faces, "vector", vector)
-    monkeypatch.setattr(faces, "align", lambda image, points: image)
+    monkeypatch.setattr(faces, "align", lambda image, points, model: image)
     due = store.face_vectors_due(con, store.FACE_MODEL, limit=10)
     assert [len(d["faces"]) for d in due] == [2, 1]
     line = step_faces.FaceVectors().run(_pass(client))

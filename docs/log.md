@@ -8967,3 +8967,81 @@ undoing an older rename after a newer one leaves the newer one's old
 name. The person page offers each undo right after its action, which is
 the order that works.
 
+
+## 2026-10-28: the quality review, every finding fixed
+
+The project's skill `code-review` in full mode, over the same range as
+the safety review: 23 findings confirmed and 3 rejected
+(`docs/eval/quality-review-2026-10-28.md`, numbered there). The user
+asked for all 23 to be fixed. Tests are in
+`tests/test_quality_2026_10_28.py` and beside the code.
+
+Where things live:
+
+- Faces are two parts. `store.graph.faces` is the graph's side: the
+  answers carried to a face read again, the groups, the matching and a
+  picture's faces. `store.retrieval.faces` is the vector side: the
+  index, the crops, `similar_faces`. A face's live answer is one SQL
+  fragment, `naming.LIVE_ANSWER`.
+- `store.personal_sql` is the one test of personal: a sensitivity, or a
+  named face. The wall's reads, `document_hidden`, `scope_documents`,
+  the counts and the rule pass all use it. `mark_suspected` writes the
+  mark for every rule, with its cue; a named face's cue is "a face in it
+  is named".
+- `store.run_name` builds every run's name. A person's actions take a
+  unique one.
+- `store.CLIENT_META` lists what a client may send in a document's meta.
+  Every other declared key is the door's.
+- `steps.base.BatchStep` is the timed batch loop of the four photo and
+  face steps.
+
+What a host chooses:
+
+- `faces.model` names the recogniser (`prax.ml.faces.RECOGNIZERS`; SFace
+  is the only entry). The face index file and the vector length are the
+  model's, and the hand-out tells the worker which model to use. The
+  `faces` section was missing from `config.SECTIONS`, so a host's
+  `faces:` was refused until now.
+- `events.gap_hours`, `min_photos`, `place_share`, `burst_hours` and
+  `folder_share`. A folder names a group only when the group holds more
+  than half of the folder's pictures, so a flat camera folder
+  (`DCIM/Camera`) no longer gives every group one name, which accepting
+  each default would have merged into one event.
+- `places.live_clips`: .mov and .mp4 by default, so Google Takeout's
+  clips are clips too.
+- `scripts/eval_faces.py` and `scripts/eval_events.py` print the tables
+  these settings are chosen from. Both are read-only and print counts
+  only. On this library the first gives the log's match table again
+  (line 0.45, margin 0.05: 2,630 named faces offered, 9 wrongly; 81 of
+  897 "nobody" faces; 651 of 5,349 open faces). The second gives the 165
+  groups of 11,184 photos at 24 hours and 8 photos.
+
+The library's language:
+
+- A place's names in `graph.language` and the label languages are
+  labels of its node. They are GeoNames' alternate names, one file per
+  country, fetched the first time a picture of that country asks.
+  Preferred is the name GeoNames prefers, never a colloquial or historic
+  one. A place node is found by the entity that answers to its name, so
+  a town renamed into German is still the town the next picture is in.
+  The gazetteer's version stays at 2, so pictures already placed get
+  their names when they are placed again.
+- An event's months are spelled in `graph.language`, and so is a
+  photo's month in its search words (`text.dates.spelled_month`, one
+  table for events, photos, worlddates and the LaTeX importer).
+
+Performance and generality:
+
+- `nearest_people` is vectorised: the same answers on 30 random sets,
+  0.189 s down to 0.101 s at this library's counts. A picture's page
+  matches only its own open faces. The named side's vectors are kept
+  until a name changes. Migration 61 indexes faces by picture.
+- `people()` counts in SQL and is kept per viewer until the store
+  changes.
+- One policy for what a derived fact may stand on (`rules.by_document`):
+  open premises first, then each hidden document's own with the open
+  ones, sourced to that document. The closures used to refuse every
+  premise that was not open.
+- The person page's events are the `attended` facts. Face groups take
+  their ids from `id_marks`. A re-read of a photo keeps the keys other
+  readings wrote in `meta.photo`.

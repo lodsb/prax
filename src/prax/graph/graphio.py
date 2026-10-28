@@ -212,7 +212,7 @@ def import_lines(
     the review queue, which pages are new or changed."""
     source = source.strip() or "file"
     producer = f"import:{source}"
-    run = f"import-{source}-{store.now().replace(':', '').replace('-', '')}"
+    run = store.run_name(f"import-{source}")
     rep = Report(source=source, run=run, ontology_here=ontology.current().version)
     records = [json.loads(line) for line in lines if line.strip()]
     if not records or records[0].get("kind") != "header":

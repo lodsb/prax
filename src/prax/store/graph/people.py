@@ -19,16 +19,19 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from collections import Counter
 from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _reading, hidden_documents
+from ..base import VIEWER, _reading, hidden_documents, store_state
 from .edges import hidden_by_premise
+from .events import RECORDED_AT
 
 PERSON_TYPE = "person"
 DEPICTS = "depicts"  # picture -> person: AT's faces write it
+ATTENDED = "attended"  # person -> event: the rule pass's chain derives it
 PERSON_FACTS_PER_RELATION = 12  # undated facts shown per relation
 PERSON_TIMELINE = 100  # dated facts shown, the earliest first
 PERSON_DOCUMENTS = 30
@@ -93,10 +96,13 @@ def _own_facts(
 
 
 def _photos_part(
-    con: sqlite3.Connection, ids: list[int], hidden: frozenset[int]
+    con: sqlite3.Connection, ids: list[int], hidden: frozenset[int], attended: set[int]
 ) -> dict[str, Any]:
     """What the pictures that depict the person say: the pictures, their
-    events and places, and who else they depict."""
+    places, and who else they depict; and the events the person
+    ``attended`` (the live facts the rule pass derives, the one answer to
+    where the person was), each with how many of the person's pictures it
+    holds and their days."""
     marks = ",".join("?" * len(ids))
     pictures: dict[int, str] = {}
     for r in con.execute(
@@ -115,7 +121,7 @@ def _photos_part(
         "places": [],
         "with": [],
     }
-    if not pictures:
+    if not pictures and not attended:
         return out
     newest = sorted(pictures, key=lambda d: (pictures[d], d), reverse=True)
     out["sample"] = newest[:PERSON_PHOTOS]
@@ -129,10 +135,12 @@ def _photos_part(
         " COALESCE(t.canonical_id, t.id) AS cid"
         " FROM edges e JOIN entities t ON t.id = e.dst"
         " WHERE e.source_doc IN (SELECT value FROM json_each(?))"
-        " AND e.rel IN ('recorded_at', 'taken_in', ?) AND e.valid_to IS NULL",
-        (docs, DEPICTS),
+        " AND e.rel IN (?, 'taken_in', ?) AND e.valid_to IS NULL",
+        (docs, RECORDED_AT, DEPICTS),
     ):
-        if r["rel"] == "recorded_at":
+        if r["rel"] == RECORDED_AT:
+            if int(r["cid"]) not in attended:
+                continue
             ev = events.setdefault(
                 int(r["cid"]),
                 {"id": int(r["cid"]), "name": r["tname"], "photos": 0, "days": set()},
@@ -144,6 +152,12 @@ def _photos_part(
             places[str(r["tname"])] += 1
         elif int(r["tid"]) not in group:
             others[(int(r["cid"]), str(r["tname"]))] += 1
+    for r in con.execute(
+        "SELECT id, name FROM entities WHERE id IN (SELECT value FROM json_each(?))",
+        (json.dumps(sorted(attended - set(events))),),
+    ):
+        # attended, by a fact no picture of theirs shows
+        events[int(r[0])] = {"id": int(r[0]), "name": r[1], "photos": 0, "days": set()}
     ranked = sorted(events.values(), key=lambda e: (-e["photos"], e["name"]))
     for ev in ranked[:PERSON_TOP]:
         days = sorted(ev.pop("days"))
@@ -175,7 +189,11 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
     edges = _own_facts(con, ids, hidden)
     if not edges:
         raise KeyError(f"no such entity: {entity_id}")
-    facts = [e for e in edges if e["rel"] != DEPICTS]
+    # the pictures and the events are the photos part's: one answer each
+    attended = {
+        int(e["other_id"]) for e in edges if e["rel"] == ATTENDED and e["dir"] == "out"
+    }
+    facts = [e for e in edges if e["rel"] not in (DEPICTS, ATTENDED)]
     persons = set(person_types())
     for f in facts:  # the page links another person to their page
         f["person"] = f["other_type"] in persons
@@ -237,7 +255,7 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
         "facts": len(facts),
         "documents": documents,
         "documents_total": len(said),
-        **_photos_part(con, ids, hidden),
+        **_photos_part(con, ids, hidden, attended),
     }
 
 
@@ -247,8 +265,30 @@ def people(
 ) -> list[dict[str, Any]]:
     """Persons, most connected first: those whose name or a label holds
     ``q``, or with none the most connected of all, each with its number of
-    visible facts and of pictures that depict it."""
+    visible facts and of pictures that depict it. Every live edge of every
+    person is counted, so the answer is kept until the store is written
+    (``store_state``): the People page asks it each time it opens, and
+    the count grows with a library's authors (0.11 s at 50,000 persons on
+    a desktop, the quality review of 2026-10-28)."""
     limit = max(1, min(limit, PEOPLE_LIMIT))
+    key = (VIEWER.get(), *store_state(con), q.strip(), limit)
+    with _PEOPLE_LOCK:
+        if key in _PEOPLE:
+            return [dict(row) for row in _PEOPLE[key]]
+    got = _people(con, q, limit)
+    with _PEOPLE_LOCK:
+        if len(_PEOPLE) >= _PEOPLE_KEPT:
+            _PEOPLE.pop(next(iter(_PEOPLE)))
+        _PEOPLE[key] = got
+    return [dict(row) for row in got]
+
+
+_PEOPLE_KEPT = 8
+_PEOPLE: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+_PEOPLE_LOCK = threading.Lock()
+
+
+def _people(con: sqlite3.Connection, q: str, limit: int) -> list[dict[str, Any]]:
     types = person_types()
     hidden = hidden_documents(con)
     marks = ",".join("?" * len(types))
@@ -264,19 +304,21 @@ def people(
     photos: Counter[int] = Counter()
     for end in ("src", "dst"):
         for r in con.execute(
-            # a person merged into a thing of another type is that thing
-            f"SELECT c.id AS cid, e.rel, e.source_doc FROM entities n"
+            # a person merged into a thing of another type is that thing;
+            # counted in SQL by document, which is what the wall needs
+            f"SELECT c.id AS cid, e.rel = ? AS shown, e.source_doc, count(*) AS n"
+            f" FROM entities n"
             f" JOIN entities c ON c.id = COALESCE(n.canonical_id, n.id)"
             f" JOIN edges e ON e.{end} = n.id AND e.valid_to IS NULL"
-            f" WHERE c.type IN ({marks}){where}",
-            (*types, *args),
+            f" WHERE c.type IN ({marks}){where} GROUP BY 1, 2, 3",
+            (DEPICTS, *types, *args),
         ):
             if r["source_doc"] is not None and int(r["source_doc"]) in hidden:
                 continue
-            if r["rel"] != DEPICTS:
-                counts[int(r["cid"])] += 1
+            if not r["shown"]:
+                counts[int(r["cid"])] += int(r["n"])
             elif end == "dst":
-                photos[int(r["cid"])] += 1
+                photos[int(r["cid"])] += int(r["n"])
     seen = set(counts) | set(photos)
     ranked = sorted(seen, key=lambda i: (-photos[i], -counts[i], i))[:limit]
     names = {

@@ -19,6 +19,7 @@ from ..base import (
     domain_clause,
     hidden_documents,
     now,
+    personal_sql,
 )
 from .meta import _put_meta, get_meta, set_meta
 
@@ -312,7 +313,7 @@ RULE_KEYS = frozenset(
 # a document marked personal or suspected is never placed by a rule: the
 # paperwork stays without a set (the user, 2026-09-30), and a new label
 # alone would otherwise place it (five were about to be, 2026-10-01)
-_NOT_PERSONAL = " AND sensitivity IS NULL"
+_NOT_PERSONAL = f" AND NOT {personal_sql('documents')}"
 
 
 def _check_rule(rule: dict[str, Any]) -> None:
@@ -804,12 +805,20 @@ def suspected_page(
 @_reading
 def sensitivity_counts(con: sqlite3.Connection) -> dict[str, int]:
     """How many documents are suspected personal, marked personal by a
-    person, and released by a person: the admin page's summary."""
+    person, released by a person, and hidden although released, for a face
+    in them a person named (``personal_sql``): the admin page's summary."""
     row = con.execute(
         "SELECT"
-        " sum(sensitivity = 'suspected'),"
-        " sum(sensitivity = 'personal'),"
-        " sum(sensitivity IS NULL AND json_extract(meta, '$.sensitivity.by') = 'human')"
-        " FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
+        " sum(d.sensitivity = 'suspected'),"
+        " sum(d.sensitivity = 'personal'),"
+        " sum(d.sensitivity IS NULL"
+        "     AND json_extract(d.meta, '$.sensitivity.by') = 'human'),"
+        f" sum(d.sensitivity IS NULL AND {personal_sql('d')})"
+        " FROM documents d WHERE json_extract(d.meta, '$.retired') IS NULL"
     ).fetchone()
-    return {"suspected": row[0] or 0, "personal": row[1] or 0, "released": row[2] or 0}
+    return {
+        "suspected": row[0] or 0,
+        "personal": row[1] or 0,
+        "released": row[2] or 0,
+        "named_faces": row[3] or 0,
+    }

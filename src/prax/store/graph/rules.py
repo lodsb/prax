@@ -35,7 +35,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _NOW, _reading, _scrubbed, _serialized
+from ..base import _NOW, _reading, _scrubbed, _serialized, personal_sql
 from .edges import Edge, end_edges, link
 
 RULE_CAP = 20_000  # derivations a relation at most
@@ -47,42 +47,22 @@ Pair = tuple[int, int]
 Plan = dict[Pair, list[int]]  # (src, dst) canonical entities -> premise edge ids
 # (edge id, src, dst, world_from, source_doc, how hidden its document is)
 Premise = tuple[int, int, int, str | None, int | None, int]
-SENSITIVITY_RANK = {None: 0, "suspected": 1, "personal": 2}
 
 
 @_reading
-def _premise_edges(
-    con: sqlite3.Connection, rel: str
-) -> list[tuple[int, int, int, str | None]]:
-    """The live asserted edges of ``rel`` a rule may stand on: ``(edge id,
-    src, dst, world_from)``, the ends as their canonical entities. Not a
-    rule's own edge, not one from a document that is personal, suspected
-    or retired."""
-    rows = con.execute(
-        """
-        SELECT e.id, COALESCE(s.canonical_id, s.id) AS src,
-               COALESCE(t.canonical_id, t.id) AS dst, e.world_from
-        FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
-        LEFT JOIN documents d ON d.id = e.source_doc
-        WHERE e.rel = ? AND e.valid_to IS NULL
-          AND COALESCE(e.producer, '') NOT LIKE 'rule:%'
-          AND (e.source_doc IS NULL OR (d.sensitivity IS NULL
-               AND json_extract(d.meta, '$.retired') IS NULL))
-        """,
-        (rel,),
-    ).fetchall()
-    return [(int(r[0]), int(r[1]), int(r[2]), r[3]) for r in rows if r[1] != r[2]]
-
-
-@_reading
-def _chain_edges(con: sqlite3.Connection, rel: str) -> list[Premise]:
-    """The live asserted edges of ``rel`` a chain may stand on, of any
+def _premises(con: sqlite3.Connection, rel: str) -> list[Premise]:
+    """The live asserted edges of ``rel`` a rule may stand on, of any
     document but a retired one, each with its document and how hidden it
-    is (``SENSITIVITY_RANK``); the ends as their canonical entities."""
+    is: 0 open, 1 suspected or personal for another reason
+    (``store.personal_sql``), 2 marked personal; the ends as their
+    canonical entities. Not a rule's own edge."""
     rows = con.execute(
-        """
+        f"""
         SELECT e.id, COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id),
-               e.world_from, e.source_doc, d.sensitivity
+               e.world_from, e.source_doc,
+               CASE WHEN d.id IS NULL THEN 0
+                    WHEN d.sensitivity = 'personal' THEN 2
+                    WHEN {personal_sql("d")} THEN 1 ELSE 0 END
         FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
         LEFT JOIN documents d ON d.id = e.source_doc
         WHERE e.rel = ? AND e.valid_to IS NULL
@@ -98,11 +78,44 @@ def _chain_edges(con: sqlite3.Connection, rel: str) -> list[Premise]:
             int(r[2]),
             r[3],
             None if r[4] is None else int(r[4]),
-            SENSITIVITY_RANK.get(r[5], 2),
+            int(r[5]),
         )
         for r in rows
         if r[1] != r[2]
     ]
+
+
+def by_document(
+    premises: list[Premise],
+    derive: Callable[..., Plan],
+    *,
+    cap: int,
+) -> tuple[Plan, dict[Pair, int | None]]:
+    """What one rule derives, and the document each fact is sourced to:
+    from the open premises first (sourced to none), then from the premises
+    of each other document alone, the most open first (sourced to it, so
+    the wall hides the fact with it). The policy every kind shares with
+    ``chain``: a fact stands on what one document says, or on what open
+    documents say, never on two documents that are not both open."""
+    stated = {(p[1], p[2]) for p in premises}
+    openly = [p[:4] for p in premises if p[5] == 0]
+    plan = derive(openly, cap=cap)
+    sources: dict[Pair, int | None] = dict.fromkeys(plan, None)
+    hidden: dict[int, list[Premise]] = defaultdict(list)
+    for p in premises:
+        if p[5] and p[4] is not None:
+            hidden[p[4]].append(p)
+    for doc in sorted(hidden, key=lambda d: (min(p[5] for p in hidden[d]), d)):
+        if len(plan) >= cap:
+            break
+        for pair, edges in derive([p[:4] for p in hidden[doc]], cap=cap).items():
+            if pair in plan or pair in stated:
+                continue
+            plan[pair] = edges
+            sources[pair] = doc
+            if len(plan) >= cap:
+                break
+    return plan, sources
 
 
 def chain(
@@ -323,11 +336,18 @@ def _write(
 
 
 @_reading
-def _source_of(con: sqlite3.Connection, edge_id: int) -> int | None:
-    row = con.execute(
-        "SELECT source_doc FROM edges WHERE id = ?", (edge_id,)
-    ).fetchone()
-    return None if row is None or row[0] is None else int(row[0])
+def _sources_of(con: sqlite3.Connection, edge_ids: list[int]) -> dict[int, int | None]:
+    """Each edge's document, or None."""
+    out: dict[int, int | None] = {}
+    for i in range(0, len(edge_ids), 500):
+        part = edge_ids[i : i + 500]
+        for r in con.execute(
+            "SELECT id, source_doc FROM edges WHERE id IN"
+            f" ({','.join('?' * len(part))})",
+            part,
+        ):
+            out[int(r[0])] = None if r[1] is None else int(r[1])
+    return out
 
 
 @_serialized
@@ -373,40 +393,39 @@ def derive_rules(
             jobs.append((r.name, r.name, "chain"))
     report: dict[str, dict[str, int]] = {}
     for read, writes, kind in sorted(jobs):
-        sources: dict[Pair, int | None] = {}
         if kind == "chain":
             first, second = (
-                _oriented(_chain_edges(con, s.removeprefix("~")), s)
+                _oriented(_premises(con, s.removeprefix("~")), s)
                 for s in onto.relations[read].chain
             )
             plan, sources = chain(first, second, cap=cap)
-            stated = {(p[1], p[2]) for p in _chain_edges(con, writes)}
-            plan = {k: v for k, v in plan.items() if k not in stated}
-            edges = [(p[0], p[1], p[2], p[3]) for p in first + second]
+            premises = first + second
         else:
-            edges = _premise_edges(con, read)
+            premises = _premises(con, read)
             if read == "part_of":
                 doubted = {int(x["edge_id"]) for x in part_of_suspects(con)}
-                edges = [e for e in edges if e[0] not in doubted]
-            plan = (
-                closure(edges, cap=cap)
-                if kind == "transitive"
-                else converse(edges, cap=cap)
+                premises = [p for p in premises if p[0] not in doubted]
+            plan, sources = by_document(
+                premises,
+                closure if kind == "transitive" else converse,
+                cap=cap,
             )
-        if kind == "inverse":
-            stated_inverse = {(a, b) for _, a, b, _ in _premise_edges(con, writes)}
-            plan = {k: v for k, v in plan.items() if k not in stated_inverse}
+        if kind in ("chain", "inverse"):
+            # what the relation written states already is not derived
+            stated = {(p[1], p[2]) for p in _premises(con, writes)}
+            plan = {k: v for k, v in plan.items() if k not in stated}
+        edges = [(p[0], p[1], p[2], p[3]) for p in premises]
         run = f"rule:{writes}" if kind != "inverse" else f"rule:{writes}<-{read}"
         held = _rule_edges(con, run)
-        if kind == "chain":
-            # a chain's fact is hidden with its document: one that would
-            # be sourced elsewhere now is ended and written again
-            for k in [
-                k
-                for k, ids in held.items()
-                if k in plan and _source_of(con, ids[0]) != sources.get(k)
-            ]:
-                _end(con, held.pop(k))
+        # a fact is hidden with its document: one that would be sourced
+        # elsewhere now is ended and written again
+        now_from = _sources_of(con, [ids[0] for k, ids in held.items() if k in plan])
+        for k in [
+            k
+            for k, ids in held.items()
+            if k in plan and now_from.get(ids[0]) != sources.get(k)
+        ]:
+            _end(con, held.pop(k))
         # one edge stands for a pair; a second one a merge folded onto it
         # is ended with those that no longer follow
         have = {k: ids[0] for k, ids in held.items()}

@@ -8,7 +8,7 @@ from typing import Any
 
 from prax.text import language
 
-from ..base import _NOW, _reading, _serialized, now
+from ..base import _NOW, _reading, _serialized, run_name
 from .edges import _entity_id
 
 PERSON = "human"  # who a decision on the review page is signed by
@@ -462,7 +462,7 @@ def decide_pair(
     if same and len(group) == 1:
         pass  # one thing already (a merge confirmed): the decision is recorded
     elif same:
-        run = f"decide-{now().replace(':', '').replace('-', '')}-{other}"
+        run = run_name("decide", other, unique=True)
         merge_entities(
             con, other, keep, across_types=across_types, producer=by, run=run
         )

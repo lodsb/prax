@@ -167,13 +167,14 @@ def test_document_context(client: TestClient) -> None:
             "text": "a",
             "title": "Paper A",
             "meta": {
-                "summary": "A is about grains.",
                 "collections": ["Synthesis"],
                 "tags": ["granular"],
                 "zotero": {"kind": "attachment", "keys": ["ATT1"], "items": ["ITEM1"]},
             },
         },
     ).json()["doc_id"]
+    # the summary is the door's own (a client may not send one)
+    store.set_summary(con, a, "A is about grains.", source="test")
     b = client.post("/ingest", json={"text": "b", "title": "Paper B"}).json()["doc_id"]
     c = client.post("/ingest", json={"text": "c", "title": "Paper C"}).json()["doc_id"]
     note = client.post(

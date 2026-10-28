@@ -242,3 +242,33 @@ def test_a_person_splits_a_group_and_the_cut_is_kept(
     assert client.post(f"/graph/events/{second['id']}/join").json()["candidates"] == 1
     assert store.event_candidates_page(con)["items"][0]["photos"] == 19
     assert client.post("/graph/events/999999/split", json={"at": at}).status_code == 404
+
+
+def test_a_phones_one_camera_folder_names_no_group(con: sqlite3.Connection) -> None:
+    """Every group in one flat folder (DCIM/Camera): its name would join
+    them all, so each is named by its place and time instead."""
+    _photos(con, "2019-05-03T10:00:00", 10, folder="phone/DCIM/Camera", tag="a")
+    _photos(con, "2019-08-20T10:00:00", 10, folder="tablet/DCIM/Camera", tag="b")
+    groups = store.photo_groups(con)
+    assert len(groups) == 2
+    assert all(g["folder"] == "" for g in groups)
+    assert len({g["suggestion"] for g in groups}) == 2
+    # a folder a group holds alone still names it
+    _photos(con, "2020-02-01T10:00:00", 9, folder="Wedding Anna", tag="w")
+    assert store.photo_groups(con)[-1]["suggestion"] == "Wedding Anna"
+
+
+def test_how_photos_are_grouped_is_the_hosts(
+    con: sqlite3.Connection, data_dir: Any
+) -> None:
+    """``events`` in prax.yaml: a gap of 2 hours splits a day in two."""
+    from prax import config
+
+    _photos(con, "2019-05-03T08:00:00", 10, every_minutes=20, tag="m")
+    _photos(con, "2019-05-03T15:00:00", 10, every_minutes=20, tag="a")
+    assert len(store.photo_groups(con)) == 1
+    (data_dir / config.CONFIG_NAME).write_text(
+        "events:\n  gap_hours: 2\n  min_photos: 5\n", "utf-8"
+    )
+    assert store.event_settings()["gap_hours"] == 2
+    assert len(store.photo_groups(con)) == 2

@@ -112,8 +112,13 @@ def _library(con: sqlite3.Connection) -> dict[str, int]:
 def test_a_person_page_gathers_every_source(con: sqlite3.Connection) -> None:
     docs = _library(con)
     ada = _entity(con, "Ada Quill")
+    # where she was is the rule pass's attended, which the night derives
+    assert store.person_page(con, ada)["events"] == []
+    store.derive_rules(con)
     page = store.person_page(con, ada)
     assert page["name"] == "Ada Quill" and page["type"] == "person"
+    # the event is the photos part's, never a fact of the timeline too
+    assert all(f["rel"] != "attended" for f in page["timeline"])
     assert [lab["label"] for lab in page["labels"]] == ["A. Quill"]
     # the dated fact in the order it holds, the rest by relation
     (dated,) = page["timeline"]

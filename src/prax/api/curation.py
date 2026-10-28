@@ -120,7 +120,7 @@ def merge(req: MergeReq, request: Request) -> dict[str, Any]:
     person's answer to what ``split-names`` lists, where resolution will
     not decide. Filed under a run like any merge, so ``/graph/unmerge``
     takes it back; nothing is deleted."""
-    run = req.run or "merge-" + store.now().replace(":", "").replace("-", "")
+    run = req.run or store.run_name("merge", unique=True)
     try:
         store.merge_entities(
             _con(request),

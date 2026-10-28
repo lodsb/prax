@@ -113,8 +113,10 @@ def test_a_personal_documents_facts_derive_nothing(con: sqlite3.Connection) -> N
     _part_of(con, "Lab", "Department", doc)
     _part_of(con, "Department", "University")
     report = store.derive_rules(con)
+    # both are premises; the personal one stands alone (one document, one
+    # edge), and with the open one would make a fact of two documents
     assert report["rule:part_of"]["added"] == 0
-    assert report["rule:part_of"]["premises"] == 1
+    assert report["rule:part_of"]["premises"] == 2
 
 
 def test_the_cap_holds(con: sqlite3.Connection) -> None:

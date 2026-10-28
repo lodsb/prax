@@ -129,13 +129,9 @@ def register_references(
         if private:
             # suspected, not personal: a person releases it or confirms it
             state = "suspected"
-            at = now()
-            made_meta["private"] = {
-                "cues": [f"referenced: {mime.split('/')[0]}"],
-                "at": at,
-                "read": False,
-            }
-            made_meta["sensitivity"] = {"state": state, "by": "rules", "at": at}
+            _suspected(
+                made_meta, [f"referenced: {mime.split('/')[0]}"], "rules", read=False
+            )
         cur = con.execute(
             "INSERT INTO documents"
             " (hash, mime, title, original_path, meta, held, sensitivity)"
@@ -574,6 +570,40 @@ def _person_decided(meta: dict[str, Any]) -> bool:
     return (meta.get("sensitivity") or {}).get("by") == "human"
 
 
+def _suspected(
+    meta: dict[str, Any], cues: list[str], by: str, **private: Any
+) -> dict[str, Any]:
+    """``meta`` marked as a rule's ``suspected``: its cues (the reasons the
+    Admin page's "personal?" list shows) in ``meta.private``, and the state
+    with who set it in ``meta.sensitivity``."""
+    at = now()
+    meta["private"] = {**(meta.get("private") or {}), **private, "cues": cues, "at": at}
+    meta["sensitivity"] = {"state": "suspected", "by": by, "at": at}
+    return meta
+
+
+def mark_suspected(
+    con: sqlite3.Connection, doc_id: int, cues: list[str], *, by: str
+) -> bool:
+    """A rule's mark on one document: ``suspected``, with its ``cues``, when
+    it is open and no person has decided about it (the wall's stage V: a
+    rule suspects, a person decides). The one writer of that mark; the
+    caller commits. True when it was marked."""
+    row = con.execute(
+        "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"] or "{}")
+    if row["sensitivity"] is not None or _person_decided(meta):
+        return False
+    con.execute(
+        "UPDATE documents SET sensitivity = 'suspected', meta = ? WHERE id = ?",
+        (json.dumps(_suspected(meta, cues, by)), doc_id),
+    )
+    return True
+
+
 @_serialized
 def suspect(
     con: sqlite3.Connection,
@@ -629,16 +659,18 @@ def suspect(
         # nothing to keep: a document with no cue carries no mark, and the
         # nightly pass reads it again (a file read, no write)
         return cues
-    meta["private"] = {
-        "rules": rules.stamp(),
-        "cues": cues,
-        "at": now(),
-        "read": bool(text) or bool(row["text_hash"]),
-    }
+    read = bool(text) or bool(row["text_hash"])
     state = None
     if rules.suspect(cues):
         state = "suspected"
-        meta["sensitivity"] = {"state": state, "by": "rules", "at": now()}
+        _suspected(meta, cues, "rules", rules=rules.stamp(), read=read)
+    else:
+        meta["private"] = {
+            "rules": rules.stamp(),
+            "cues": cues,
+            "at": now(),
+            "read": read,
+        }
     con.execute(
         "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
         (state, json.dumps(meta), doc_id),

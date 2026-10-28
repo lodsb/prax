@@ -72,7 +72,12 @@ def test_the_rules_in_force_count_the_names_and_never_show_them(
         "kontoauszug" in r["strong"]
         and ["rechnung", "invoice", "quittung", "receipt"] in r["weak"]
     )
-    assert r["documents"] == {"suspected": 0, "personal": 0, "released": 0}
+    assert r["documents"] == {
+        "suspected": 0,
+        "personal": 0,
+        "released": 0,
+        "named_faces": 0,
+    }
 
 
 def test_a_named_token_reaches_no_admin_route(client: TestClient) -> None:

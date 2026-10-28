@@ -42,12 +42,14 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import Any
 
-from prax.text import mimes
+from prax import config
+from prax.text import dates, mimes
 
-from ..base import _reading, _serialized, now
+from ..base import _reading, _serialized, now, run_name
 from .edges import Edge, document_node, link, retire_run
-from .labels import PERSON
+from .labels import PERSON, display_language
 
+RECORDED_AT = "recorded_at"  # a picture to the event it was taken at
 EVENT_GAP_HOURS = 24
 EVENT_MIN_PHOTOS = 8
 # a place names the event when this share of its placed photos is there
@@ -57,21 +59,27 @@ EVENT_NAME_CHARS = 120
 EVENT_STATES = ("open", "event", "not")
 # where the page offers a cut: before a run of photos with no gap this long
 EVENT_BURST_HOURS = 3
+# a folder names a group that holds more than this share of its pictures
+EVENT_FOLDER_SHARE = 0.5
+
+
+def event_settings() -> dict[str, float]:
+    """The grouping's numbers, ``events`` in prax.yaml, read at call time:
+    a host whose owner photographs every day, or seldom, sets its own
+    (``scripts/eval_events.py`` prints the groups each gap would make).
+    The defaults above were measured on one library (2026-10-26)."""
+    return {
+        "gap_hours": config.number("events.gap_hours", default=EVENT_GAP_HOURS),
+        "min_photos": config.whole("events.min_photos", default=EVENT_MIN_PHOTOS),
+        "place_share": config.number("events.place_share", default=EVENT_PLACE_SHARE),
+        "burst_hours": config.number("events.burst_hours", default=EVENT_BURST_HOURS),
+        "folder_share": config.number(
+            "events.folder_share", default=EVENT_FOLDER_SHARE
+        ),
+    }
+
+
 EVENT_BURST_SAMPLE = 6
-_MONTH_NAMES = (
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-)
 _LETTER = re.compile(r"[^\W\d_]")
 
 
@@ -84,7 +92,9 @@ def _when(taken: str) -> datetime | None:
 
 def _months(first: datetime, last: datetime) -> str:
     """``May 2018``, ``May – June 2018``, ``December 2019 – January 2020``."""
-    a, b = _MONTH_NAMES[first.month - 1], _MONTH_NAMES[last.month - 1]
+    lang = display_language()
+    a = dates.spelled_month(first.month, lang)
+    b = dates.spelled_month(last.month, lang)
     if (first.year, first.month) == (last.year, last.month):
         return f"{a} {first.year}"
     if first.year == last.year:
@@ -94,7 +104,9 @@ def _months(first: datetime, last: datetime) -> str:
 
 def _days(first: datetime, last: datetime) -> str:
     """``3 May 2018``, ``3 – 5 May 2018``, ``30 May – 2 June 2018``."""
-    a, b = _MONTH_NAMES[first.month - 1], _MONTH_NAMES[last.month - 1]
+    lang = display_language()
+    a = dates.spelled_month(first.month, lang)
+    b = dates.spelled_month(last.month, lang)
     if first.date() == last.date():
         return f"{first.day} {a} {first.year}"
     if (first.year, first.month) == (last.year, last.month):
@@ -153,6 +165,11 @@ def photo_groups(con: sqlite3.Connection) -> list[dict[str, Any]]:
         if r["path"]:
             got["folders"].add(_folder_name(str(r["path"])))
     ordered = sorted(photos.values(), key=lambda p: (p["when"], p["id"]))
+    knobs = event_settings()
+    # how many dated pictures each folder holds: a folder names a group
+    # only when the group holds most of them (a phone's one camera folder
+    # holds every group, and naming each after it joins them all)
+    in_folder = Counter(f for p in ordered for f in p["folders"] if f)
     cuts = sorted(
         (when, str(r[0]))
         for r in con.execute("SELECT at FROM event_cuts")
@@ -171,7 +188,7 @@ def photo_groups(con: sqlite3.Connection) -> list[dict[str, Any]]:
         if (
             last is None
             or cut
-            or (p["when"] - last["when"]).total_seconds() >= EVENT_GAP_HOURS * 3600
+            or (p["when"] - last["when"]).total_seconds() >= knobs["gap_hours"] * 3600
             or (p["country"] and last["country"] and p["country"] != last["country"])
         ):
             runs.append([p])
@@ -180,14 +197,16 @@ def photo_groups(con: sqlite3.Connection) -> list[dict[str, Any]]:
             runs[-1].append(p)
     out = []
     for run, cut in zip(runs, starts, strict=True):
-        if len(run) < EVENT_MIN_PHOTOS:
+        if len(run) < knobs["min_photos"]:
             continue
         first, last = run[0]["when"], run[-1]["when"]
         placed = [p for p in run if p["town"]]
-        place = _dominant([p["town"] for p in placed], EVENT_PLACE_SHARE)
-        country = _dominant([p["country"] for p in placed], EVENT_PLACE_SHARE)
+        place = _dominant([p["town"] for p in placed], knobs["place_share"])
+        country = _dominant([p["country"] for p in placed], knobs["place_share"])
         named = [f for p in run for f in p["folders"] if f]
         folder = _dominant(named, 0.5) if len(named) >= len(run) / 2 else ""
+        if folder and named.count(folder) <= knobs["folder_share"] * in_folder[folder]:
+            folder = ""  # the folder holds more than this group: no name
         where = f"{place}, {country}" if place and country != place else place
         where = where or country
         months = _months(first, last)
@@ -346,7 +365,10 @@ def event_timeline(con: sqlite3.Connection, candidate_id: int) -> dict[str, Any]
         when = _when(str(r["taken"] or ""))
         if when is None:
             continue
-        if last is None or (when - last).total_seconds() >= EVENT_BURST_HOURS * 3600:
+        if (
+            last is None
+            or (when - last).total_seconds() >= event_settings()["burst_hours"] * 3600
+        ):
             bursts.append({"first": when.isoformat(), "docs": []})
         bursts[-1]["last"] = when.isoformat()
         bursts[-1]["docs"].append(int(r["doc_id"]))
@@ -393,7 +415,11 @@ def _drop_cut(con: sqlite3.Connection, candidate_id: int) -> str:
     # a decided group that ends within the gap before the cut would be
     # joined to an open one; one further back is not reached
     start = _when(row["first_taken"])
-    reach = (start - timedelta(hours=EVENT_GAP_HOURS)).isoformat() if start else ""
+    reach = (
+        (start - timedelta(hours=event_settings()["gap_hours"])).isoformat()
+        if start
+        else ""
+    )
     before = con.execute(
         "SELECT 1 FROM event_candidates WHERE state != 'open'"
         " AND last_taken < ? AND last_taken >= ?",
@@ -486,7 +512,7 @@ def decide_event(
     title = " ".join((name or "").split())[:EVENT_NAME_CHARS]
     if not title:
         raise ValueError("an event needs a name")
-    run = f"event-{now().replace(':', '').replace('-', '')}-{candidate_id}"
+    run = run_name("event", candidate_id, unique=True)
     first_day, last_day = row["first_taken"][:10], row["last_taken"][:10]
     said = (
         f"one of {row['photos']} photos taken {first_day} to {last_day},"
@@ -510,7 +536,7 @@ def decide_event(
         day = str(m["taken"] or "")[:10]
         link(
             con,
-            Edge(node, ntype, "recorded_at", title, "event"),
+            Edge(node, ntype, RECORDED_AT, title, "event"),
             source_doc=int(m["id"]),
             evidence=said,
             producer=by,

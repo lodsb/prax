@@ -31,11 +31,11 @@ route reaches these writes.
 from __future__ import annotations
 
 import json
-import secrets
 import sqlite3
 from typing import Any
 
-from ..base import _reading, _serialized, document_hidden, now
+from ..base import _reading, _serialized, document_hidden, now, run_name
+from ..documents import mark_suspected
 from .edges import Edge, document_node, end_edge, link
 from .labels import PERSON, add_label, display_language, merge_entities
 from .people import DEPICTS, person_types
@@ -43,6 +43,13 @@ from .people import DEPICTS, person_types
 FACE_VERDICTS = ("person", "not_face", "nobody")
 FACE_NAME_CHARS = 120
 FACES_AT_ONCE = 2000  # faces one action may answer for
+# a face's live answer as the person they are now: a merge folds the
+# entity named, and every read of an answer shows the canonical one
+LIVE_ANSWER = (
+    " LEFT JOIN face_names n ON n.face_id = f.id AND n.ended_at IS NULL"
+    " LEFT JOIN entities x ON x.id = n.entity_id"
+    " LEFT JOIN entities e ON e.id = COALESCE(x.canonical_id, x.id)"
+)
 
 
 def _faces(
@@ -74,7 +81,7 @@ def _faces(
 def _run(kind: str) -> str:
     """An action's run: its second and a few random letters, since a
     person answers for two groups within one second."""
-    return f"{kind}-{now().replace(':', '').replace('-', '')}-{secrets.token_hex(3)}"
+    return run_name(kind, unique=True)
 
 
 def _end_answers(con: sqlite3.Connection, face_ids: list[int], run: str) -> int:
@@ -101,6 +108,48 @@ def _end_answers(con: sqlite3.Connection, face_ids: list[int], run: str) -> int:
         if held is None and end_edge(con, edge, run=run):
             ended += 1
     return ended
+
+
+def _carry_answers(con: sqlite3.Connection, moves: dict[int, int], at: str) -> int:
+    """What a person said of each old face, said of its successor: the
+    live answer and refusals ended on the old face and written again on
+    the new one with their run, person, edge and time, so an undo of
+    their action takes them back as before. Returns the faces carried."""
+    carried = 0
+    for old, new in moves.items():
+        for r in con.execute(
+            "SELECT * FROM face_names WHERE face_id = ? AND ended_at IS NULL", (old,)
+        ).fetchall():
+            con.execute(
+                "UPDATE face_names SET ended_at = ? WHERE id = ?", (at, r["id"])
+            )
+            con.execute(
+                "INSERT INTO face_names (face_id, verdict, entity_id, edge_id, by,"
+                " run, said_at) VALUES (?,?,?,?,?,?,?)",
+                (
+                    new,
+                    r["verdict"],
+                    r["entity_id"],
+                    r["edge_id"],
+                    r["by"],
+                    r["run"],
+                    r["said_at"],
+                ),
+            )
+            carried += 1
+        for r in con.execute(
+            "SELECT * FROM face_refusals WHERE face_id = ? AND ended_at IS NULL",
+            (old,),
+        ).fetchall():
+            con.execute(
+                "UPDATE face_refusals SET ended_at = ? WHERE id = ?", (at, r["id"])
+            )
+            con.execute(
+                "INSERT INTO face_refusals (face_id, entity_id, by, run, said_at)"
+                " VALUES (?,?,?,?,?)",
+                (new, r["entity_id"], r["by"], r["run"], r["said_at"]),
+            )
+    return carried
 
 
 def _end_refusals(
@@ -157,23 +206,10 @@ def _person(
 
 
 def _suspect_picture(con: sqlite3.Connection, doc_id: int) -> bool:
-    """A picture with a named face marked ``suspected``, when it is open
-    and no person has decided about it. True when it was marked."""
-    row = con.execute(
-        "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    meta = json.loads(row["meta"] or "{}")
-    if (
-        row["sensitivity"] is not None
-        or (meta.get("sensitivity") or {}).get("by") == "human"
-    ):
-        return False
-    meta["sensitivity"] = {"state": "suspected", "by": "faces", "at": now()}
-    con.execute(
-        "UPDATE documents SET sensitivity = 'suspected', meta = ? WHERE id = ?",
-        (json.dumps(meta), doc_id),
-    )
-    return True
+    """A picture with a named face marked ``suspected`` (``mark_suspected``:
+    when it is open and no person has decided about it), with the cue the
+    Admin page's "personal?" list shows. True when it was marked."""
+    return mark_suspected(con, doc_id, ["a face in it is named"], by="faces")
 
 
 @_serialized
@@ -359,10 +395,8 @@ def face_answers(con: sqlite3.Connection, face_ids: list[int]) -> dict[int, Any]
     for r in con.execute(
         # the person as they are now: a merge folds the entity named
         "SELECT n.face_id, n.verdict, e.id AS entity_id, n.run, f.doc_id, e.name"
-        " FROM face_names n JOIN faces f ON f.id = n.face_id"
-        " LEFT JOIN entities x ON x.id = n.entity_id"
-        " LEFT JOIN entities e ON e.id = COALESCE(x.canonical_id, x.id)"
-        " WHERE n.ended_at IS NULL AND n.face_id IN (SELECT value FROM json_each(?))",
+        " FROM faces f" + LIVE_ANSWER + " WHERE n.id IS NOT NULL"
+        " AND f.id IN (SELECT value FROM json_each(?))",
         (json.dumps(sorted({int(f) for f in face_ids})),),
     ):
         if document_hidden(con, int(r["doc_id"])):

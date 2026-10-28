@@ -202,19 +202,20 @@ def detect(image: Any, *, score: float = SCORE) -> list[Face]:
 
 
 # ------------------------------------------------------------ recognition
-# What a face looks like as 128 numbers (plan item AT step 2): SFace
-# (OpenCV Zoo, Apache 2.0, 37 MB of ONNX) over the face aligned to the
-# five points it was trained with, as OpenCV's ``FaceRecognizerSF`` aligns
-# it. Two faces are one person's when their cosine similarity reaches
-# ``MATCH``, the line OpenCV's demo uses; a library's own line is measured
-# in step 5 (``faces.match`` in prax.yaml), never fixed here.
+# What a face looks like as numbers (plan item AT step 2): a recogniser of
+# ``RECOGNIZERS``, the host's choice (``faces.model`` in prax.yaml), SFace
+# by default (OpenCV Zoo, Apache 2.0, 37 MB of ONNX, 128 numbers) over the
+# face aligned to the five points it was trained with, as OpenCV's
+# ``FaceRecognizerSF`` aligns it. Each model has its own index file and
+# its own line for two faces being one person's, measured
+# (``faces.match.line``, ``scripts/eval_faces.py``) and read by every
+# match, never fixed here.
 SFACE_REPO = "opencv/face_recognition_sface"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
 SFACE_REVISION = "3d7082438a6e4551e840c9b2bb60b71e8da4b524"
 SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
 RECOGNIZER = "sface-2021dec"
 DIM = 128
-MATCH = 0.363
 ALIGNED_PX = 112
 # where the five landmarks lie in an aligned face of 112 x 112
 TEMPLATE = (
@@ -224,21 +225,77 @@ TEMPLATE = (
     (41.5493, 92.3655),
     (70.7299, 92.2041),
 )
+
+
+@dataclass(frozen=True)
+class Recognizer:
+    """A face recogniser: its file (a Hugging Face repo, pinned to a
+    revision and checked by sha256), how many numbers it gives, and the
+    aligned face it reads (its side in pixels and where the five landmarks
+    lie in it). It reads RGB from 0 to 255, as SFace does; a model that
+    reads otherwise needs its own ``vector``."""
+
+    name: str
+    repo: str
+    file: str
+    revision: str
+    sha256: str
+    dim: int
+    aligned_px: int
+    template: tuple[tuple[float, float], ...]
+
+
+RECOGNIZERS = {
+    RECOGNIZER: Recognizer(
+        RECOGNIZER,
+        SFACE_REPO,
+        SFACE_FILE,
+        SFACE_REVISION,
+        SFACE_SHA256,
+        DIM,
+        ALIGNED_PX,
+        TEMPLATE,
+    ),
+}
+
+
+def recognizer(name: str | None = None) -> Recognizer:
+    """The recogniser ``name``, or the host's (``faces.model``); a name
+    prax does not know is refused rather than read as SFace."""
+    from prax import config
+
+    chosen = name or str(
+        config.setting("faces.model", "PRAX_FACES_MODEL", RECOGNIZER) or RECOGNIZER
+    )
+    if chosen not in RECOGNIZERS:
+        known = ", ".join(sorted(RECOGNIZERS))
+        raise ValueError(
+            f"faces.model {chosen!r} is not a recogniser of prax ({known})"
+        )
+    return RECOGNIZERS[chosen]
+
+
 CROP_PX = 160  # the face as the Review page shows it
 CROP_MARGIN = 1.6  # the square's side, in the face box's longer side
 CROP_QUALITY = 82
 
 
+def _recognizer(name: str | None = None) -> Any:
+    """The host's recogniser (or ``name``) as an ONNX session, loaded once."""
+    return _recognizer_session(recognizer(name).name)
+
+
 @functools.cache
-def _recognizer() -> Any:
+def _recognizer_session(name: str) -> Any:
     import hashlib
 
     from prax.ml import fetch
 
-    path = fetch.model_file(SFACE_REPO, SFACE_FILE, revision=SFACE_REVISION)
-    if hashlib.sha256(path.read_bytes()).hexdigest() != SFACE_SHA256:
+    spec = RECOGNIZERS[name]
+    path = fetch.model_file(spec.repo, spec.file, revision=spec.revision)
+    if hashlib.sha256(path.read_bytes()).hexdigest() != spec.sha256:
         path.unlink(missing_ok=True)  # fetched again next time
-        raise RuntimeError(f"{path} is not the SFace file prax was measured with")
+        raise RuntimeError(f"{path} is not the {name} file prax was measured with")
     import onnxruntime as ort
 
     opts = ort.SessionOptions()
@@ -266,13 +323,15 @@ def similarity_transform(src: Any, dst: Any) -> Any:
     return np.hstack([scale * rot, shift[:, None]])
 
 
-def align(image: Any, landmarks: Any) -> Any:
+def align(image: Any, landmarks: Any, model: str = RECOGNIZER) -> Any:
     """The face whose five ``landmarks`` (pixels of ``image``) are given,
-    turned and scaled onto ``TEMPLATE``: a 112 x 112 RGB image."""
+    turned and scaled onto the ``model``'s template: for SFace a 112 x 112
+    RGB image."""
     import numpy as np
     from PIL import Image
 
-    m = similarity_transform(landmarks, TEMPLATE)
+    spec = RECOGNIZERS[model]
+    m = similarity_transform(landmarks, spec.template)
     a = m[:, :2]
     inv = np.linalg.inv(a)
     back = -inv @ m[:, 2]
@@ -282,24 +341,25 @@ def align(image: Any, landmarks: Any) -> Any:
     back = back - inv @ np.array([0.5, 0.5]) + 0.5
     data = (inv[0, 0], inv[0, 1], back[0], inv[1, 0], inv[1, 1], back[1])
     return image.convert("RGB").transform(
-        (ALIGNED_PX, ALIGNED_PX),
+        (spec.aligned_px, spec.aligned_px),
         Image.Transform.AFFINE,
         data=tuple(float(v) for v in data),
         resample=Image.Resampling.BILINEAR,
     )
 
 
-def vector(aligned: Any) -> list[float]:
-    """An aligned face as SFace's 128 numbers, of length one."""
+def vector(aligned: Any, model: str = RECOGNIZER) -> list[float]:
+    """An aligned face as the ``model``'s numbers (SFace's 128), of length
+    one."""
     import numpy as np
 
     rgb = np.asarray(aligned.convert("RGB"), dtype=np.float32)
     blob = rgb.transpose(2, 0, 1)[None]  # RGB, 0 to 255, as OpenCV feeds it
-    session = _recognizer()
+    session = _recognizer_session(model)
     (out,) = session.run(None, {session.get_inputs()[0].name: blob})
     v = out[0].astype(np.float64)
     n = float(np.linalg.norm(v))
-    return [round(float(x) / n, 6) for x in v] if n else [0.0] * DIM
+    return [round(float(x) / n, 6) for x in v] if n else [0.0] * len(v)
 
 
 def crop(image: Any, box: Any) -> bytes:

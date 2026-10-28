@@ -58,6 +58,8 @@ SECTIONS = (
     "private",  # what looks personal (prax.wall.private); the owner's names
     "packs",  # the packs whose capability this host runs (docs/packs.md)
     "places",  # roots: each named share and where this host mounts it
+    "faces",  # match (line, margin, neighbours), groups: measured per library
+    "events",  # gap_hours, min_photos, ...: how photos are grouped into events
 ) + packs.setting_sections()  # and each pack's own section
 
 

@@ -43,7 +43,7 @@ from prax.graph import ontology
 from prax.ml import clusters, embeddings
 from prax.text import acronyms, arxiv, dates, language, quotes, references, schemaorg
 
-from .base import _reading, _serialized, archive_path, now, vectors_available
+from .base import _reading, _serialized, archive_path, now, run_name, vectors_available
 from .documents import (
     HISTORY_KEEP,
     _put_meta,
@@ -78,19 +78,19 @@ from .graph import (
     link,
     rename_display_language,
     replace_communities,
+    replace_face_groups,
     retire_reading,
     unmark_corpus_ruling,
 )
 from .jobs import Job
 from .retrieval import (
-    FACE_MODEL,
     compact_vectors,
     face_index_path,
+    face_model,
     face_neighbours,
     fts_merge,
     merge_vectors,
     replace_acronyms,
-    replace_face_groups,
 )
 
 Log = Callable[[str], None]
@@ -1275,7 +1275,7 @@ def _communities(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     pairs = communities.graph_of(docs.values(), direct)
     job.update(note=f"communities: partitioning {len(pairs)} pairs")
     found = communities.partition(pairs)
-    run = f"communities-{now().replace(':', '').replace('-', '')}"
+    run = run_name("communities")
     kept = replace_communities(con, found.regions, found.parts, found.weight, run=run)
     return {
         "entities": found.entities,
@@ -1345,7 +1345,7 @@ def _facegroups(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     nearest faces in other pictures) for the Review page; a group keeps
     the id of the old one it overlaps most. Seconds; the settings are
     ``faces.groups`` in prax.yaml."""
-    if not vectors_available() or not face_index_path(FACE_MODEL).exists():
+    if not vectors_available() or not face_index_path().exists():
         return {"skipped": "no face index"}
     k = config.whole("faces.groups.neighbours", default=15)
     job.update(note=f"facegroups: the {k} nearest faces of each")
@@ -1357,14 +1357,14 @@ def _facegroups(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         min_samples=config.whole("faces.groups.min_samples", default=3),
         floor=config.number("faces.groups.floor", default=0.3),
     )
-    run = f"facegroups-{now().replace(':', '').replace('-', '')}"
+    run = run_name("facegroups")
     kept = replace_face_groups(
         con,
         ids,
         found.labels,
         found.strength,
         found.persistence,
-        model=FACE_MODEL,
+        model=face_model(),
         run=run,
     )
     grouped = sum(1 for g in found.labels if g != clusters.NOISE)

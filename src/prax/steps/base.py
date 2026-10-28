@@ -190,6 +190,65 @@ class Step:
         raise NotImplementedError
 
 
+# a worker's pass asks a batch step (``BatchStep``) for batch after batch
+# for this long: one batch of ten a pass read 14,000 photos of a first
+# crawl at some ten a minute (2026-10-26), and a preview is read in some
+# 45 ms (2026-10-27)
+BATCH_SECONDS = 90
+
+
+def first_error(rep: dict[str, Any]) -> str:
+    """The first error the door answered a post with, for the pass's line."""
+    errors = rep.get("errors") or []
+    if not errors:
+        return ""
+    e = errors[0]
+    return f"; the first, doc {e.get('doc_id')}: {str(e.get('error'))[:160]}"
+
+
+class BatchStep(Step):
+    """A step a worker does itself, batch after batch for ``BATCH_SECONDS``
+    a pass (the photos, places and faces of pictures): ``batch`` reads
+    one fetched batch (the hand-out's whole answer is ``self.handed``)
+    into the body it posts, with any counts of its own,
+    and ``line`` says what the pass did from the counts, the door's
+    ``applied``, ``errors`` and its ``actions``, and the first error. A
+    batch nothing of which landed ends the pass's run of it: the next pass
+    tries again."""
+
+    handed: dict[str, Any]  # the hand-out's answer, set by ``batches``
+
+    def batch(
+        self, p: Pass, items: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        raise NotImplementedError
+
+    def line(self, tally: dict[str, int], first: str) -> str:
+        raise NotImplementedError
+
+    def batches(self, p: Pass) -> str | None:
+        start = time.monotonic()
+        tally: dict[str, int] = {"applied": 0, "errors": 0}
+        first = ""
+        while time.monotonic() - start < BATCH_SECONDS:
+            self.handed = p.fetch(self.name)
+            items = self.handed.get("items") or []
+            if not items:
+                break
+            body, counted = self.batch(p, items)
+            rep = p.post(self.name, body)
+            tally["applied"] += int(rep.get("applied", 0))
+            tally["errors"] += len(rep.get("errors") or [])
+            for key, n in {**(rep.get("actions") or {}), **counted}.items():
+                tally[key] = tally.get(key, 0) + int(n)
+            first = first or first_error(rep)
+            if tally["errors"] and not tally["applied"]:
+                break
+        if not any(tally.values()):
+            return None
+        return self.line(tally, first)
+
+
 # a step whose model or data could not be had rests this long before it
 # tries again, so a host that cannot fetch it does not try on every pass
 REST_SECONDS = 3600.0

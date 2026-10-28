@@ -14,7 +14,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import glyphs, language, names
 
-from ..base import _serialized, hidden_documents, now
+from ..base import _serialized, hidden_documents, run_name
 from ..graph import (
     Edge,
     _refresh_name,
@@ -750,7 +750,7 @@ def _repair_document_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) 
     ``unmerge_run`` takes the round back whole. Nothing is ended: the
     folded entities' edges are evidence and now reach the document's
     node."""
-    run = f"{TWINS_PRODUCER}:{now().replace(':', '').replace('-', '')}"
+    run = run_name(TWINS_PRODUCER, sep=":")
     done = 0
     for row in rows:
         for other in row["also"]:
@@ -873,7 +873,7 @@ def _repair_spacing_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
     """Fold each group into its keeper, signed by this repair under one run,
     so ``unmerge_run`` takes the round back whole. Nothing is ended: the
     folded entities' edges are evidence, and their names stay as labels."""
-    run = f"{SPACING_PRODUCER}:{now().replace(':', '').replace('-', '')}"
+    run = run_name(SPACING_PRODUCER, sep=":")
     done = 0
     for row in rows:
         for other in row["also"]:
@@ -988,7 +988,7 @@ def _repair_damaged_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
     that name: the mended one preferred, the old one kept as a label that
     says it was the name. One run for the round, so ``unmerge_run`` takes
     the folds and the renames back."""
-    run = f"{DAMAGED_PRODUCER}:{now().replace(':', '').replace('-', '')}"
+    run = run_name(DAMAGED_PRODUCER, sep=":")
     done = 0
     for row in rows:
         here = con.execute(

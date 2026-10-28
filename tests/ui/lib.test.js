@@ -356,7 +356,10 @@ test("tokensTable, tokenSecret, privateRules: the admin page", () => {
   assert.match(secret, /<pre>prax_abc<\/pre>/);
   const rules = lib.privateRules({ strong: ["kontoauszug"], weak: [["rechnung", "invoice"]], weak_needed: 2, head: 5000,
     added: { strong: [], weak: [], paths: ["/archive/private-example"], names: 2 }, documents: { suspected: 404, personal: 3, released: 1 } });
-  assert.match(rules, /404 suspected, 3 personal, 1 released by you/);
+  assert.match(rules, /404 suspected, 3 personal, 1 released by you</);
+  const named = lib.privateRules({ strong: [], weak: [], weak_needed: 2, head: 5000, added: {},
+    documents: { suspected: 1, personal: 0, released: 0, named_faces: 7 } });
+  assert.match(named, /0 released by you, 7 hidden for a named face/);
   assert.match(rules, /rechnung \/ invoice/);
   assert.match(rules, /2 names \(a weak cue each\)/);
   assert.match(rules, /everything under \/archive\/private-example/);

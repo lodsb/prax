@@ -20,6 +20,14 @@ a transitive ``located_in`` through one node would put each in the
 other's country. The second becomes ``Paris, Texas`` (``_place_node``),
 and a region named as a country is (Georgia, United States) likewise.
 
+A place's names in the library's languages (``graph.language`` and the
+label languages, ``Gazetteer.names``) are labels of its node, producer
+``geonames``: preferred in a language the node has no preferred name in
+yet, an alternative otherwise, so a German search for München finds the
+pictures of Munich and the ``names`` pass shows it in the library's
+language. A node is found by what answers to its name, so a renamed one
+is still the place it was.
+
 Every fact has the picture as its source, so the wall hides it with the
 picture: a photo no viewer may see says to that viewer nowhere it was
 taken, and a town only ever reached through hidden photos is not there
@@ -37,6 +45,8 @@ from prax.text import mimes
 from ..base import _reading, _serialized, now
 from ..documents import _put_meta, _refresh_document_field, get_meta
 from .edges import Edge, document_edges_of, document_node, end_edges, link
+from .labels import add_label
+from .lookups import entity_answering
 
 PLACE_PRODUCER = "geonames"
 
@@ -96,22 +106,59 @@ def place_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
 def _gazetteer_ends(con: sqlite3.Connection, name: str) -> tuple[set[str], bool]:
     """What the gazetteer's facts say a place node ``name`` is inside, and
     whether any place is said to be inside it."""
+    # by the entity that answers to the name, so a node the names pass
+    # renamed into the library's language is still found by its own name
+    node = entity_answering(con, name, "place")
+    if node is None:
+        return set(), False
     outer = {
         str(r[0])
         for r in con.execute(
-            "SELECT t.name FROM edges e JOIN entities s ON s.id = e.src"
-            " JOIN entities t ON t.id = e.dst WHERE s.name = ? AND s.type = 'place'"
-            " AND e.rel = 'located_in' AND e.producer = ? AND e.valid_to IS NULL",
-            (name, PLACE_PRODUCER),
+            "SELECT t.name FROM edges e JOIN entities t ON t.id = e.dst"
+            " WHERE e.src = ? AND e.rel = 'located_in' AND e.producer = ?"
+            " AND e.valid_to IS NULL",
+            (node, PLACE_PRODUCER),
         )
     }
     inner = con.execute(
-        "SELECT 1 FROM edges e JOIN entities t ON t.id = e.dst"
-        " WHERE t.name = ? AND t.type = 'place' AND e.rel = 'located_in'"
-        " AND e.producer = ? AND e.valid_to IS NULL LIMIT 1",
-        (name, PLACE_PRODUCER),
+        "SELECT 1 FROM edges WHERE dst = ? AND rel = 'located_in'"
+        " AND producer = ? AND valid_to IS NULL LIMIT 1",
+        (node, PLACE_PRODUCER),
     ).fetchone()
     return outer, inner is not None
+
+
+def _name_place(
+    con: sqlite3.Connection,
+    nodes: dict[str, str],
+    names: dict[str, dict[str, str]],
+    *,
+    run: str,
+) -> int:
+    """The gazetteer's names of a picture's town, region and country in
+    other languages, as labels of their nodes; how many were new."""
+    added = 0
+    for lang, parts in names.items():
+        for part, label in parts.items():
+            node = nodes.get(part)
+            eid = entity_answering(con, node, "place") if node else None
+            if eid is None or not str(label).strip():
+                continue
+            preferred = con.execute(
+                "SELECT 1 FROM entity_labels WHERE entity_id = ? AND lang = ?"
+                " AND kind = 'pref'",
+                (eid, lang),
+            ).fetchone()
+            added += add_label(
+                con,
+                eid,
+                str(label),
+                lang=lang,
+                kind="alt" if preferred else "pref",
+                producer=PLACE_PRODUCER,
+                run=run,
+            )
+    return added
 
 
 def _place_node(con: sqlite3.Connection, name: str, parent: str) -> str:
@@ -171,7 +218,8 @@ def apply_place(
 ) -> str:
     """A picture's place: ``meta.place``, its facts in the graph and the
     town in its search field. ``place`` is the gazetteer's answer (name,
-    geonameid, region, country, cc, km) or None for a position near no
+    geonameid, region, country, cc, km, and ``names``, its parts' names
+    by language) or None for a position near no
     town. Returns ``placed`` or ``nowhere``."""
     meta = get_meta(con, doc_id)
     run = place_run(version)
@@ -238,4 +286,9 @@ def apply_place(
         _within(con, region_node, country_node, doc_id=doc_id, run=run, evidence=said)
     else:
         _within(con, town_node, country_node, doc_id=doc_id, run=run, evidence=said)
+    # named once its nodes are there
+    names = place.get("names") or {}
+    if isinstance(names, dict) and names:
+        nodes = {"town": town_node, "region": region_node, "country": country_node}
+        _name_place(con, nodes, names, run=run)
     return "placed"

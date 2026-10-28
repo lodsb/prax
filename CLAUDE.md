@@ -71,7 +71,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
-   context, views, communities, traversal, rules, paths, geo, events, people, naming), `retrieval` (knobs, compounds, query, legs,
+   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
@@ -99,7 +99,7 @@ revisit threshold, under "Decision thresholds" below.
    `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`, `eval_latex.py`,
    `eval_paths.py`, `eval_venues.py`, `eval_swaps.py`, `eval_dates.py`,
    `eval_followups.py` (through `prax.store`, so on a copy only),
-   `eval_quality.py`,
+   `eval_quality.py`, `eval_faces.py`, `eval_events.py`,
    `bench_world_dates.py`,
    `compare_extractors.py`, `bench_extractor.py`,
    `make_zotero_fixture.py`, and `check_private.py`, the pre-commit guard
@@ -455,8 +455,9 @@ reference `docs/ask.md`.
   never deletes them; what a person said of a face moves to the new face
   whose box covers it (`SAME_FACE_IOU`), and an answer whose face was not
   found again stays, with its `depicts`, for its undo. The `facevectors` step aligns each face as OpenCV's
-  recogniser does and gives it SFace's 128 numbers (the face index,
-  invariant 1) and a small crop filed in the archive; `similar_faces` is
+  recogniser does and gives it the host's recogniser's numbers
+  (`faces.model`, one of `prax.ml.faces.RECOGNIZERS`, SFace's 128 by
+  default; `store.face_model`; the face index of that model, invariant 1) and a small crop filed in the archive; `similar_faces` is
   the nearest-neighbour search over them. The `facegroups` pass of `prax
   maintain` groups them by density (`prax.ml.clusters`, HDBSCAN over each
   face's nearest faces in other pictures, a pure module) into candidates
@@ -629,7 +630,9 @@ reference `docs/ask.md`.
 - The wall (stage U): the library keeps everything, and a named token
   (`prax token add`, the `tokens` table, only a secret's sha256 kept)
   sees only what it is given: the modules it names, and no document whose
-  `sensitivity` is `suspected` or `personal` unless `--personal`.
+  `sensitivity` is `suspected` or `personal`, nor a picture with a named
+  face, unless `--personal` (`store.personal_sql`, the one test of
+  personal every read, count and rule uses).
   `PRAX_TOKEN` is the administrator and sees all. The filter is in the
   store, keyed by `store.VIEWER` (a context variable the door sets for a
   named token's request and copies into any thread it starts): a read

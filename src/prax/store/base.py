@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 import sqlite3
 import threading
 import time
@@ -224,36 +225,50 @@ class DocumentMeta(TypedDict, total=False):
 MetaLike = DocumentMeta | dict[str, Any]
 
 
-# the keys only the door's own passes write: what a client sends in its
-# meta is never one of them, since several name a file of the archive or
-# decide what the wall shows (the review of 2026-10-28)
-DOOR_WRITTEN_META = frozenset(
+# the keys of ``DocumentMeta`` a client may send in its meta: where a
+# document came from and what its record says. Every other key is the
+# door's own (``DOOR_WRITTEN_META``), so a key a new step declares is
+# refused from a client until it is named here: several name a file of
+# the archive or decide what the wall shows (the reviews of 2026-10-28).
+# An importer's own block, keyed by its ``source``, is the client's too.
+CLIENT_META = frozenset(
     {
-        "photo",
-        "taken",
-        "place",
-        "faces",
-        "retired",
-        "sensitivity",
-        "private",
-        "reading",
-        "ocr",
-        "page",
-        "asks",
-        "extraction",
-        "extraction_stale",
-        "references",
-        "text_source",
-        "quality",
-        "profile",
-        "markup",
+        "source",
+        "origin",
+        "capture",
+        "requested_url",
+        "previous_capture",
+        "parser",
+        "video",
+        "zotero",
+        "fields",
+        "creators",
+        "collections",
+        "date",
+        "abstract",
+        "doi",
+        "arxiv",
+        "paper",
+        "project",
+        "tags",
+        "citations",
+        "github",
+        "claude",
+        "chat",
+        "links",
+        "lang",
+        "status",
     }
 )
+DOOR_WRITTEN_META = frozenset(DocumentMeta.__annotations__) - CLIENT_META
 
 
 def door_written(meta: MetaLike | None) -> list[str]:
-    """The keys of a client's ``meta`` that only the door may write."""
-    return sorted(k for k in meta or {} if k in DOOR_WRITTEN_META)
+    """The keys of a client's ``meta`` it may not send: every key but those
+    of ``CLIENT_META`` and its own importer's block (``meta[source]``)."""
+    meta = meta or {}
+    own = meta.get("source")
+    return sorted(k for k in meta if k not in CLIENT_META and k != own)
 
 
 def undeclared_meta(meta: MetaLike) -> list[str]:
@@ -292,6 +307,18 @@ def now() -> str:
     second, ``Z`` (``2026-09-22T01:49:03Z``). One shape, so the strings
     sort as the moments do."""
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def run_name(kind: str, *after: object, unique: bool = False, sep: str = "-") -> str:
+    """A run's name: its kind, the second it began (``now`` without its
+    separators) and what follows (``cleanup-20261028T005739Z-clips``).
+    ``unique`` adds a few random letters, for an action a person makes:
+    two in one second would share a run, and one undo (``unmerge_run``,
+    ``restore_run``) would take both back."""
+    bits = [f"{kind}{sep}{now().replace(':', '').replace('-', '')}", *map(str, after)]
+    if unique:
+        bits.append(secrets.token_hex(3))
+    return "-".join(bits)
 
 
 # how long a connection waits for another process's write transaction
@@ -561,6 +588,20 @@ _hidden_memo: dict[tuple[Any, ...], frozenset[int]] = {}
 _hidden_lock = threading.Lock()
 
 
+def store_state(con: sqlite3.Connection) -> tuple[Any, ...]:
+    """What a read's memo is keyed by besides its arguments: the file, this
+    connection, ``PRAGMA data_version`` (another connection committed) and
+    this connection's own ``total_changes`` (it wrote), so a memo never
+    outlives a write. A closed connection's id may be a new one's, hence
+    the file too."""
+    return (
+        str(con.execute("PRAGMA database_list").fetchone()[2]),
+        id(con),
+        int(con.execute("PRAGMA data_version").fetchone()[0]),
+        con.total_changes,
+    )
+
+
 def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
     """The documents the current viewer may not see; empty for none.
 
@@ -573,10 +614,7 @@ def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
     viewer = VIEWER.get()
     if viewer is None:
         return frozenset()
-    state = int(con.execute("PRAGMA data_version").fetchone()[0])
-    # the file too: a closed connection's id may be a new one's
-    where = str(con.execute("PRAGMA database_list").fetchone()[2])
-    key = (viewer, where, id(con), state, con.total_changes)
+    key = (viewer, *store_state(con))
     with _hidden_lock:
         held = _hidden_memo.get(key)
     if held is not None:
@@ -589,19 +627,32 @@ def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
     return got
 
 
+def personal_sql(alias: str) -> str:
+    """The one test of a document being personal for a reason other than
+    its domains, as SQL over the documents row ``alias``: marked
+    (``sensitivity``, suspected or personal), or a picture a person named
+    a face in, even one they opened, since who a face is (and so who was
+    where) is for a token with ``personal`` only (plan item AT's wall,
+    decided 2026-10-28). Every reader of personal-ness asks this: the
+    wall, the rule pass, the domain rules, the counts. A new reason is one
+    more line here."""
+    return (
+        f"({alias}.sensitivity IS NOT NULL OR EXISTS (SELECT 1 FROM faces pf"
+        " JOIN face_names pn ON pn.face_id = pf.id"
+        f" WHERE pf.doc_id = {alias}.id AND pn.ended_at IS NULL"
+        " AND pn.verdict = 'person'))"
+    )
+
+
 def _hidden_read(con: sqlite3.Connection, viewer: Viewer) -> frozenset[int]:
     out: set[int] = set()
     if not viewer.personal:
         out |= {
             int(r[0])
             for r in con.execute(
-                "SELECT id FROM documents WHERE sensitivity IS NOT NULL"
+                f"SELECT id FROM documents d WHERE {personal_sql('d')}"
             )
         }
-        # a picture a person named a face in, even one they opened: who a
-        # face is (and so who was where) is for a token with personal only
-        # (plan item AT's wall; decided 2026-10-28)
-        out |= {int(r[0]) for r in con.execute(_NAMED_FACES)}
     if viewer.domains is not None:
         unset = UNASSIGNED in viewer.domains
         for doc_id, raw in con.execute(
@@ -612,40 +663,19 @@ def _hidden_read(con: sqlite3.Connection, viewer: Viewer) -> frozenset[int]:
     return frozenset(out)
 
 
-# the pictures a person named a face in (``hidden_documents``)
-_NAMED_FACES = (
-    "SELECT DISTINCT f.doc_id FROM face_names n JOIN faces f ON f.id = n.face_id"
-    " WHERE n.ended_at IS NULL AND n.verdict = 'person'"
-)
-
-
-def _names_a_face(con: sqlite3.Connection, doc_id: int) -> bool:
-    return (
-        con.execute(
-            "SELECT 1 FROM face_names n JOIN faces f ON f.id = n.face_id"
-            " WHERE f.doc_id = ? AND n.ended_at IS NULL AND n.verdict = 'person'"
-            " LIMIT 1",
-            (doc_id,),
-        ).fetchone()
-        is not None
-    )
-
-
 def document_hidden(con: sqlite3.Connection, doc_id: int) -> bool:
     """Whether the current viewer may not see this document."""
     viewer = VIEWER.get()
     if viewer is None:
         return False
     row = con.execute(
-        "SELECT sensitivity, json_extract(meta, '$.domains') FROM documents"
-        " WHERE id = ?",
+        f"SELECT {personal_sql('d')}, json_extract(d.meta, '$.domains')"
+        " FROM documents d WHERE d.id = ?",
         (int(doc_id),),
     ).fetchone()
     if row is None:
         return False  # not there at all: the read says so itself
-    if row[0] is not None and not viewer.personal:
-        return True
-    if not viewer.personal and _names_a_face(con, int(doc_id)):
+    if row[0] and not viewer.personal:
         return True
     if viewer.domains is not None:
         unset = UNASSIGNED in viewer.domains

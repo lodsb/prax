@@ -21,8 +21,11 @@ import math
 from datetime import datetime
 from typing import Any
 
-# what a reading is: a later one (another size, another field) is a new
-# version, and every photo becomes due for it again
+# what a reading is: a later one (another size, another EXIF field) is a
+# new version, and every photo becomes due for it again, its original
+# read from the share. A field computed from the preview the door holds
+# (a perceptual hash) is a step and a stamp of its own instead, kept in
+# meta.photo beside these (store.PHOTO_KEYS), so no original is read
 VERSION = 1
 THUMB_PX = 320
 PREVIEW_PX = 1600

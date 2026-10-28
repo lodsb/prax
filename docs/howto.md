@@ -1783,9 +1783,35 @@ sections are `models` and `steps` (which model does which step),
 `domains` (which ontology modules a document is read against),
 `embeddings`, `vectors`, `rerank`, `parse`, `citations`, `door`,
 `ontology`, `graph`, `paths`, `sources`, `run` (4b), `budget`,
-`schedule`, `private` (4½) and `packs`, with a section of its own for
-each pack that has settings (`config.SECTIONS`). Everything has a default, so the file may hold
+`schedule`, `private` (4½), `places`, `faces`, `events` and `packs`,
+with a section of its own for each pack that has settings
+(`config.SECTIONS`). Everything has a default, so the file may hold
 only what differs.
+
+The photo settings were measured on one library, so a host with other
+photos measures them again. `scripts/eval_faces.py` and
+`scripts/eval_events.py` print the tables to choose from. Both read the
+store read-only and print counts only.
+
+    places:
+      live_clips:
+        suffixes: [.mov, .mp4]   # a Live Photo's clip beside its picture
+        tags: [_HEVC]            # what a downloader adds to the clip's name
+    faces:
+      model: sface-2021dec       # the recogniser (PRAX_FACES_MODEL)
+      match: {neighbours: 5, line: 0.45, margin: 0.05}
+      groups: {neighbours: 15, min_size: 3, min_samples: 3, floor: 0.3}
+    events:
+      gap_hours: 24      # no gap this long inside one group
+      min_photos: 8      # a smaller group is no candidate
+      place_share: 0.6   # the share of a group's places that names it
+      burst_hours: 3     # where the Review page offers a cut
+      folder_share: 0.5  # a folder names a group holding more than this of it
+
+`faces.model` names one of `prax.ml.faces.RECOGNIZERS`; an unknown name
+is an error. Each model writes its own face index
+(`vectors-face-<model>.usearch`), so changing it means every face is read
+again into a new file and the line is measured again.
 
 Each setting can still be given as an environment variable for one
 run, and the variable wins: `PRAX_EMBED=hash pytest`, `PRAX_VEC_DTYPE=i8
@@ -2360,7 +2386,7 @@ by `prax maintain` on request:
 | `conflicts` | two facts of a functional relation that cannot both hold, kept in `edge_conflicts` (`store.find_conflicts`). Shown as `disputed`, never resolved |
 | `communities` | the regions of the library rebuilt at two levels (`prax.graph.communities`, `docs/communities.md`) |
 | `histories` | the parse and extraction histories held to `HISTORY_KEEP` entries |
-| `events` | photos taken close together found again as candidate events for the Review page (`store.find_event_candidates`); what a person decided is kept |
+| `events` | photos taken close together found again as candidate events for the Review page (`store.find_event_candidates`); what a person decided is kept. `events` in prax.yaml (3k) sets the gap and the least group |
 | `facegroups` | the faces that are probably one person, grouped by density over the face vectors (`prax.ml.clusters`, HDBSCAN) for the Review page's face groups tab; a group keeps its id while its faces change. `faces.groups` in prax.yaml: `neighbours` (15), `min_size` (3), `min_samples` (3), `floor` (0.3). The "who is this?" tab is no pass: it matches the open faces against the named ones on request, with `faces.match`: `neighbours` (5, the named faces that vote), `line` (0.45, the least cosine similarity offered) and `margin` (0.05, how much nearer than anyone else) |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c). The nightly has no reason to |
 | `rejudge` (only when named) | the corpus's rulings on which names are the library's word, asked again under the current test |

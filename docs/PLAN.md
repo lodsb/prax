@@ -219,6 +219,29 @@ ones at once, and to plan the rest here.
       measured gap), 19 (`host.commit_reserve_mb`), 22 (heal's thin-texts
       leaves the checks' scans to them), 23 (`changes` counts a side once).
 
+### The quality review of 2026-10-28
+
+The safety review of the range since 2026-10-19 first (28 defects,
+fixed in 0c84afc), then the quality review in full mode over it: 23
+findings (`docs/eval/quality-review-2026-10-28.md`, numbered there).
+The user asked on 2026-10-28 for every one to be fixed.
+
+- [x] (2026-10-28, `docs/log.md`) **All 23.** The faces store in two
+      parts (1), the client's meta keys an allowlist (2), `faces.model`
+      (3), a camera folder names no group (4), `scripts/eval_faces.py`
+      and `scripts/eval_events.py` (5, 17), places and months in the
+      library's language (6, 12), `store.personal_sql` and
+      `mark_suspected` (7, 8, 10), `store.run_name` (9), `BatchStep`
+      (11), the match and event settings read once and at call time (13,
+      14, 16), `meta.photo` kept across readings (15), `places.live_clips`
+      (18), one premise policy (19), the person page's events from
+      `attended` (20), face group ids from `id_marks` (21), the people
+      list kept (22), the matching vectorised and per picture (23).
+- [ ] Pictures placed before 2026-10-28 have no names in other
+      languages until they are placed again. Bump the gazetteer reading
+      when there is another reason to place every picture again, or add
+      a pass that only adds the labels.
+
 ## Stages
 
 - [ ] **AO. A text says what is wrong with it.** The user, 2026-10-17:

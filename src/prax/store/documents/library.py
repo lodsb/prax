@@ -17,6 +17,7 @@ from ..base import (
     _reading,
     _serialized,
     now,
+    run_name,
 )
 from .meta import _put_meta, _refresh_document_field, get_meta
 from .places import live_photo_clip
@@ -436,7 +437,7 @@ def retire_set(
     plainly. Each keeps the facts it ended, by id, so ``restore_set``
     reopens exactly those."""
     picked = cleanup_set(con, rule, folder=folder)
-    run = f"cleanup-{now().replace(':', '').replace('-', '')}-{rule}"
+    run = run_name("cleanup", rule)
     reason = f"clean-up: {clutter.RULES[rule]}" + (f" ({folder})" if folder else "")
     retired = edges = moved = 0
     for doc_id, keeper in picked:

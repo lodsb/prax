@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from prax.parsers import latex as conversion
+from prax.text import dates
 
 SOURCE = "latex"
 
@@ -29,20 +30,7 @@ _DATE = re.compile(
 )
 _DATE_LINE = re.compile(r"^[A-Z][a-z]+ \d{1,2}, \d{4}$")
 _AUTHORS = re.compile(r",\s*|\s+and\s+")
-_MONTHS = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-]
+_MONTHS = list(dates.SPELLED["en"])  # a folder's date is spelled in English
 
 
 @dataclass(frozen=True)

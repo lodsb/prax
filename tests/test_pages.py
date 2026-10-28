@@ -320,12 +320,7 @@ def test_a_graph_can_be_drawn_from_a_pages_tree_or_without_personal(
     paper = store.ingest_text(con, "a paper about reverbs " * 30, title="P")["doc_id"]
     diary = store.ingest_text(con, "my own diary entry " * 30, title="D")["doc_id"]
     other = store.ingest_text(con, "something else " * 30, title="O")["doc_id"]
-    con.execute(
-        "UPDATE documents SET meta = json_set(meta, '$.sensitivity',"
-        ' json(\'{"state": "personal", "by": "human"}\')) WHERE id = ?',
-        (diary,),
-    )
-    con.commit()
+    store.set_sensitivity(con, diary, "personal")
     proj = store.write_page(con, "project-r", "The project.", kind="project")["doc_id"]
     note = store.write_page(
         con, "r-notes", f"See [P](#doc/{paper}).", author="agent", part_of="project-r"

@@ -393,27 +393,12 @@ def statement(t: Triple, onto: ontology.Ontology) -> str:
     return f"{t.src} {words} {t.dst}{when}."
 
 
-_MONTH_NAMES = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-]
-
-
 def _spoken(date: str) -> str:
     """``2003-10-11`` as "October 11, 2003", ``1998-08`` as "August 1998":
     a sentence spells its dates, and the judge compares words."""
     if len(date) >= 7 and date[5:7].isdigit() and 1 <= int(date[5:7]) <= 12:
-        month = _MONTH_NAMES[int(date[5:7]) - 1]
+        # the judge reads English sentences: the date as one spells it
+        month = dates.spelled_month(int(date[5:7]))
         return (
             f"{month} {int(date[8:10])}, {date[:4]}"
             if len(date) == 10

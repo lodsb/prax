@@ -15,24 +15,19 @@ from __future__ import annotations
 
 import base64
 import functools
-import time
 from dataclasses import asdict
 from typing import Any
 
 from prax import store
-from prax.graph import gazetteer
+from prax.graph import gazetteer, vocabulary
 from prax.parsers import photos
+from prax.text import language
 
 from . import leases
-from .base import HandOut, Pass, Step, TakeIn, ready, resting
-
-# a worker's pass asks for batch after batch for this long: one batch of
-# ten a pass read 14,000 photos of a first crawl at some ten a minute
-# (2026-10-26), and a picture is a quick read
-RUN_SECONDS = 90
+from .base import BatchStep, HandOut, Pass, TakeIn, ready, resting
 
 
-class Photos(Step):
+class Photos(BatchStep):
     name = "photos"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
@@ -69,29 +64,20 @@ class Photos(Step):
     def run(self, p: Pass) -> str | None:
         if not photos.available():
             return None  # no HEIC reader here: a phone's photos would all fail
+        return self.batches(p)
+
+    def batch(
+        self, p: Pass, items: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        p.note(f"{self.name}: {len(items)} pictures", total=len(items), done=0)
         by = photos.stamp()
-        start = time.monotonic()
-        tally = {"applied": 0, "read": 0, "failed": 0, "errors": 0}
-        while time.monotonic() - start < RUN_SECONDS:
-            items = p.fetch(self.name).get("items") or []
-            if not items:
-                break
-            p.note(f"{self.name}: {len(items)} pictures", total=len(items), done=0)
-            rep = p.post(
-                self.name, {"results": [self._read(p, it, by) for it in items]}
-            )
-            acts = rep.get("actions") or {}
-            tally["applied"] += int(rep.get("applied", 0))
-            tally["read"] += int(acts.get("read", 0))
-            tally["failed"] += int(acts.get("failed", 0))
-            tally["errors"] += len(rep.get("errors") or [])
-            if tally["errors"] and not tally["applied"]:
-                break  # nothing lands: the next pass tries again
-        if not any(tally.values()):
-            return None
+        return {"results": [self._read(p, it, by) for it in items]}, {}
+
+    def line(self, tally: dict[str, int], first: str) -> str:
         return (
-            f"{tally['applied']} pictures ({tally['read']} read,"
-            f" {tally['failed']} unreadable, {tally['errors']} not fetched)"
+            f"{tally['applied']} pictures ({tally.get('read', 0)} read,"
+            f" {tally.get('failed', 0)} unreadable,"
+            f" {tally['errors']} not fetched{first})"
         )
 
     @staticmethod
@@ -118,7 +104,7 @@ def _gazetteer() -> gazetteer.Gazetteer:
     return gazetteer.load()
 
 
-class Geocode(Step):
+class Geocode(BatchStep):
     """Where a picture was taken: the door hands out the positions the
     photos step read, the worker names the town each lies in, and the
     door writes it as facts (``store.apply_place``). No original is read,
@@ -130,7 +116,10 @@ class Geocode(Step):
         skip = frozenset(leases.leased(self.name))
         due = store.places_due(h.con, gazetteer.VERSION, limit=h.limit, skip=skip)
         h.lease([d["doc_id"] for d in due])
-        return h.batch(due)
+        # the languages a place is named in besides its own: the library's
+        # and the ones its labels are given in (prax.graph.vocabulary)
+        langs = sorted({language.canonical(), *vocabulary.label_languages(h.con)})
+        return {**h.batch(due), "langs": langs}
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         def apply(doc_id: int, r: dict[str, Any]) -> str:
@@ -150,38 +139,35 @@ class Geocode(Step):
             return None  # offline and no files: nothing to name a place by
         if (trouble := ready(self.name, _gazetteer)) is not None:
             return trouble
-        start = time.monotonic()
-        tally = {"applied": 0, "placed": 0, "nowhere": 0, "errors": 0}
-        while time.monotonic() - start < RUN_SECONDS:
-            items = p.fetch(self.name).get("items") or []
-            if not items:
-                break
-            p.note(f"{self.name}: {len(items)} positions", total=len(items), done=0)
-            places = _gazetteer()
-            results = []
-            for it in items:
-                found = places.nearest(float(it["lat"]), float(it["lon"]))
-                results.append(
-                    {
-                        "doc_id": it["doc_id"],
-                        "v": gazetteer.VERSION,
-                        "by": gazetteer.stamp(),
-                        "place": asdict(found) if found else None,
-                    }
-                )
-            rep = p.post(self.name, {"results": results})
-            acts = rep.get("actions") or {}
-            tally["applied"] += int(rep.get("applied", 0))
-            tally["placed"] += int(acts.get("placed", 0))
-            tally["nowhere"] += int(acts.get("nowhere", 0))
-            tally["errors"] += len(rep.get("errors") or [])
-            if tally["errors"] and not tally["applied"]:
-                break
-        if not any(tally.values()):
-            return None
+        return self.batches(p)
+
+    def batch(
+        self, p: Pass, items: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        p.note(f"{self.name}: {len(items)} positions", total=len(items), done=0)
+        places = _gazetteer()
+        langs = [str(lang) for lang in self.handed.get("langs") or []]
+        results = []
+        for it in items:
+            found = places.nearest(float(it["lat"]), float(it["lon"]))
+            place = asdict(found) if found else None
+            if found is not None and langs:
+                place = {**(place or {}), "names": places.names(found, langs)}
+            results.append(
+                {
+                    "doc_id": it["doc_id"],
+                    "v": gazetteer.VERSION,
+                    "by": gazetteer.stamp(),
+                    "place": place,
+                }
+            )
+        return {"results": results}, {}
+
+    def line(self, tally: dict[str, int], first: str) -> str:
         return (
-            f"{tally['applied']} positions ({tally['placed']} placed,"
-            f" {tally['nowhere']} near no town)"
+            f"{tally['applied']} positions ({tally.get('placed', 0)} placed,"
+            f" {tally.get('nowhere', 0)} near no town,"
+            f" {tally['errors']} not placed{first})"
         )
 
 

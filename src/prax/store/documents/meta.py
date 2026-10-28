@@ -578,20 +578,6 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
 
 
 SECTION_FIELD_CHARS = 3_000  # of section summaries in one document's field
-_MONTHS = (
-    "january",
-    "february",
-    "march",
-    "april",
-    "may",
-    "june",
-    "july",
-    "august",
-    "september",
-    "october",
-    "november",
-    "december",
-)
 
 
 def _photo_words(meta: dict[str, Any]) -> str:
@@ -605,7 +591,9 @@ def _photo_words(meta: dict[str, Any]) -> str:
     if len(taken) >= 7 and taken[:4].isdigit() and taken[5:7].isdigit():
         month = int(taken[5:7])
         if 1 <= month <= 12:
-            bits += [taken[:4], taken[5:7], _MONTHS[month - 1]]
+            # the month as a person of the library's language types it
+            spelled = dates.spelled_month(month, language.canonical()).lower()
+            bits += [taken[:4], taken[5:7], spelled]
             bits += [taken[:10]] if len(taken) >= 10 else []
     place = meta.get("place") or {}
     where = [str(place[k]) for k in ("name", "region", "country") if place.get(k)]

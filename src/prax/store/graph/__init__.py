@@ -27,6 +27,7 @@ ORDER = (
     "events",
     "people",
     "naming",
+    "faces",
 )
 
 from .communities import (  # noqa: F401
@@ -126,8 +127,10 @@ from .events import (  # noqa: F401
     EVENT_MIN_PHOTOS,
     EVENT_PLACE_SHARE,
     EVENT_STATES,
+    RECORDED_AT,
     decide_event,
     event_candidates_page,
+    event_settings,
     event_timeline,
     find_event_candidates,
     join_event,
@@ -135,6 +138,19 @@ from .events import (  # noqa: F401
     replace_event_candidates,
     split_event,
     undo_event,
+)
+from .faces import (  # noqa: F401
+    GROUP_CARRY,
+    GROUP_STRIP,
+    GROUPS_PAGE,
+    MATCH_STRIP,
+    SAME_FACE_IOU,
+    apply_faces,
+    face_group,
+    face_groups,
+    face_matches,
+    picture_faces,
+    replace_face_groups,
 )
 from .geo import (  # noqa: F401
     PLACE_PRODUCER,
@@ -200,6 +216,7 @@ from .lookups import (  # noqa: F401
 )
 from .naming import (  # noqa: F401
     FACE_VERDICTS,
+    LIVE_ANSWER,
     face_answers,
     judge_faces,
     merge_people,

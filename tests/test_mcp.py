@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import mcp_server
+from prax import mcp_server, store
 
 EXPECTED_TOOLS = {
     "search",
@@ -118,10 +118,15 @@ def test_get_and_search_are_brief(proxied: TestClient) -> None:
     """What the agent reads leaves out what only the UI reads: the meta's
     histories and the hashes of a document, the ranks and empty fields of a
     hit. The door still answers the UI in full."""
-    meta = {"parse_history": [{"extractor": "plain/1"}], "lang": "en"}
     r = proxied.post(
-        "/ingest", json={"text": "brief tools read little", "title": "b", "meta": meta}
+        "/ingest",
+        json={"text": "brief tools read little", "title": "b", "meta": {"lang": "en"}},
     ).json()
+    # a history only the door writes, set as its parse would
+    con = proxied.app.state.con
+    meta = store.get_meta(con, int(r["doc_id"]))
+    meta["parse_history"] = [{"extractor": "plain/1"}]
+    store.set_meta(con, int(r["doc_id"]), meta)
     full = proxied.get(f"/get/{r['doc_id']}").json()
     assert "hash" in full and "parse_history" in full["meta"]
     doc = call("get", doc_id=r["doc_id"])

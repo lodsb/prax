@@ -35,13 +35,27 @@ MTIME_SLACK = 2
 # pages are served out of the original, and a held one outlives the NAS
 REFERENCED = ("audio/", "video/", "image/")
 # a phone's Live Photo is a picture with a short clip of the same name
-# beside it: the clip is a place, and the picture is the document
-_LIVE_CLIP = (".mov",)
+# beside it: the clip is a place, and the picture is the document. The
+# clip's suffixes and the tags a downloader adds to its name are
+# ``places.live_clips`` in prax.yaml: Apple's own export writes a .MOV,
+# Google Takeout a .MP4 beside the picture
+LIVE_CLIP_SUFFIXES = (".mov", ".mp4")
 _LIVE_PICTURE = (".heic", ".heif", ".jpg", ".jpeg")
 # icloudpd names a Live Photo's HEVC clip ``IMG_1234_HEVC.MOV`` beside
 # ``IMG_1234.HEIC``: 25 of a library's clips were made documents for it
 # (2026-10-26)
-_LIVE_CLIP_TAGS = ("_HEVC",)
+LIVE_CLIP_TAGS = ("_HEVC",)
+
+
+def _live_clips() -> tuple[set[str], list[str]]:
+    """The suffixes a Live Photo's clip has and the tags in its name."""
+    suffixes = config.words("places.live_clips.suffixes", default=LIVE_CLIP_SUFFIXES)
+    tags = config.words("places.live_clips.tags", default=LIVE_CLIP_TAGS)
+    return {s.lower() if s.startswith(".") else f".{s.lower()}" for s in suffixes}, [
+        t.upper() for t in tags
+    ]
+
+
 # heal stats a referenced original's file at most this many times a look,
 # so a share of 20,000 photos is not walked over the network each time
 REACH_CHECKS = 2000
@@ -64,15 +78,15 @@ def referenced_private() -> bool:
 
 
 def live_photo_clip(con: sqlite3.Connection, root: str, path: str) -> bool:
-    """Whether the file at ``path`` is a Live Photo's clip: a ``.mov``
-    with a picture of the same name in the same folder, seen at ``root``,
-    or of that name without a downloader's tag (``_LIVE_CLIP_TAGS``)."""
+    """Whether the file at ``path`` is a Live Photo's clip: a clip
+    (``places.live_clips``, a .mov or .mp4) with a picture of the same name
+    in the same folder, seen at ``root``, or of that name without a
+    downloader's tag (``_HEVC``)."""
+    clips, tags = _live_clips()
     stem, dot, suffix = path.rpartition(".")
-    if not dot or "." + suffix.lower() not in _LIVE_CLIP:
+    if not dot or "." + suffix.lower() not in clips:
         return False
-    stems = [stem] + [
-        stem[: -len(t)] for t in _LIVE_CLIP_TAGS if stem.upper().endswith(t)
-    ]
+    stems = [stem] + [stem[: -len(t)] for t in tags if stem.upper().endswith(t)]
     names = [s + e for s in stems for p in _LIVE_PICTURE for e in (p, p.upper())]
     marks = ",".join("?" * len(names))
     return (

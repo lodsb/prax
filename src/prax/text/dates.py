@@ -48,6 +48,60 @@ _MONTHS = {
 }
 
 
+# each month's name as a library in that language writes it, January
+# first: what a date is spelled with (an event's name, a photo's search
+# words), in ``graph.language``, English where a language is not here
+SPELLED = {
+    "en": (
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ),
+    "de": (
+        "Januar",
+        "Februar",
+        "März",
+        "April",
+        "Mai",
+        "Juni",
+        "Juli",
+        "August",
+        "September",
+        "Oktober",
+        "November",
+        "Dezember",
+    ),
+    "fr": (
+        "janvier",
+        "février",
+        "mars",
+        "avril",
+        "mai",
+        "juin",
+        "juillet",
+        "août",
+        "septembre",
+        "octobre",
+        "novembre",
+        "décembre",
+    ),
+}
+
+
+def spelled_month(month: int, lang: str = "en") -> str:
+    """Month ``month`` (1 to 12) as a library in ``lang`` writes it."""
+    return SPELLED.get(lang, SPELLED["en"])[month - 1]
+
+
 def month_names() -> tuple[str, ...]:
     """Every month name the date reader knows, in every language it
     reads, lower case."""

@@ -121,7 +121,12 @@ def apply_photo(
     gave one, and the document field rewritten, so a search finds it by
     its month and its camera. Returns ``read``."""
     meta = get_meta(con, doc_id)
-    photo: dict[str, Any] = {"v": version, "by": by, "at": now()}
+    photo: dict[str, Any] = {
+        **_not_ours(meta.get("photo")),
+        "v": version,
+        "by": by,
+        "at": now(),
+    }
     for key in ("camera", "lens", "gps", "width", "height"):
         if facts.get(key) not in (None, ""):
             photo[key] = facts[key]
@@ -140,6 +145,19 @@ def apply_photo(
     return "read"
 
 
+# what the photos step writes into ``meta.photo``; a key another reading
+# keeps there (a perceptual hash from the preview, with a stamp of its
+# own) outlives the photos step reading the picture again
+PHOTO_KEYS = frozenset(
+    {"v", "by", "at", "camera", "lens", "gps", "width", "height", "error"}
+) | frozenset(PHOTO_COPIES)
+
+
+def _not_ours(photo: dict[str, Any] | None) -> dict[str, Any]:
+    """What ``meta.photo`` holds that the photos step did not write."""
+    return {k: v for k, v in (photo or {}).items() if k not in PHOTO_KEYS}
+
+
 def _a_position(gps: Any) -> bool:
     """Whether a worker's ``gps`` is a position: finite degrees in range."""
     try:
@@ -156,7 +174,13 @@ def photo_failed(
     """A picture the reader could not open: kept as ``meta.photo.error``
     at this version, so it is not handed out again until a later one."""
     meta = get_meta(con, doc_id)
-    meta["photo"] = {"v": version, "by": by, "at": now(), "error": error[:300]}
+    meta["photo"] = {
+        **_not_ours(meta.get("photo")),
+        "v": version,
+        "by": by,
+        "at": now(),
+        "error": error[:300],
+    }
     _put_meta(con, doc_id, meta)
     con.commit()
     return "failed"
@@ -264,143 +288,6 @@ def _checked_face(face: dict[str, Any]) -> tuple[str, str, float, int]:
     if not 0 <= score <= 1:
         raise ValueError(f"a score is 0 to 1: {score!r}")
     return json.dumps(box), json.dumps(marks), score, max(0, int(face["px"]))
-
-
-# how much a new face's box must cover an old one's to be the same face
-# read again: past it, what a person said of the old face moves to it
-SAME_FACE_IOU = 0.4
-
-
-def _iou(a: list[float], b: list[float]) -> float:
-    """The overlap of two ``x, y, w, h`` boxes over their union."""
-    w = max(0.0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
-    h = max(0.0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
-    inter = w * h
-    union = a[2] * a[3] + b[2] * b[3] - inter
-    return inter / union if union > 0 else 0.0
-
-
-def _successors(
-    old: dict[int, list[float]], new: dict[int, list[float]]
-) -> dict[int, int]:
-    """Each old face the new reading found again, with its new face: the
-    pairs of most overlap first, each face in one pair at most."""
-    pairs = sorted(
-        ((_iou(ob, nb), o, n) for o, ob in old.items() for n, nb in new.items()),
-        reverse=True,
-    )
-    out: dict[int, int] = {}
-    taken: set[int] = set()
-    for iou, o, n in pairs:
-        if iou < SAME_FACE_IOU:
-            break
-        if o not in out and n not in taken:
-            out[o] = n
-            taken.add(n)
-    return out
-
-
-def _carry_answers(con: sqlite3.Connection, moves: dict[int, int], at: str) -> int:
-    """What a person said of each old face, said of its successor: the
-    live answer and refusals ended on the old face and written again on
-    the new one with their run, person, edge and time, so an undo of
-    their action takes them back as before. Returns the faces carried."""
-    carried = 0
-    for old, new in moves.items():
-        for r in con.execute(
-            "SELECT * FROM face_names WHERE face_id = ? AND ended_at IS NULL", (old,)
-        ).fetchall():
-            con.execute(
-                "UPDATE face_names SET ended_at = ? WHERE id = ?", (at, r["id"])
-            )
-            con.execute(
-                "INSERT INTO face_names (face_id, verdict, entity_id, edge_id, by,"
-                " run, said_at) VALUES (?,?,?,?,?,?,?)",
-                (
-                    new,
-                    r["verdict"],
-                    r["entity_id"],
-                    r["edge_id"],
-                    r["by"],
-                    r["run"],
-                    r["said_at"],
-                ),
-            )
-            carried += 1
-        for r in con.execute(
-            "SELECT * FROM face_refusals WHERE face_id = ? AND ended_at IS NULL",
-            (old,),
-        ).fetchall():
-            con.execute(
-                "UPDATE face_refusals SET ended_at = ? WHERE id = ?", (at, r["id"])
-            )
-            con.execute(
-                "INSERT INTO face_refusals (face_id, entity_id, by, run, said_at)"
-                " VALUES (?,?,?,?,?)",
-                (new, r["entity_id"], r["by"], r["run"], r["said_at"]),
-            )
-    return carried
-
-
-@_serialized
-def apply_faces(
-    con: sqlite3.Connection,
-    doc_id: int,
-    *,
-    faces: list[dict[str, Any]],
-    version: int,
-    by: str,
-    width: int,
-    height: int,
-    source: str = "preview",
-) -> str:
-    """A picture's faces reading: the faces an earlier reading found ended
-    (``gone_at``), the new ones written, and ``meta.faces`` saying which
-    reading, of which copy at what size, and how many. What a person said
-    of an old face moves to the new face whose box covers it
-    (``SAME_FACE_IOU``); an answer whose face was not found again stays on
-    the ended face, its ``depicts`` fact with it, and its action's undo
-    still takes it back. A reading older than the one the picture holds
-    changes nothing (a worker's post after its lease ran out). Returns
-    ``found``, ``none`` or ``stale``."""
-    checked = [_checked_face(f) for f in faces]
-    meta = get_meta(con, doc_id)
-    if int((meta.get("faces") or {}).get("v") or 0) > version:
-        return "stale"
-    at = now()
-    old = {
-        int(r[0]): json.loads(r[1])
-        for r in con.execute(
-            "SELECT id, box FROM faces WHERE doc_id = ? AND gone_at IS NULL",
-            (doc_id,),
-        )
-    }
-    con.execute(
-        "UPDATE faces SET gone_at = ? WHERE doc_id = ? AND gone_at IS NULL",
-        (at, doc_id),
-    )
-    new: dict[int, list[float]] = {}
-    for box, marks, score, px in checked:
-        cur = con.execute(
-            "INSERT INTO faces (doc_id, box, landmarks, score, px, detector, found_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (doc_id, box, marks, score, px, by, at),
-        )
-        new[int(cur.lastrowid or 0)] = json.loads(box)
-    if old and new:
-        _carry_answers(con, _successors(old, new), at)
-    meta["faces"] = {
-        "v": version,
-        "by": by,
-        "at": at,
-        "n": len(checked),
-        "from": source,
-        "width": int(width),
-        "height": int(height),
-    }
-    _put_meta(con, doc_id, meta)
-    con.commit()
-    return "found" if checked else "none"
 
 
 @_guards("doc", list)

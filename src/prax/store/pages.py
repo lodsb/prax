@@ -20,6 +20,7 @@ from .base import (
     _serialized,
     document_hidden,
     hidden_documents,
+    personal_sql,
 )
 from .documents import (
     _set_promote,
@@ -525,9 +526,6 @@ def page_subtree(con: sqlite3.Connection, doc_id: int) -> list[int]:
     return out
 
 
-PERSONAL_STATES = ("suspected", "personal")  # what "personal" means to a filter
-
-
 @_reading
 def scope_documents(
     con: sqlite3.Connection, *, page: int | None = None, personal: str | None = None
@@ -550,13 +548,10 @@ def scope_documents(
                 docs.update(linked_documents(_read_archive(row[0]).decode("utf-8")))
         out = frozenset(docs)
     if personal in ("hide", "only"):
-        marks = ",".join("?" * len(PERSONAL_STATES))
         marked = {
             int(r[0])
             for r in con.execute(
-                "SELECT id FROM documents WHERE json_extract(meta,"
-                f" '$.sensitivity.state') IN ({marks})",
-                PERSONAL_STATES,
+                f"SELECT id FROM documents d WHERE {personal_sql('d')}"
             )
         }
         if personal == "only":

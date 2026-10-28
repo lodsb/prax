@@ -133,7 +133,8 @@ from .meta import (  # noqa: F401
 from .photos import (  # noqa: F401
     FACE_LANDMARKS,
     PHOTO_COPIES,
-    apply_faces,
+    PHOTO_KEYS,
+    _checked_face,
     apply_photo,
     face_counts,
     faces_due,
@@ -271,6 +272,7 @@ from .text import (  # noqa: F401
     index_text,
     ingest_file,
     ingest_text,
+    mark_suspected,
     original_info,
     rechunk,
     reference_chunks,

@@ -60,10 +60,11 @@ def nearest_people(
     who = np.asarray(people, dtype=np.int64)
     # named rows sorted by person, for each person's nearest at once
     order = np.argsort(who, kind="stable")
-    who_sorted = who[order]
-    persons, starts = np.unique(who_sorted, return_index=True)
+    persons, starts, counts = np.unique(
+        who[order], return_index=True, return_counts=True
+    )
+    column_of = np.repeat(np.arange(len(persons)), counts)  # sorted row -> person
     column = {int(p): i for i, p in enumerate(persons)}
-    rows_of = np.split(np.arange(len(order)), starts[1:])
     named_sorted = np.asarray(named, dtype=np.float32)[order]
     excluded = excluded or {}
     step = max(1, SLICE // len(named))
@@ -71,34 +72,41 @@ def nearest_people(
     out: list[Match | None] = []
     for lo in range(0, m, step):
         sims = np.asarray(queries[lo : lo + step], dtype=np.float32) @ named_sorted.T
-        for i in range(len(sims)):
-            for p in excluded.get(lo + i, ()):
-                if p in column:
-                    sims[i, rows_of[column[p]]] = -np.inf
+        n = len(sims)
+        for i, ps in excluded.items():
+            if lo <= i < lo + n:
+                for p in ps:
+                    if p in column:
+                        c = column[p]
+                        sims[i - lo, starts[c] : starts[c] + counts[c]] = -np.inf
         best = np.maximum.reduceat(sims, starts, axis=1)
         near = np.argpartition(-sims, kk - 1, axis=1)[:, :kk]
-        for i in range(len(sims)):
-            row = sims[i]
-            votes: dict[int, int] = {}
-            for j in near[i]:
-                if np.isfinite(row[j]):
-                    c = int(np.searchsorted(starts, j, side="right") - 1)
-                    votes[c] = votes.get(c, 0) + 1
-            if not votes:
+        alive = np.isfinite(np.take_along_axis(sims, near, axis=1))
+        votes = np.zeros((n, len(persons)), dtype=np.int64)
+        np.add.at(
+            votes, (np.repeat(np.arange(n), kk), column_of[near].ravel()), alive.ravel()
+        )
+        most = votes.max(axis=1)
+        # the most votes, the nearer face on a tie
+        top = np.argmax(np.where(votes == most[:, None], best, -np.inf), axis=1)
+        rows = np.arange(n)
+        sim = best[rows, top]
+        others = best.copy()
+        others[rows, top] = -np.inf
+        other = others.max(axis=1)
+        mine = np.where(column_of[None, :] == top[:, None], sims, -np.inf)
+        like = order[np.argmax(mine, axis=1)]
+        for i in range(n):
+            if most[i] == 0:
                 out.append(None)
                 continue
-            top = max(votes, key=lambda c: (votes[c], best[i, c]))
-            others = np.delete(best[i], top)
-            other = float(others.max()) if len(others) else -np.inf
-            sim = float(best[i, top])
-            j = int(rows_of[top][np.argmax(row[rows_of[top]])])
             out.append(
                 Match(
-                    person=int(persons[top]),
-                    similarity=sim,
-                    margin=sim - other if np.isfinite(other) else 1.0,
-                    votes=votes[top],
-                    like=int(order[j]),
+                    person=int(persons[top[i]]),
+                    similarity=float(sim[i]),
+                    margin=float(sim[i] - other[i]) if np.isfinite(other[i]) else 1.0,
+                    votes=int(most[i]),
+                    like=int(like[i]),
                 )
             )
     return out

@@ -20,23 +20,10 @@ from prax import store
 from prax.ml import faces
 
 from . import leases
-from .base import HandOut, Pass, Step, TakeIn, ready, resting
-
-# a worker's pass asks for batch after batch for this long, as the photos
-# step does: a preview is read in some 45 ms (2026-10-27)
-RUN_SECONDS = 90
+from .base import BatchStep, HandOut, Pass, TakeIn, ready, resting
 
 
-def _first_error(rep: dict[str, Any]) -> str:
-    """The first error the door answered a post with, for the pass's line."""
-    errors = rep.get("errors") or []
-    if not errors:
-        return ""
-    e = errors[0]
-    return f"; the first, doc {e.get('doc_id')}: {str(e.get('error'))[:160]}"
-
-
-class Faces(Step):
+class Faces(BatchStep):
     name = "faces"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
@@ -67,28 +54,18 @@ class Faces(Step):
             return None
         if (trouble := ready(self.name, faces._session)) is not None:
             return trouble
-        start = time.monotonic()
-        tally = {"applied": 0, "found": 0, "none": 0, "errors": 0}
-        first = ""
-        while time.monotonic() - start < RUN_SECONDS:
-            items = p.fetch(self.name).get("items") or []
-            if not items:
-                break
-            p.note(f"{self.name}: {len(items)} pictures", total=len(items), done=0)
-            rep = p.post(self.name, {"results": [self._read(p, it) for it in items]})
-            acts = rep.get("actions") or {}
-            tally["applied"] += int(rep.get("applied", 0))
-            tally["found"] += int(acts.get("found", 0))
-            tally["none"] += int(acts.get("none", 0))
-            tally["errors"] += len(rep.get("errors") or [])
-            first = first or _first_error(rep)
-            if tally["errors"] and not tally["applied"]:
-                break  # nothing lands: the next pass tries again
-        if not any(tally.values()):
-            return None
+        return self.batches(p)
+
+    def batch(
+        self, p: Pass, items: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        p.note(f"{self.name}: {len(items)} pictures", total=len(items), done=0)
+        return {"results": [self._read(p, it) for it in items]}, {}
+
+    def line(self, tally: dict[str, int], first: str) -> str:
         return (
-            f"{tally['applied']} pictures ({tally['found']} with faces,"
-            f" {tally['none']} without, {tally['errors']} not read{first})"
+            f"{tally['applied']} pictures ({tally.get('found', 0)} with faces,"
+            f" {tally.get('none', 0)} without, {tally['errors']} not read{first})"
         )
 
     @staticmethod
@@ -130,26 +107,30 @@ def _save(*, force: bool = False) -> None:
         _saved_at.update(at=time.monotonic(), unsaved=0)
 
 
-class FaceVectors(Step):
+class FaceVectors(BatchStep):
     """What each face looks like (plan item AT step 2): the door hands out
     the pictures holding faces with no vector, the worker aligns each face
-    in the preview, gives it SFace's 128 numbers and a small crop, and the
-    door adds the vectors to the face index (``store.apply_face_vectors``)."""
+    in the preview, gives it the door's recogniser's numbers (``faces.model``,
+    SFace's 128 by default; the hand-out names it) and a small crop, and
+    the door adds the vectors to the face index
+    (``store.apply_face_vectors``)."""
 
     name = "facevectors"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
         skip = frozenset(leases.leased(self.name))
-        due = store.face_vectors_due(h.con, store.FACE_MODEL, limit=h.limit, skip=skip)
+        model = store.face_model()
+        due = store.face_vectors_due(h.con, model, limit=h.limit, skip=skip)
         if not due:
             _save(force=True)
         h.lease([d["doc_id"] for d in due])
-        return h.batch([{**d, "preview": f"/doc/{d['doc_id']}/preview"} for d in due])
+        items = [{**d, "preview": f"/doc/{d['doc_id']}/preview"} for d in due]
+        return {**h.batch(items), "model": model}
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         model = str(t.payload.get("model") or "")
-        if model != store.FACE_MODEL:
-            raise ValueError(f"the door's faces are {store.FACE_MODEL}, not {model!r}")
+        if model != (mine := store.face_model()):
+            raise ValueError(f"the door's faces are {mine}, not {model!r}")
 
         def apply(doc_id: int, r: dict[str, Any]) -> str:
             got = store.apply_face_vectors(
@@ -176,32 +157,26 @@ class FaceVectors(Step):
             return None
         if (trouble := ready(self.name, faces._recognizer)) is not None:
             return trouble
-        start = time.monotonic()
-        tally = {"applied": 0, "faces": 0, "errors": 0}
-        first = ""
-        while time.monotonic() - start < RUN_SECONDS:
-            items = p.fetch(self.name).get("items") or []
-            if not items:
-                break
-            n = sum(len(it["faces"]) for it in items)
-            p.note(f"{self.name}: {n} faces", total=n, done=0)
-            results = [self._read(p, it) for it in items]
-            rep = p.post(self.name, {"model": faces.RECOGNIZER, "results": results})
-            tally["applied"] += int(rep.get("applied", 0))
-            tally["faces"] += sum(len(r.get("faces") or []) for r in results)
-            tally["errors"] += len(rep.get("errors") or [])
-            first = first or _first_error(rep)
-            if tally["errors"] and not tally["applied"]:
-                break
-        if not any(tally.values()):
-            return None
+        return self.batches(p)
+
+    def batch(
+        self, p: Pass, items: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, int]]:
+        n = sum(len(it["faces"]) for it in items)
+        p.note(f"{self.name}: {n} faces", total=n, done=0)
+        model = faces.recognizer(self.handed.get("model")).name  # the door's
+        results = [self._read(p, it, model) for it in items]
+        body = {"model": model, "results": results}
+        return body, {"faces": sum(len(r.get("faces") or []) for r in results)}
+
+    def line(self, tally: dict[str, int], first: str) -> str:
         return (
-            f"{tally['faces']} faces in {tally['applied']} pictures"
+            f"{tally.get('faces', 0)} faces in {tally['applied']} pictures"
             f" ({tally['errors']} not read{first})"
         )
 
     @staticmethod
-    def _read(p: Pass, it: dict[str, Any]) -> dict[str, Any]:
+    def _read(p: Pass, it: dict[str, Any], model: str) -> dict[str, Any]:
         from PIL import Image
 
         out: dict[str, Any] = {"doc_id": it["doc_id"]}
@@ -218,7 +193,7 @@ class FaceVectors(Step):
             read.append(
                 {
                     "id": f["id"],
-                    "vector": faces.vector(faces.align(image, points)),
+                    "vector": faces.vector(faces.align(image, points, model), model),
                     "crop": base64.b64encode(faces.crop(image, f["box"])).decode(
                         "ascii"
                     ),
