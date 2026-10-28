@@ -823,8 +823,8 @@ The user asked on 2026-10-28 for every one to be fixed.
       entities that differ only by case or punctuation, and the like
       (`docs/log.md`, "The heal pass"). (2026-10-06: case and punctuation
       are the sure tier's already; what showed up is spacing.
-      `prax heal --check spacing-twins` finds 783 groups, 793 entities to
-      fold, on a copy of the store; applying it waits for the user's word.)
+      `prax heal --check spacing-twins` was applied on 2026-10-09, and
+      again on 2026-10-28 for the 59 groups made since.)
 - [ ] **Only then, `confidence` as a number.** A column beside the
       three words rather than instead of them, written where a pass
       measured it and left null where nothing did — an edge whose
@@ -980,7 +980,7 @@ not done.
 
 ## Two architectural stages (the user, 2026-10-18; not yet ordered)
 
-- [ ] (designed 2026-10-28, `docs/global-ids.md`; two questions for the user at its end) **AP. Ids that mean the same in another library.** "the document
+- [ ] (designed 2026-10-28, `docs/global-ids.md`; its two questions answered the same day) **AP. Ids that mean the same in another library.** "the document
       ids should probably be derived from stable hashes, so i can merge a
       friend's library in, or networking etc and also share a subgraph".
       A document has one already: its original's sha256 (invariant 2);
@@ -1344,3 +1344,16 @@ to 8; the library's `agent-memory-landscape` page):
 - Kùzu migration script (only if the entity threshold is crossed)
 - Complement / "blast-radius" SQL tools exposed via MCP
 - Karakeep or Linkwarden as an additional capture front-end feeding the inbox
+
+## 2026-10-28: AP's two answers, and the spacing twins again
+
+- **AP.** The user's answers to the note's two questions. An import's
+  `likely` rows wait on the Review page, their edges held until the row
+  is decided; resolution's judges may answer first, a person's answer
+  replaces theirs. A page's global id is minted at random once, like an
+  entity's: a slug is renamed and is not unique across libraries, and a
+  hash changes with every revision. `docs/global-ids.md` says both.
+- **Spacing twins.** `prax heal --check spacing-twins --apply` folded
+  the 59 groups made since 2026-10-09 (job 1497), one run that
+  `unmerge_run` takes back. The check finds none now. The plan's line
+  that still said 783 waiting was the count from before the first run.

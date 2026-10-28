@@ -38,8 +38,14 @@ global id, `gid`, written once:
 - **A document's** is its `hash`. Nothing new: the column exists and is
   unique. A retired copy (`retire_document(duplicate_of=)`) keeps its
   own hash, so an import that names the copy's hash lands on the keeper
-  through `retired.of`. A page's hash is the hash of its first original
-  (`_page_original`), local like any other; pages still meet by slug.
+  through `retired.of`.
+- **A page's** is minted once when the page is made, like an entity's:
+  128 random bits, written `p:` and 26 Crockford base32 characters
+  (decided 2026-10-28). Not its slug: two libraries that both have
+  `project-synth` are probably talking about different projects, and a
+  rename changes the slug. Not its hash: every revision is a new
+  original with a new hash. The `gid` stays through edits and renames;
+  the page's revisions keep their own hashes as documents.
 - **An entity's** is minted once when the row is made: 128 random bits,
   written `e:` and 26 Crockford base32 characters. It is not derived from
   the name, because the name changes (`rename_person`, the `names` pass)
@@ -79,7 +85,9 @@ now.
 - **INFERRED edges with premises are left out.** The receiving library
   derives its own from what it holds (`derive_rules`); a derived fact
   shipped without its premises would be a claim nothing here supports.
-- **`page`** is unchanged.
+- **`page`** gains `gid`. An import lands a page on the local page of
+  that `gid` and never on one with an equal slug; a new page whose slug
+  is taken here gets a free one (`-2`).
 
 ## The import
 
@@ -98,12 +106,19 @@ is our entity N". Rows are made in this order:
    only this library mints its own.
 2. A `gid` already in `foreign_entities` for this source lands where it
    was decided.
-3. Otherwise the entity goes through `store.link` by name and type, as
-   now, and the result is written as a `likely` row, `decided_by`
-   `import`. Resolution's candidates get the pair when the name was a
-   label rather than the entity's own name. A person's decision on the
-   Review page, or `unmerge_run`, makes the row `human`, and a later
-   import follows it.
+3. Otherwise the entity is matched by name and type (`store.link`'s
+   lookup, writing nothing) and the result is written as a `likely` row,
+   `decided_by` `import`. When nothing here answers to the name, the
+   entity is new: it is made, and the row is `new`, decided.
+
+A `likely` row waits on the Review page (decided 2026-10-28). Its edges
+are held in the import's file, not written, until the row is decided:
+"theirs is our N", "theirs is a new entity", or "leave it out". The
+judges of resolution's likely pairs (`steps.adjudicate`, the local model
+and then the paid one, with `sameness.yaml`) may answer first, as they
+do for two entities of this library; a person's answer replaces theirs.
+A decided row makes its held edges due, and a later import follows it.
+`unmerge_run` takes back an import's run as now.
 
 An edge whose `gid` this library already holds live for that document
 is counted and not written again: a re-import of the same file writes
@@ -139,25 +154,24 @@ for a backup of a subgraph or a project kept in git.
 
 ## Steps, when it is built
 
-1. Migration: `entities.gid` filled by `randomblob`, and an empty
+1. Migration: `entities.gid` and `pages.gid` filled by `randomblob`, and an empty
    `edges.gid`. SQLite has no sha256, so a `maintain` pass fills the
    edges' column, and `link` writes it from then on. Measure the fill
    and the indexes on a copy first.
 2. `store.link`, `merge_entities` and every writer of `entities` mint
    the `gid`; a test holds every row to one.
 3. `prax-graph/2` out and in, `foreign_entities`, the re-import that
-   writes nothing.
+   writes nothing, and the held edges of `likely` rows with their tab on
+   the Review page.
 4. `--as <token>`: the export's reads scrubbed, faces left out, a case
    in `tests/test_wall.py`.
 
 Sharing over a network ("networking") is the same file over HTTP and is
 not designed here.
 
-## Open questions for the user
+## Decided (the user, 2026-10-28)
 
-- Should an import's `likely` rows wait on the Review page before their
-  edges are written, or be written at once and undone by run as now?
-  This note writes at once, as `prax-graph/1` does.
-- Is a page's global id its slug (as now) or its first hash? Two
-  libraries that both have `project-synth` are probably talking about
-  different projects.
+- An import's `likely` rows wait on the Review page before their edges
+  are written (above, "The import").
+- A page's global id is random and minted once, neither its slug nor a
+  hash, so it stays through edits and renames.
