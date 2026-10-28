@@ -402,7 +402,9 @@ One set of pictures on a page of its own, 40 a page: a person's, an
 event's, a place's with the places in it, or an event group's from the
 Review page. A person's page links its events ("its photos") and its
 places here, and each event group on the Review page has "all its
-photos".
+photos". In the graph, a person's, an event's or a place's panel has
+"its photos" for the administrator; a node knows its name, so the click
+looks its id up (`GET /entities`, the name and type alike).
 
 ### `#review?rel=&unmapped=&offset=`
 

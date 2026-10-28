@@ -883,9 +883,9 @@ The user asked on 2026-10-28 for every one to be fixed.
       (`mountGallery`) over `GET /pictures` (`store.picture_set`: a
       person's, an event's, an event group's, a place's) or a list in
       hand (a document's figures), with a pager and a viewer that steps
-      across pages; `#photos` for a set on its own page. Left for later:
-      the face grids of the Review page (a face crop is not a picture of
-      a set), and a graph entity's "photos here".
+      across pages; `#photos` for a set on its own page. The graph's
+      panel has "its photos" too (the same day). Left for later: the face
+      grids of the Review page (a face crop is not a picture of a set).
 - [ ] **A procedural graph for the surfer** (later; the reference is in
       `docs/log.md`, "After the mathematics").
 - [ ] **If the UI still feels slow from the MacBook** — the next suspect

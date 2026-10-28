@@ -30,6 +30,13 @@ function isPersonType(t) {
   for (let i = 0; t && i < 8; i++, t = TYPE_PARENTS[t]) if (t === "person") return true;
   return false;
 }
+// the set of pictures a thing of type t has (#photos): a person's are the
+// ones that show them, an event's and a place's the ones taken there
+function photoSetOfType(t) {
+  const sets = { person: "depicts", event: "event", place: "place" };
+  for (let i = 0; t && i < 8; i++, t = TYPE_PARENTS[t]) if (sets[t]) return sets[t];
+  return "";
+}
 const regionColor = (id) => `hsl(${regionHue(id)} 40% 44%)`;
 
 // Where each thing was last drawn, by key, for the life of the page: a
@@ -801,6 +808,7 @@ function graphPanel(node, edges, graph) {
   if (node.expanded) acts.push(`<a href="#" id="graph-fold">fold</a>`);
   if (edges.some((e) => e.source_doc)) acts.push(node.docsShown ? `<a href="#" id="graph-docs-off">hide its documents</a>` : `<a href="#" id="graph-docs">show its documents</a>`);
   acts.push(graph && graph.connectFrom === node.key ? `<span>now click the other end</span>` : `<a href="#" id="graph-path">how is it connected to…</a>`);
+  if (!isGuest() && photoSetOfType(node.type)) acts.unshift(`<a href="#" id="graph-photos">its photos</a>`);
   if (isPersonType(node.type)) acts.unshift(`<a href="#people?${new URLSearchParams({ name: node.name })}">their page</a>`);
   const docs = node.docs !== undefined ? ` · in ${node.docs} documents` : "";
   return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)}${docs} · ${edges.length} edges drawn</div>
@@ -835,7 +843,18 @@ function graphPanelUpdater(panel) {
     on("#graph-docs", () => graph.showDocs(node.key));
     on("#graph-docs-off", () => graph.hideDocs(node.key));
     on("#graph-path", () => { graph.connectFrom = node.key; graph.select(node.key); });
+    on("#graph-photos", () => openPhotos(node, panel));
   };
+}
+
+// A node knows its name, not its id: the id is looked up when asked for
+async function openPhotos(node, panel) {
+  const rows = await api("/entities", { q: node.name, limit: 200 });
+  const named = rows.filter((r) => r.name === node.name);
+  const hit = named.find((r) => r.type === node.type) || named[0];
+  const link = panel.querySelector("#graph-photos");
+  if (hit) location.hash = `#photos?${photoSetOfType(node.type)}=${hit.id}`;
+  else if (link) link.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: "no photos found" }));
 }
 
 // What the graph is drawn from, when narrowed: a module's documents

@@ -42,7 +42,9 @@ COUNTRIES = "countryInfo.txt"
 # 3 (2026-10-28): placed again for the places' names in other languages,
 # which the pictures placed at 2 have none of; the same answer keeps its
 # facts (store.apply_place), so only the names and the stamps are new
-VERSION = 3
+# 4 (2026-10-28): placed again to join the towns split in two by a region
+# renamed into another language (store.graph.geo._gazetteer_ends)
+VERSION = 4
 REACH_KM = 30.0
 # not a town of its own: a section of a city (Lisbon's Intendente,
 # Berlin's Mitte, which were the nearest "towns" to their centres), and

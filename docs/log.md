@@ -9213,3 +9213,23 @@ node keeps the facts. Only `meta.place`'s stamp and the names are new.
 The gazetteer reading is version 3, so the `geocode` step hands the
 1,800 out again. A reading that names another town ends and re-writes,
 as before. The test is in `tests/test_review_2026_10_28.py`.
+
+### The same evening: one town, two nodes
+
+The run at version 3 kept 1,302 pictures' facts and re-wrote 498. All
+498 named the same town, at the same distance, as before. What differed
+was the node: "X" against "X, R". Afterwards 43 of the 77 towns stood
+on two nodes, where version 2 had left 11.
+
+The cause is in `_gazetteer_ends`. It compared the names of the places a
+town node is inside with the region's node string. A region renamed
+into the library's language (by the `names` pass, or now by the places'
+own names, which version 3 wrote as it went) no longer matched. The
+town looked as if it were inside something else, and `_place_node` gave
+it a node of its own. It now compares entity ids, and the reading is
+version 4, so the pictures on a stray node move to their town's. The
+test renames a region between two placements
+(`tests/test_review_2026_10_28.py`).
+
+The graph's panel of a person, an event or a place also has "its
+photos" now, the gallery of `#photos`, for the administrator.

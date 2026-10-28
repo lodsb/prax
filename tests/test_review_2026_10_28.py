@@ -552,3 +552,26 @@ def test_a_reading_that_names_the_same_town_keeps_its_facts(con: Any) -> None:
     # another town: the facts move
     _placed(con, doc, "Brinby", "Lower Vale", "Ardenia")
     assert {r[0] for r in con.execute(live, (doc,))}.isdisjoint(before)
+
+
+def test_a_region_renamed_keeps_its_towns_in_one_node(con: Any) -> None:
+    """A region shown in another language (the names pass, or a place's
+    names) is still the region a town was placed in: the town is not
+    taken for a second town of its name."""
+    from tests.test_geocode import _photo_with
+
+    docs = [
+        _photo_with(con, f"{i}.jpg", 45.5, 10.2, "2018-05-03T10:00:00", 40 * i + 1)
+        for i in range(2)
+    ]
+    _placed(con, docs[0], "Aldmouth", "Lower Vale", "Ardenia")
+    region = store.entity_answering(con, "Lower Vale", "place")
+    con.execute("UPDATE entities SET name = 'Unteres Tal' WHERE id = ?", (region,))
+    _placed(con, docs[1], "Aldmouth", "Lower Vale", "Ardenia")
+    towns = {
+        int(r[0])
+        for r in con.execute(
+            "SELECT dst FROM edges WHERE rel = 'taken_in' AND valid_to IS NULL"
+        )
+    }
+    assert len(towns) == 1

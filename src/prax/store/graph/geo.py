@@ -105,18 +105,20 @@ def place_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
     return {"placed": row[0] or 0, "nowhere": row[1] or 0, "waiting": row[2] or 0}
 
 
-def _gazetteer_ends(con: sqlite3.Connection, name: str) -> tuple[set[str], bool]:
-    """What the gazetteer's facts say a place node ``name`` is inside, and
-    whether any place is said to be inside it."""
+def _gazetteer_ends(con: sqlite3.Connection, name: str) -> tuple[set[int], bool]:
+    """The entities the gazetteer's facts say a place node ``name`` is
+    inside, and whether any place is said to be inside it. Ids, not names:
+    a region renamed into another language is still the region (on
+    2026-10-28, 43 of 77 towns were split in two that way)."""
     # by the entity that answers to the name, so a node the names pass
     # renamed into the library's language is still found by its own name
     node = entity_answering(con, name, "place")
     if node is None:
         return set(), False
     outer = {
-        str(r[0])
+        int(r[0])
         for r in con.execute(
-            "SELECT t.name FROM edges e JOIN entities t ON t.id = e.dst"
+            "SELECT e.dst FROM edges e"
             " WHERE e.src = ? AND e.rel = 'located_in' AND e.producer = ?"
             " AND e.valid_to IS NULL",
             (node, PLACE_PRODUCER),
@@ -175,7 +177,7 @@ def _place_node(con: sqlite3.Connection, name: str, parent: str) -> str:
     outer, holds = _gazetteer_ends(con, name)
     if not parent:
         return f"{name} (country)" if outer else name
-    if outer - {parent} or (holds and not outer):
+    if outer - {entity_answering(con, parent, "place")} or (holds and not outer):
         return f"{name}, {parent}"
     return name
 
