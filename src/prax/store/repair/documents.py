@@ -23,15 +23,10 @@ from ..documents import (
     similarity,
     unreachable_originals,
 )
+from ..graph import title_key
 from .common import CAP
 
 STALE_JOB_SECONDS = 86_400  # a day: the door reaps its own host in minutes
-
-
-_TITLE_KEY = re.compile(r"[^\w]+")
-
-
-TWIN_TITLE_MIN = 9  # shorter titles pair by accident ("Untitled", "Notes")
 
 
 def _twin_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -45,8 +40,8 @@ def _twin_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
         "SELECT id, title, mime FROM documents WHERE text_hash IS NOT NULL"
         " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
     ):
-        key = _TITLE_KEY.sub(" ", (r["title"] or "").lower()).strip()
-        if len(key) < TWIN_TITLE_MIN:
+        key = title_key(r["title"])  # the versions' title key
+        if not key:
             continue
         groups.setdefault((key, (r["mime"] or "").split("/")[0]), []).append(r)
     found: list[dict[str, Any]] = []

@@ -71,7 +71,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
-   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces), `retrieval` (knobs, compounds, query, legs,
+   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
@@ -185,7 +185,8 @@ revisit threshold, under "Decision thresholds" below.
    (`taken_in`, from its GPS position; core 5, 2026-10-26) and the event
    a person grouped it into (`recorded_at`; core 6, the same day), and the
    person a picture shows and the event a person was at (`depicts`,
-   `attended`; core 7, 2026-10-27). A bump that only adds what a
+   `attended`; core 7, 2026-10-27), and the work a document is a version
+   of (`example_of`; core 8, 2026-10-28, plan item AS). A bump that only adds what a
    module accepts moves the extraction stamps by migration (18, 26, 39)
    instead of making every document due again.
    `research.yaml` holds papers, methods, claims and pages.
@@ -202,7 +203,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core7+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
+   (`core8+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that
@@ -329,7 +330,11 @@ project's sync reads from the note; or a live `supersedes`/`invalidates`
 edge reaches it) carries `stale` with the date and what replaced it, and
 moves `STALE_SHIFT` places down: also a preference, `include_stale`
 keeps the plain order, and `ask` tells the answering model
-(`store.staleness`).
+(`store.staleness`). An older version of a work (`example_of`, plan
+item AS) is stale by its work's later one, read from the decided
+versions and not written as `supersedes`: two versions of one title are
+one node. A search folds it under the later version when both come up
+(`versions` on the hit; `store.later_versions`).
 An optional cross-encoder rerank (bge-reranker-v2-m3) runs over the
 fused top-N; benchmark it on the target hardware before enabling it by
 default. Graph traversal expands entry-point hits 1–2 hops. Complement

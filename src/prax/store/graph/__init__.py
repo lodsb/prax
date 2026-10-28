@@ -28,6 +28,7 @@ ORDER = (
     "people",
     "naming",
     "faces",
+    "versions",
 )
 
 from .communities import (  # noqa: F401
@@ -271,6 +272,20 @@ from .traversal import (  # noqa: F401
     senses,
     traverse,
     traverse_map,
+)
+from .versions import (  # noqa: F401
+    COPY_LINE,
+    TITLE_KEY_MIN,
+    VERSION_FLOOR,
+    VERSION_GROUP_MAX,
+    VERSION_VERDICTS,
+    VERSIONS_PAGE,
+    decide_version,
+    find_versions,
+    title_key,
+    undo_version,
+    version_candidates,
+    versions_of,
 )
 from .views import (  # noqa: F401
     _SUBGRAPH_EDGE,

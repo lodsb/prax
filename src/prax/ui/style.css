@@ -738,3 +738,5 @@ body.guest #ask-again, body.guest .doc-actions-remove, body.reader .doc-actions-
 .face-done { opacity: .35; }
 .face-done .face-pick { pointer-events: none; }
 .face-alike { border: 1px solid var(--line); padding: .5rem; margin: .5rem 0 1rem; }
+.version-heads { font-size: .9rem; }
+.version-heads mark { background: var(--panel); color: inherit; font-weight: 600; }

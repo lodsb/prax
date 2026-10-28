@@ -709,6 +709,57 @@ def graph_event_undo(candidate_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/graph/versions")
+def graph_versions(
+    request: Request, verdict: str | None = None, offset: int = 0, limit: int = 20
+) -> dict[str, Any]:
+    """Pairs of documents that are probably versions of one work or one
+    text twice, the most alike first, for a person to answer
+    (``store.version_candidates``); answered ones with ``verdict``."""
+    try:
+        return store.version_candidates(
+            _con(request),
+            verdict=verdict or None,
+            offset=max(0, offset),
+            limit=max(1, min(limit, store.VERSIONS_PAGE)),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/graph/versions/find")
+def graph_versions_find(request: Request) -> dict[str, Any]:
+    """The pairs found again now, as the nightly's ``versions`` pass does."""
+    return store.find_versions(_con(request))
+
+
+class VersionReq(BaseModel):
+    verdict: str
+
+
+@router.post("/graph/versions/{candidate_id}")
+def graph_version_decide(
+    candidate_id: int, req: VersionReq, request: Request
+) -> dict[str, Any]:
+    """A person's answer: ``version``, ``copy`` or ``different``
+    (``store.decide_version``)."""
+    try:
+        return store.decide_version(_con(request), candidate_id, req.verdict)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/graph/versions/{candidate_id}/undo")
+def graph_version_undo(candidate_id: int, request: Request) -> dict[str, Any]:
+    """An answer taken back: its facts ended, a copy back, the pair open."""
+    try:
+        return store.undo_version(_con(request), candidate_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.get("/graph/events/{candidate_id}/timeline")
 def graph_event_timeline(candidate_id: int, request: Request) -> dict[str, Any]:
     """A group's photos as its bursts, where a cut may go

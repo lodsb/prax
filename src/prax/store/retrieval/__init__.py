@@ -75,6 +75,7 @@ from .fusion import (  # noqa: F401
     CITE_SCAN,
     CITE_TRIES,
     CITE_WORDS,
+    EXAMPLE_OF,
     PRIOR_DEPTH,
     PRIOR_MIN,
     PRIOR_SMALL,
@@ -100,9 +101,13 @@ from .fusion import (  # noqa: F401
     _Took,
     _without,
     cite_link,
+    in_order,
+    later_versions,
     published_dates,
     search,
     staleness,
+    work_versions,
+    works_of,
 )
 from .knobs import (  # noqa: F401
     Knobs,

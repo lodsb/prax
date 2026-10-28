@@ -745,3 +745,34 @@ test("the person page's rename and same-person forms", () => {
   assert.match(html, /form class="person-same search-form" hidden/);
   assert.match(html, /Ada &lt;L&gt; stays the name/);
 });
+
+test("a pair of versions: both sides, the headings one side has, the suggested answer first", () => {
+  const side = (id, heads, extra) => ({ doc_id: id, title: "Ranking <things>", chars: 12000, headings: heads, added: "2026-01-02T00:00:00Z", ...extra });
+  const html = lib.versionRow({ id: 7, overlap: 0.42, verdict: null,
+    reasons: { by: "title", authors: ["lovelace"], suggest: "version" },
+    a: side(3, ["Introduction", "Method"], { published: "2019" }),
+    b: side(9, ["Introduction", "Method", "Appendix"]) });
+  assert.match(html, /42% of their text alike · one title · authors lovelace/);
+  assert.match(html, /Ranking &lt;things&gt;/);
+  assert.match(html, /published 2019/);
+  assert.match(html, /added 2026-01-02/);
+  assert.match(html, /<mark>Appendix<\/mark>/);
+  assert.doesNotMatch(html, /<mark>Method/);
+  assert.match(html, /<button type="button" data-verdict="version">versions of one work/);
+  const copy = lib.versionRow({ id: 8, overlap: 0.95, verdict: null, reasons: { suggest: "copy" }, a: side(1, []), b: side(2, []) });
+  assert.match(copy, /<button type="button" data-verdict="copy">one text twice/);
+  const done = lib.versionRow({ id: 9, overlap: 0.5, verdict: "different", reasons: {}, a: side(1, []), b: side(2, []) });
+  assert.match(done, /<b>different<\/b>/);
+  assert.match(done, /data-version-undo/);
+});
+
+test("which version of a work a document is, and the versions a hit folds", () => {
+  const v = { work: { id: 1, name: "Ranking <things>" }, latest: 9,
+    versions: [{ doc_id: 3, published: "2019" }, { doc_id: 9, published: "2021" }] };
+  assert.match(lib.versionsLine(v, 3), /version 1 of 2 of <i>Ranking &lt;things&gt;<\/i>: <a href="#doc\/9">2021<\/a>/);
+  assert.match(lib.versionsLine(v, 9), /the latest of 2/);
+  assert.equal(lib.versionsLine(null, 3), "");
+  assert.match(lib.foldedVersions([3]), /1 older version: <a href="#doc\/3">#3<\/a>/);
+  assert.equal(lib.foldedVersions([]), "");
+  assert.match(lib.staleNote({ state: "superseded", by: "versions", replaced_by: [{ doc_id: 9, title: "t" }] }), /a later version of its work/);
+});

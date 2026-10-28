@@ -71,6 +71,7 @@ from .graph import (
     find_conflicts,
     find_edges,
     find_event_candidates,
+    find_versions,
     forget_resolved_reviews,
     in_english_text,
     languages_by_entity,
@@ -119,6 +120,7 @@ PASSES = (
     "histories",
     "events",
     "facegroups",
+    "versions",
 )
 # a pass only when named: the nightly has no reason to
 ON_REQUEST = ("rechunk", "rejudge", "vectors")
@@ -1339,6 +1341,14 @@ def _events(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return find_event_candidates(con)
 
 
+def _versions(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """Pairs of documents that are probably versions of one work, or one
+    text twice, found again for the Review page's versions tab
+    (``store.find_versions``): no model; a pair measured again only when a
+    text changed, and what a person decided is kept."""
+    return find_versions(con)
+
+
 def _facegroups(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The faces that are probably one person, grouped again by density
     over the face vectors (``prax.ml.clusters``, HDBSCAN over each face's
@@ -1398,6 +1408,7 @@ _RUN = {
     "conflicts": _conflicts,
     "events": _events,
     "facegroups": _facegroups,
+    "versions": _versions,
 }
 
 

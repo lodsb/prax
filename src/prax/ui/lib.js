@@ -393,6 +393,34 @@ function splitRow(it) {
       <button type="button" data-act="apart" data-ids="${ids.join(",")}">several things</button>
       <span class="decide-out muted"></span></div></article>`;
 }
+// Two documents that are probably versions of one work (GET /graph/versions,
+// plan item AS): each side's title, date, length and top-level headings, a
+// heading only one side has marked, how much text they share, and why they
+// were paired. The suggested answer is the first button.
+const VERSION_ANSWERS = { version: "versions of one work", copy: "one text twice", different: "different" };
+function versionSide(s, other) {
+  const theirs = new Set(other.headings || []);
+  const heads = (s.headings || []).map((h) => theirs.has(h) ? esc(h) : `<mark>${esc(h)}</mark>`);
+  const when = s.published ? `published ${esc(s.published)}` : `added ${esc((s.added || "").slice(0, 10))}`;
+  return `<div><h4><a href="#doc/${s.doc_id}">${esc(s.title || `#${s.doc_id}`)}</a></h4>
+    <p class="muted">#${s.doc_id} · ${when} · ${Number(s.chars || 0).toLocaleString()} characters${s.retired ? " · retired" : ""}</p>
+    ${heads.length ? `<p class="version-heads">${heads.join(" · ")}</p>` : '<p class="muted">no headings</p>'}</div>`;
+}
+function versionRow(it) {
+  const r = it.reasons || {};
+  const why = [`${Math.round(it.overlap * 100)}% of their text alike`,
+    r.by === "arxiv" ? "one arXiv id" : "one title",
+    (r.authors || []).length ? `authors ${r.authors.map(esc).join(", ")}` : ""].filter(Boolean);
+  const order = [r.suggest || "version", ...Object.keys(VERSION_ANSWERS).filter((k) => k !== (r.suggest || "version"))];
+  const acts = it.verdict
+    ? `<span><b>${esc(VERSION_ANSWERS[it.verdict] || it.verdict)}</b></span>
+        <button type="button" class="secondary" data-version-undo>undo</button>`
+    : order.map((k, i) => `<button type="button"${i ? ' class="secondary"' : ""} data-verdict="${k}">${VERSION_ANSWERS[k]}</button>`).join(" ");
+  return `<article class="decide-row version-row" data-candidate="${it.id}">
+    <p class="muted">${why.join(" · ")}</p>
+    <div class="decide-pair">${versionSide(it.a, it.b)}${versionSide(it.b, it.a)}</div>
+    <div class="decide-acts">${acts}<span class="decide-out muted"></span></div></article>`;
+}
 // A group of photos taken close together (GET /graph/events): its days,
 // how many, where and from which folder, a strip of its thumbnails, and
 // the name it would be given, which a person may change before saying
@@ -894,7 +922,7 @@ function staleNote(stale) {
   const when = stale.since ? ` ${esc(stale.since)}` : "";
   const by = (stale.replaced_by || []).slice(0, 2)
     .map((r) => `<a href="#doc/${Number(r.doc_id)}">${esc(r.title || "doc " + r.doc_id)}</a>`).join("; ");
-  const said = stale.by === "graph" ? "another document says so" : "its own text says so";
+  const said = { graph: "another document says so", versions: "a later version of its work" }[stale.by] || "its own text says so";
   return `<span class="stale" title="no longer current: ${esc(said)}">${esc(stale.state)}${when}${by ? ` → ${by}` : ""}</span>`;
 }
 
@@ -914,6 +942,22 @@ function staleSources(sources) {
 // its source says), when it came into the library, when its text was last
 // read. Each says what it is, so "2019" is never mistaken for the day the
 // file arrived.
+// Which version of a work a document is (GET /get's `versions`, plan item
+// AS): its place among them, the work, and the others, each a link.
+function versionsLine(v, docId) {
+  if (!v || !v.versions || v.versions.length < 2) return "";
+  const at = v.versions.findIndex((x) => x.doc_id === docId);
+  const others = v.versions.filter((x) => x.doc_id !== docId).map((x) =>
+    `<a href="#doc/${Number(x.doc_id)}">${esc(x.published || "#" + x.doc_id)}</a>`);
+  const which = at === v.versions.length - 1 ? "the latest" : `version ${at + 1}`;
+  return `<span title="versions of one work, as a person decided">${which} of ${v.versions.length} of <i>${esc(v.work.name)}</i>: ${others.join(", ")}</span>`;
+}
+// A search hit's older versions folded under it (store.search, `versions`).
+function foldedVersions(ids) {
+  if (!ids || !ids.length) return "";
+  const links = ids.map((d) => `<a href="#doc/${Number(d)}">#${Number(d)}</a>`).join(", ");
+  return ` <span class="muted">· ${ids.length} older version${ids.length === 1 ? "" : "s"}: ${links}</span>`;
+}
 function dateLine(meta, doc) {
   const bits = [];
   const published = publishedLabel(meta);
@@ -1126,5 +1170,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

@@ -166,7 +166,7 @@ def search(
     deadline = time.monotonic() + CITE_BUDGET
     stale = staleness(con, hits)
     if stale and not include_stale:
-        hits = _shift_stale(hits, stale)
+        hits = _fold_versions(_shift_stale(hits, stale), stale)
     hits = hits[:limit]
     for h in hits:
         h["published"] = stamped.get(h["doc_id"])
@@ -348,15 +348,107 @@ def _shift_stale(
     return [h for _, h in keyed]
 
 
+# A version of a work (plan item AS, ``store.graph.versions``): each is
+# ``example_of`` the work, a fact sourced to the version. Which is the
+# latest is read here, where a search reads it, and not written: two
+# versions of one title are one node of the graph, so ``supersedes``
+# between them would be an edge from the node to itself.
+EXAMPLE_OF = "example_of"
+
+
+def in_order(con: sqlite3.Connection, ids: list[int]) -> list[int]:
+    """Documents in the order they appeared: by ``meta.published``, else
+    by when the library took them in, else by id; the latest last."""
+    if not ids:
+        return []
+    rows = con.execute(
+        f"SELECT id, json_extract(meta, '$.published.date') AS pub, added_at"
+        f" FROM documents WHERE id IN ({','.join('?' * len(ids))})",
+        ids,
+    ).fetchall()
+    rows.sort(key=lambda r: (str(r["pub"] or r["added_at"] or ""), r["id"]))
+    return [int(r["id"]) for r in rows]
+
+
+def works_of(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
+    """The work each of ``ids`` is a live version of, where it is one."""
+    if not ids:
+        return {}
+    out: dict[int, int] = {}
+    for r in con.execute(
+        f"SELECT e.source_doc, COALESCE(w.canonical_id, w.id) FROM edges e"
+        f" JOIN entities w ON w.id = e.dst WHERE e.rel = ? AND e.valid_to IS NULL"
+        f" AND e.source_doc IN ({','.join('?' * len(ids))}) ORDER BY e.id",
+        (EXAMPLE_OF, *ids),
+    ):
+        out.setdefault(int(r[0]), int(r[1]))
+    return out
+
+
+def work_versions(con: sqlite3.Connection, work: int) -> list[int]:
+    """A work's live versions this viewer may see, the latest last."""
+    hidden = hidden_documents(con)
+    ids = sorted(
+        {
+            int(r[0])
+            for r in con.execute(
+                "SELECT e.source_doc FROM edges e JOIN entities w ON w.id = e.dst"
+                " JOIN documents d ON d.id = e.source_doc"
+                " WHERE e.rel = ? AND e.valid_to IS NULL"
+                " AND COALESCE(w.canonical_id, w.id) = ?"
+                " AND json_extract(d.meta, '$.retired') IS NULL",
+                (EXAMPLE_OF, work),
+            )
+        }
+        - hidden
+    )
+    return in_order(con, ids)
+
+
+def later_versions(con: sqlite3.Connection, ids: list[int]) -> dict[int, list[int]]:
+    """For each of ``ids`` that is a version with a later live version
+    this viewer may see, those later versions, the latest last: what a
+    search marks stale and folds."""
+    out: dict[int, list[int]] = {}
+    seen: dict[int, list[int]] = {}
+    for doc, work in works_of(con, ids).items():
+        if work not in seen:
+            seen[work] = work_versions(con, work)
+        order = seen[work]
+        if doc in order and order.index(doc) < len(order) - 1:
+            out[doc] = order[order.index(doc) + 1 :]
+    return out
+
+
+def _fold_versions(
+    hits: list[dict[str, Any]], stale: dict[int, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The hits with an older version folded under a later one of its
+    work among them (``versions``, oldest first); a version whose later
+    one did not come up stays, marked stale."""
+    at = {int(h["doc_id"]): h for h in hits}
+    folded: set[int] = set()
+    for h in hits:
+        mark = stale.get(int(h["doc_id"]))
+        if not mark or mark.get("by") != "versions":
+            continue
+        later = [x for x in mark.get("later") or [] if x in at and x not in folded]
+        if later:
+            folded.add(int(h["doc_id"]))
+            at[later[-1]].setdefault("versions", []).append(int(h["doc_id"]))
+    return [h for h in hits if int(h["doc_id"]) not in folded]
+
+
 def staleness(
     con: sqlite3.Connection, hits: list[dict[str, Any]]
 ) -> dict[int, dict[str, Any]]:
     """Which of the hits' documents are no longer current, and why:
     ``{doc_id: {state, since, by, replaced_by: [{doc_id, title}]}}``. Its
-    own status (``meta.status``, a project's sync reads it from the note)
-    or a live ``supersedes``/``invalidates`` edge that reaches it (a sync,
-    an agent's ``link``, an extraction). A replacement the viewer may not
-    see is not named."""
+    own status (``meta.status``, a project's sync reads it from the note),
+    a live ``supersedes``/``invalidates`` edge that reaches it (a sync,
+    an agent's ``link``, an extraction), or a later version of its work
+    (``by: versions``, with ``later``, the later versions). A replacement
+    the viewer may not see is not named."""
     if not hits:
         return {}
     ids = sorted({int(h["doc_id"]) for h in hits})
@@ -375,6 +467,25 @@ def staleness(
             "by": said.get("by"),
             "replaced_by": [],
         }
+    # a version of a work with a later one (``later_versions``): the
+    # latest replaces it, and ``later`` is what a search folds it under
+    later = later_versions(con, ids)
+    if later:
+        latest = {x[-1] for x in later.values()}
+        named_as = {
+            int(r[0]): (r[1], r[2])
+            for r in con.execute(
+                f"SELECT id, title, json_extract(meta, '$.published.date')"
+                f" FROM documents WHERE id IN ({','.join('?' * len(latest))})",
+                tuple(latest),
+            )
+        }
+        for doc_id, newer in later.items():
+            title, since = named_as.get(newer[-1], (None, None))
+            out.setdefault(
+                doc_id,
+                {"state": "superseded", "since": since, "by": "versions"},
+            ).update(replaced_by=[{"doc_id": newer[-1], "title": title}], later=newer)
     titles: dict[str, list[int]] = {}
     for h in hits:
         if h.get("title"):

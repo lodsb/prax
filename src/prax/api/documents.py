@@ -51,6 +51,10 @@ def get(
     )
     if stale:
         doc["stale"] = stale
+    # the work it is a version of and that work's versions (plan item AS)
+    versions = store.versions_of(con, doc_id)
+    if versions is not None:
+        doc["versions"] = versions
     # where its file lies, for a document prax does not hold: a referenced
     # recording or picture (AQ stage 3); a held one says nothing
     if not doc.get("held", 1):

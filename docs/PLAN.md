@@ -1067,7 +1067,7 @@ not done.
       model, `depicts` in core, after AQ stage 3); what is personal left
       to the wall's rules, not implied by the pack.
 
-- [ ] **AS. Versions of a work.** The user, 2026-10-23: "some of my old
+- [x] (2026-10-28, `docs/log.md`) **AS. Versions of a work.** The user, 2026-10-23: "some of my old
       papers are in prax in different versions … not sure if they should
       be either a version or a dep graph". Three kinds of "the same
       paper" are kept apart:
@@ -1094,7 +1094,7 @@ not done.
       documents are retired as a duplicate so far, and 9 `supersedes`
       edges are live.
 
-      - [ ] **Step 1, the relation.** A document is a version of a
+      - [x] (2026-10-28) **Step 1, the relation.** A document is a version of a
             `work` (core's type: "a book as a work rather than as the
             document at hand"): a relation document -> work, `same_as:
             schema:exampleOfWork`. `version_of` is kitchen's alias for
@@ -1102,14 +1102,29 @@ not done.
             versions are ordered by `supersedes`, which search's
             staleness already reads. Core 5, additive: the extraction
             stamps move by migration.
-      - [ ] **Step 2, the candidates.** Pairs of live documents that are
+            Built: core 8 (`example_of`, migration 62 moves the stamps).
+            Not `supersedes`: two versions of one title are one node of
+            the graph (`document_node`), so the edge would run from the
+            node to itself. Which version is later is read where a search
+            reads it (`retrieval.in_order`: `meta.published`, else when
+            the library took it in).
+      - [x] (2026-10-28) **Step 2, the candidates.** Pairs of live documents that are
             likely versions: one title key (heal's) or one arXiv id with
             another `vN`, or one DOI's preprint and its record; a shared
             author surname; and an overlap under the twin line. A
             measure that survives an edit (shingles of words, not chunk
             hashes) ranks them. Kept as candidates like
             `entity_candidates`, not written as edges.
-      - [ ] **Step 3, the decision.** A tab of the Review page shows a
+            Built: `prax.text.shingles` (runs of five words), the
+            `versions` pass of `prax maintain` (`store.find_versions`,
+            `version_candidates`, migration 62): one title key or one
+            arXiv id, a group of at most six, at least a tenth of the
+            shingles shared; at nine tenths the pair is offered as a
+            copy. A shared surname is shown, not required: most pairs
+            have no author on one side. On a copy of the live store, 676
+            pairs (493 versions, 183 copies) in 45 s, 7 s when nothing
+            changed, outside the store's lock.
+      - [x] (2026-10-28) **Step 3, the decision.** A tab of the Review page shows a
             pair side by side (title, date, length, a diff of their
             headings) and takes "version", "copy" or "different". A
             version writes the work (or joins the one either already
@@ -1117,11 +1132,20 @@ not done.
             later to the earlier by `meta.published`, `producer: human`.
             A copy retires the twin as heal does. "Different" is kept,
             so the pair is not asked again.
-      - [ ] **Step 4, the reads.** Search shows a work's newest live
+            Built: `store.decide_version`, `undo_version`, `GET
+            /graph/versions`, `POST /graph/versions/{id}` and `/undo`, the
+            Review page's "versions" tab under documents. The diff is of
+            the top-level headings, a heading one side alone has marked.
+      - [x] (2026-10-28; the owner's own papers wait for the owner's answers) **Step 4, the reads.** Search shows a work's newest live
             version and folds the others under it ("2 other versions",
             with their ids). `get` names the work and its versions.
             `traverse` from the work reaches every version's facts. The
             owner's own papers are the first test set.
+            Built: an older version is stale by the latest (`by:
+            versions`) and a search folds it under the latest when both
+            come up (`versions` on the hit); `get` carries `versions`;
+            the document page says which version it is. `traverse` from
+            the work reaches its versions' nodes by `example_of`.
 
 - [ ] **AT. Faces.** The user, 2026-10-23: "automatic face recognition
       where i can identify the faces, so everyone is tagged". After AR's

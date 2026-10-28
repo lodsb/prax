@@ -18,6 +18,8 @@ const DECIDE_LISTS = {
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   genre: { title: "genre", view: (p) => viewGenres(p),
     about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about; the level in bold comes with them. Tick a level alone when nothing under it fits. A subject may be left out. \"to check\" holds a model's labels, the least sure first: save them as they are, or change the ticks first. \"decided a domain\" is the part of it a domain rule placed by those labels, where a wrong one costs the most. The documents come from each source in turn. About 150 is the aim." },
+  versions: { title: "versions", view: (p) => viewVersions(p),
+    about: "Two documents of one title (or one arXiv id) whose texts are much alike: a preprint and its journal version, or one text downloaded twice. Versions of one work: each is a version of the work, and a search shows the latest with the others folded under it. One text twice: the copy is retired into the one with more facts, as heal does. Different: never asked again. Headings only one side has are marked. Undo takes any answer back." },
   events: { title: "events", view: (p) => viewEvents(p),
     about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back. Split…: cut a group before a burst of its photos, kept for every later pass; join takes a cut back." },
   faces: { title: "faces", view: (p) => viewFaces(p),
@@ -34,7 +36,7 @@ const DECIDE_LISTS = {
 // what a document is, the photos. "" is the review queue (view-review.js).
 const DECIDE_GROUPS = [
   { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges"] },
-  { title: "documents", what: "what each document is and is about", keys: ["genre"] },
+  { title: "documents", what: "what each document is and is about, and which are versions of one work", keys: ["genre", "versions"] },
   { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces", "groups", "matches"] },
 ];
 
@@ -225,6 +227,55 @@ async function viewGenres(p) {
       send({ genres, subjects });
     });
     form.querySelector("[data-genre-skip]").addEventListener("click", () => send({ skip: true }));
+  });
+}
+
+async function viewVersions(p) {
+  const list = DECIDE_LISTS.versions;
+  const verdict = ["version", "copy", "different"].includes(p.verdict) ? p.verdict : "";
+  const limit = 20;
+  const offset = Number(p.offset || 0);
+  const link = (v, label) => v === verdict ? `<b>${label}</b>` : `<a href="#review?${new URLSearchParams({ list: "versions", ...(v ? { verdict: v } : {}) })}">${label}</a>`;
+  view.innerHTML = `${decideTabs("versions")}<p class="muted">${esc(list.about)}</p>
+    <p>${link("", "to answer")} · ${link("version", "versions")} · ${link("copy", "copies")} · ${link("different", "different")} <span id="version-count" class="muted"></span>
+      · <a href="#" id="versions-find">look again</a></p>
+    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  const box = document.getElementById("decide-list");
+  document.getElementById("versions-find").addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    ev.target.textContent = "looking…";
+    try { await post("/graph/versions/find", {}); } catch (err) { showError(box, err); return; }
+    viewVersions(p);
+  });
+  let res;
+  try { res = await api("/graph/versions", { ...(verdict ? { verdict } : {}), offset, limit }); } catch (err) { showError(box, err); return; }
+  const c = res.counts;
+  document.getElementById("version-count").textContent = ` — ${c.open} to answer, ${c.version} versions, ${c.copy} copies, ${c.different} different`;
+  const page = (o) => `#review?${new URLSearchParams({ list: "versions", ...(verdict ? { verdict } : {}), offset: o })}`;
+  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  box.innerHTML = res.items.length
+    ? res.items.map(versionRow).join("") + pager
+    : `<p class="muted">${verdict ? "None yet." : "Nothing to answer: no two documents of one title share enough text (the versions pass of prax maintain finds them, or look again)."}</p>`;
+  box.querySelectorAll(".version-row").forEach((row) => {
+    const id = row.dataset.candidate;
+    const out = row.querySelector(".decide-out");
+    const send = async (path, body, done) => {
+      row.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        out.textContent = done(await post(path, body));
+        row.classList.add("done");
+      } catch (err) {
+        out.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+        row.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      }
+    };
+    row.querySelectorAll("[data-verdict]").forEach((b) => b.addEventListener("click", () =>
+      send(`/graph/versions/${id}`, { verdict: b.dataset.verdict }, (r) =>
+        r.verdict === "version" ? `versions of ${r.work.name}` : r.verdict === "copy" ? `#${r.retired} retired into #${r.kept}` : "different")));
+    const undo = row.querySelector("[data-version-undo]");
+    if (undo) undo.addEventListener("click", () => send(`/graph/versions/${id}/undo`, {}, (r) =>
+      `open again${r.ended ? `, ${r.ended} facts ended` : ""}${r.unretired ? `, #${r.unretired} back` : ""}`));
   });
 }
 

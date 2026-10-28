@@ -54,10 +54,8 @@ from .common import (  # noqa: F401
 from .documents import (  # noqa: F401
     _FORKS,
     _GLYPH_GLOB,
-    _TITLE_KEY,
     SERVER_FAULT,
     STALE_JOB_SECONDS,
-    TWIN_TITLE_MIN,
     UNTYPED,
     _document_edge_counts,
     _edges_of_retired,

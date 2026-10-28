@@ -9045,3 +9045,58 @@ Performance and generality:
 - The person page's events are the `attended` facts. Face groups take
   their ids from `id_marks`. A re-read of a photo keeps the keys other
   readings wrote in `meta.photo`.
+
+## 2026-10-28: AS, versions of a work
+
+A preprint, the camera-ready paper and the journal version are three
+documents of one work. Plan item AS, steps 1 to 4. Tests are in
+`tests/test_versions.py`.
+
+The relation. Core 8 adds `example_of`, from a document to a `work`
+(`schema:exampleOfWork`). Migration 62 moves the extraction stamps.
+Which version is later is not written as `supersedes`. Two versions of
+one title are one node of the graph (`document_node` names a document by
+its title), so the edge would run from the node to itself. The order is
+read where a search needs it: `retrieval.in_order` sorts by
+`meta.published`, else by when the library took the document in.
+
+The measure. Chunk hashes find a copy and miss a version: one changed
+word changes a chunk. `prax.text.shingles` compares runs of five words
+instead. Measured read-only on the live store, over the 1,067 pairs of
+one title in groups of at most six:
+
+| shingles shared | pairs | of them, chunk overlap under 0.1 |
+|---|---|---|
+| under 0.1 | 393 | 389 |
+| 0.1 to 0.9 | 490 | 226 |
+| 0.9 and more | 184 | 7 |
+
+Under a tenth are different texts with one title ("Introduction"). Nine
+tenths and more is one text twice; 7 of those the chunk hashes put
+under a tenth, so heal's `twin-documents` could never see them. Most
+pairs have no author recorded on one side, so a shared surname is
+shown as a reason and not required.
+
+The candidates. The `versions` pass of `prax maintain`
+(`store.find_versions`) keeps pairs of one title key or one arXiv id,
+in a group of at most six, sharing at least a tenth of their shingles
+(`version_candidates`, migration 62). A pair at nine tenths is offered
+as a copy. On a copy of the live store: 676 pairs (493 offered as
+versions, 183 as copies), 45 s the first time and 7 s when nothing
+changed. The first version of the pass held the store's write lock for
+52 s; it now measures outside the lock and writes in one short
+transaction, and never touches a pair a person answered meanwhile.
+
+The answer. The Review page's "versions" tab, under documents, shows a
+pair side by side: title, date, length, and the top-level headings, a
+heading one side alone has marked. "Versions of one work" writes both
+`example_of` the work, joining one either already belongs to.
+"One text twice" retires the copy into the one with more facts, as heal
+does. "Different" is kept, so the pair is not asked again. Each answer
+has an undo.
+
+The reads. An older version is stale by its work's latest (`by:
+versions`). A search folds it under the latest when both come up
+(`versions` on the hit, "1 older version" in the list). `get` carries
+`versions`, and the document page says which version it is. `traverse`
+from the work reaches each version by `example_of`.

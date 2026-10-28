@@ -56,7 +56,7 @@
 # that a person a picture of an event depicts was there. Only additions:
 # migration 56 moves the stamps.
 module: core
-version: 7
+version: 8
 
 entity_types:
   person:
@@ -201,6 +201,15 @@ relation_types:
     description: >-
       an event a person was at: the inverse of schema:attendee, which an
       event says of a person
+  example_of:
+    kind: eternal
+    same_as: schema:exampleOfWork
+    domain: [document]
+    range: [work]
+    description: >-
+      the work a document is a version of (a preprint, the camera-ready
+      paper, the journal version, one edition of a book), as a person
+      decided it; never two works, which `extends` or `cites` relate
   links_to:
     kind: eternal
     same_as: dcterms:references

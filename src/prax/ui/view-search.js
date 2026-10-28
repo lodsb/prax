@@ -94,7 +94,7 @@ async function viewSearch(p) {
       }
       return `
       <article class="hit">
-        <a class="hit-title" href="#doc/${h.doc_id}?chunk=${h.chunk_id}">${esc(h.title || "(untitled)")}</a>${h.published ? ` <span class="muted" title="published ${esc(h.published)}">${esc(h.published.slice(0, 4))}</span>` : ""}${h.stale ? " " + staleNote(h.stale) : ""}
+        <a class="hit-title" href="#doc/${h.doc_id}?chunk=${h.chunk_id}">${esc(h.title || "(untitled)")}</a>${h.published ? ` <span class="muted" title="published ${esc(h.published)}">${esc(h.published.slice(0, 4))}</span>` : ""}${h.stale ? " " + staleNote(h.stale) : ""}${foldedVersions(h.versions)}
         <div class="hit-meta">
           ${badge(h.kind)}
           <span>${headingPath(h.heading)}</span>

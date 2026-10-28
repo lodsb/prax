@@ -92,6 +92,7 @@ class SearchHit(TypedDict, total=False):
     rerank_score: float
     published: str | None  # ``meta.published``, as precise as its source
     stale: dict[str, Any]  # ``staleness``: the state, its date, the replacement
+    versions: list[int]  # older versions of its work folded under it
     cite: str  # ``cite_link``, with ``cite=``
     domains: list[str] | None  # the door's addition: the document's modules
 

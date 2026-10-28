@@ -210,6 +210,8 @@ function metaLine(meta, doc) {
   if (meta.creators && meta.creators.length) bits.push(esc(meta.creators.map((c) => c.name).join(", ")));
   const when = dateLine(meta, doc);
   if (when) bits.push(when);
+  const versions = versionsLine(doc.versions, doc.id);
+  if (versions) bits.push(versions);
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
