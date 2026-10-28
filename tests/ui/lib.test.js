@@ -776,3 +776,61 @@ test("which version of a work a document is, and the versions a hit folds", () =
   assert.equal(lib.foldedVersions([]), "");
   assert.match(lib.staleNote({ state: "superseded", by: "versions", replaced_by: [{ doc_id: 9, title: "t" }] }), /a later version of its work/);
 });
+
+test("pageWindow names the ends and two either side, with gaps", () => {
+  assert.deepEqual(lib.pageWindow(1, 1), [1]);
+  assert.deepEqual(lib.pageWindow(1, 4), [1, 2, 3, 4]);
+  assert.deepEqual(lib.pageWindow(6, 30), [1, null, 4, 5, 6, 7, 8, null, 30]);
+  assert.deepEqual(lib.pageWindow(30, 30), [1, null, 28, 29, 30]);
+  assert.deepEqual(lib.pageWindow(4, 30), [1, 2, 3, 4, 5, 6, null, 30]);
+});
+
+test("pagerHtml links pages by offset and says where it is", () => {
+  const href = (o) => `#person/12?photos=${o / 20 + 1}&x=1`;
+  assert.equal(lib.pagerHtml(20, 0, 20, href), "");  // one page needs none
+  const html = lib.pagerHtml(233, 40, 20, href);
+  assert.match(html, /<b aria-current="page">3<\/b>/);
+  assert.match(html, /data-offset="20" class="step">‹/);
+  assert.match(html, /data-offset="60" class="step">›/);
+  assert.match(html, /data-offset="220">12</);
+  assert.match(html, /41–60 of 233/);
+  assert.match(html, /&amp;x=1/);  // the link is escaped
+  assert.doesNotMatch(lib.pagerHtml(233, 220, 20, href), /class="step">›/);
+});
+
+test("galleryHtml draws photos and figures as tiles placed in their set", () => {
+  const photos = lib.galleryHtml({ total: 45, offset: 20, limit: 20, items: [
+    { doc_id: 7, taken: "2019-05-03T10:00:00", title: "IMG_1.JPG" }] }, (o) => `#p?o=${o}`);
+  assert.match(photos, /href="#doc\/7" data-i="20"/);
+  assert.match(photos, /src="\/doc\/7\/thumb"/);
+  assert.match(photos, /<span class="muted where">2019-05-03<\/span>/);
+  assert.match(photos, /class="pager pager-pages"/);
+  const figs = lib.galleryHtml({ total: 1, offset: 0, limit: 20, items: [
+    { doc_id: 3, ref: "ab12", caption: "Fig. 2 <b>", page: 4, chunk_id: 9, href: "#chunk-9" }] }, () => "#", true);
+  assert.match(figs, /gallery-grid figures/);
+  assert.match(figs, /src="\/doc\/3\/figure\/ab12"/);
+  assert.match(figs, /Fig\. 2 &lt;b&gt;/);
+  assert.match(figs, /p\. 4/);
+  assert.doesNotMatch(figs, /pager/);
+});
+
+test("the viewer steps within the set and shows the large picture", () => {
+  assert.equal(lib.viewerStep(0, -1, 5), null);
+  assert.equal(lib.viewerStep(19, 1, 45), 20);  // across a page's end
+  assert.equal(lib.viewerStep(44, 1, 45), null);
+  const v = lib.viewerHtml({ doc_id: 7, taken: "2019-05-03T10:00:00", title: "IMG_1.JPG" }, 0, 45);
+  assert.match(v, /src="\/doc\/7\/preview"/);
+  assert.match(v, /data-viewer="prev" aria-label="previous" disabled/);
+  assert.match(v, /1 of 45/);
+  assert.match(v, /open the document/);
+  const f = lib.viewerHtml({ doc_id: 3, ref: "ab12", caption: "Fig. 2", href: "#chunk-9" }, 44, 45);
+  assert.match(f, /src="\/doc\/3\/figure\/ab12"/);
+  assert.match(f, /href="#chunk-9" data-viewer="open">its place in the text/);
+  assert.match(f, /data-viewer="next" aria-label="next" disabled/);
+});
+
+test("pictureSetOf reads the one set a #photos address names", () => {
+  assert.deepEqual(lib.pictureSetOf({ place: "12", page: "2" }), { key: "place", id: 12 });
+  assert.equal(lib.pictureSetOf({ place: "x" }), null);
+  assert.equal(lib.pictureSetOf({}), null);
+});

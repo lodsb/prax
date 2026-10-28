@@ -9142,3 +9142,45 @@ is split, and each gives the same output before and after:
 
 The most complex functions are now at 18: `refresh_blocks`, `lint`,
 `venues.read`, `request_of` and `cite_link`.
+
+## 2026-10-28: the gallery, photos a page at a time
+
+The user: a person's page showed a sample of 24 photos and no way to the
+rest; the document figures could use the same. One component now does
+both, and every set of pictures the graph holds.
+
+- **The read.** `store.picture_set` (graph part `pictures`, `GET
+  /pictures`) gives one page of a set: a person's (`depicts`), an
+  event's (`recorded_at`), an event candidate's photos, or a place's
+  (`taken_in`) with the places `located_in` it. It is read through the
+  wall: a hidden picture is in neither the page nor the count. The person
+  read no longer carries `sample`, and its places carry their ids.
+- **The component.** `mountGallery` in `core.js` draws a page of tiles
+  and a pager under it, and keeps the page in the address. Its viewer
+  steps with ← and → across page ends. The pure parts are in `lib.js`
+  with node tests. The document page's figure strip is the same
+  gallery over the chunks it already has, and six of the Review page's
+  pagers are now `pagerHtml`.
+- **Where.** The person page, `#photos?depicts|event|place|candidate`
+  (linked from a person's events and places and from each event group on
+  the Review page), and the document's figures.
+
+Measured on the live store, read-only, then on a copy with migration 63:
+
+| set | pictures | first version | with the index, one read |
+|---|---|---|---|
+| the most photographed person | 604 | 10 ms | 4 ms |
+| the largest event | 2,352 | 11 ms | 7 ms |
+| a region (178 places) | 1,168 | 200 ms | 16 ms |
+| a country (468 places) | 1,594 | 325 ms | 36 ms |
+
+The place walk was slow because every alias lookup asked `canonical_id`,
+which no index served: a scan of 263,645 entities a level. Migration 63
+indexes the folded rows (48,861; 61 ms to build). The walk goes one
+level at a time. A count and a page each read every member's meta, so
+the set is now read once in its order and the page sliced from it.
+
+Looked at in headless Chrome on a throwaway store of 53 generated
+pictures and a document of 45 generated figures, never the owner's
+photos: the pages, the viewer, a step past a page's end, the figure's
+place in the text, a phone's width.

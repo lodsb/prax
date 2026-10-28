@@ -35,7 +35,6 @@ ATTENDED = "attended"  # person -> event: the rule pass's chain derives it
 PERSON_FACTS_PER_RELATION = 12  # undated facts shown per relation
 PERSON_TIMELINE = 100  # dated facts shown, the earliest first
 PERSON_DOCUMENTS = 30
-PERSON_PHOTOS = 24  # thumbnails on the page
 PERSON_TOP = 12  # events, places and people photographed with them
 PEOPLE_LIMIT = 100
 
@@ -116,19 +115,16 @@ def _photos_part(
             pictures[doc] = str(r["taken"] or "")
     out: dict[str, Any] = {
         "photos": len(pictures),
-        "sample": [],
         "events": [],
         "places": [],
         "with": [],
     }
     if not pictures and not attended:
         return out
-    newest = sorted(pictures, key=lambda d: (pictures[d], d), reverse=True)
-    out["sample"] = newest[:PERSON_PHOTOS]
     docs = json.dumps(sorted(pictures))
     group = set(ids)
     events: dict[int, dict[str, Any]] = {}
-    places: Counter[str] = Counter()
+    places: Counter[tuple[int, str]] = Counter()
     others: Counter[tuple[int, str]] = Counter()
     for r in con.execute(
         "SELECT e.source_doc, e.rel, e.world_from, t.id AS tid, t.name AS tname,"
@@ -149,7 +145,7 @@ def _photos_part(
             if r["world_from"]:
                 ev["days"].add(str(r["world_from"])[:10])
         elif r["rel"] == "taken_in":
-            places[str(r["tname"])] += 1
+            places[(int(r["cid"]), str(r["tname"]))] += 1
         elif int(r["tid"]) not in group:
             others[(int(r["cid"]), str(r["tname"]))] += 1
     for r in con.execute(
@@ -164,7 +160,9 @@ def _photos_part(
         ev["first"], ev["last"] = (days[0], days[-1]) if days else (None, None)
     out["events"] = ranked[:PERSON_TOP]
     top = PERSON_TOP
-    out["places"] = [{"name": n, "photos": c} for n, c in places.most_common(top)]
+    out["places"] = [
+        {"id": i, "name": n, "photos": c} for (i, n), c in places.most_common(top)
+    ]
     out["with"] = [
         {"id": i, "name": n, "photos": c} for (i, n), c in others.most_common(top)
     ]

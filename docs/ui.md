@@ -20,6 +20,7 @@ The ones added for browsing, each a thin wrapper over a store function:
 | `GET /doc/{id}/original` | the archived original bytes with their MIME type. `Content-Disposition: inline`, so a PDF opens in the browser's viewer; `#page=N` comes from a chunk's locator |
 | `GET /doc/{id}/text` | the Markdown text artifact as `text/markdown` |
 | `GET /doc/{id}/figure/{sha}` | a figure's bytes out of the document's original, by the hash the text references (`![caption](figure:<sha256>)`). Immutable, cached for a year |
+| `GET /pictures?depicts|event|candidate|place&offset&limit` | one page of a set of pictures for the gallery (`store.picture_set`): `{set, id, name, total, offset, limit, items}`, each item `{doc_id, taken, title}`. Exactly one of the four names the set; a place's holds the places `located_in` it, to `PLACE_DEPTH` levels. A person's and a place's newest first, an event's in the order taken, undated last. At most `PICTURES_PAGE_MAX` (100) a page. The administrator's |
 | `GET /doc/{id}/chunks` | the document as its chunks in order: id, seq, kind, heading, page, locator, text, table data |
 | `GET /entities?q&limit` | entities whose name contains `q`: id, name, type, degree |
 | `GET /ontology` | the current ontology: version, entity types, relations with domain and range |
@@ -146,11 +147,12 @@ when the dialog closes. A line under the actions says what became of
 the last reading request: waiting for a worker, done with the stamp and
 outcome, or failed with the reason.
 
-"N figures…" (or `?figures=1`) unfolds a strip of every picture of the
-document: a paper's figures, a talk's frames, a scan's pages. Each is
-captioned by the reference's caption, else by the first words of a
-reading, placed by page or moment, with a link to its chunk. The link
-reads "fold the figures" while the strip is open, and folds it.
+"N figures…" (or `?figures=1`) unfolds the gallery of every picture of
+the document: a paper's figures, a talk's frames, a scan's pages, 20 a
+page (`?figpage=N`). Each is captioned by the reference's caption, else
+by the first words of a reading, and placed by page or moment. A click
+opens it in the viewer, whose link scrolls to its chunk. The link reads
+"fold the figures" while the gallery is open, and folds it.
 
 The body is rendered chunk by chunk, each with a kind badge and page
 number. Tables come from their grids, code as code. A figure is the
@@ -368,6 +370,39 @@ over all of them or the vision model over their scanned pages;
 read, captioned or every image (`POST /readings/bulk`). When there are
 several, a button repairs them all together, as a job. Nothing is
 deleted.
+
+### The gallery
+
+A set of pictures, a page at a time, with a viewer over it
+(`core.js` `mountGallery`; the markup is `lib.js` `galleryHtml`,
+`pagerHtml` and `viewerHtml`). It takes a `load(offset, limit)` that
+answers `{total, offset, limit, items}`: `pictureLoad(key, id)` over
+`GET /pictures`, or `listLoad(items)` over a list already fetched (a
+document's figures). An item is a photo (`/doc/N/thumb` in the grid,
+`/doc/N/preview` in the viewer, the thumbnail when there is no preview)
+or a figure (`ref`, `/doc/N/figure/<ref>` in both).
+
+- The pager under the grid names the first and last page and two either
+  side. The page is in the address (`?photos=2`, `?page=2`, `?figpage=2`)
+  without a history entry, so a reload or the live refresh draws it
+  again.
+- A click on a tile opens the viewer; a click with Ctrl, Cmd or Shift
+  follows the tile's link instead. ← and → step through the whole set,
+  fetching the next page past either end of this one. Esc or a click
+  beside the picture closes it.
+- `follow(item)` takes over the viewer's link: a figure's scrolls to its
+  chunk.
+
+Where it is: a person's "In photos" (`#person/N?photos=`), the document
+page's figures, and `#photos`.
+
+### `#photos?depicts=N`, `?event=N`, `?place=N`, `?candidate=N`
+
+One set of pictures on a page of its own, 40 a page: a person's, an
+event's, a place's with the places in it, or an event group's from the
+Review page. A person's page links its events ("its photos") and its
+places here, and each event group on the Review page has "all its
+photos".
 
 ### `#review?rel=&unmapped=&offset=`
 

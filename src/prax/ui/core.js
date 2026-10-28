@@ -236,3 +236,93 @@ function momentLink(docId, t, video) {
   const url = video && video.url ? `${video.url}${video.url.includes("?") ? "&" : "?"}t=${t}s` : null;
   return `<a class="moment" href="${url ? esc(url) : `#doc/${docId}`}" data-t="${t}" data-doc="${docId}" title="at ${fmtTime(t)}"${url ? ` target="_blank" rel="noopener"` : ""}>${fmtTime(t)}</a>`;
 }
+
+// A gallery over a set of pictures, a page at a time (lib.js galleryHtml):
+// load(offset, limit) answers {total, offset, limit, items}. ``param``
+// names the page in the address (#person/12?photos=3), kept without a
+// new history entry, so a reload or a refresh draws the same page.
+// ``follow(item, e)`` may take over the viewer's link (a figure's place in
+// the text). Resolves once the first page is drawn: a live refresh
+// compares the HTML with the gallery in it.
+async function mountGallery(box, opts) {
+  const limit = opts.limit || 20;
+  const params = route().params;
+  let offset = opts.param && /^\d+$/.test(params[opts.param] || "") ? (Number(params[opts.param]) - 1) * limit : 0;
+  let page = null;
+  const here = (o) => {
+    const r = route();
+    const q = { ...r.params };
+    if (o) q[opts.param] = String(o / limit + 1); else delete q[opts.param];
+    const s = new URLSearchParams(q).toString();
+    return `#${r.name}${r.arg ? "/" + r.arg : ""}${s ? "?" + s : ""}`;
+  };
+  const draw = async (o) => {
+    page = await opts.load(o, limit);
+    if (!page.items.length && page.total && o > 0) page = await opts.load(Math.floor((page.total - 1) / limit) * limit, limit);  // past the end: the last page
+    offset = page.offset;
+    box.innerHTML = page.total ? galleryHtml(page, opts.param ? here : () => "#", opts.figures) : (opts.empty || "");
+    if (opts.param) history.replaceState(null, "", here(offset));
+  };
+  const item = async (i) => {
+    if (i < page.offset || i >= page.offset + page.items.length) await draw(Math.floor(i / limit) * limit);
+    return page.items[i - page.offset];
+  };
+  let shade = null, at = 0;
+  const close = () => { if (shade) { shade.remove(); shade = null; document.removeEventListener("keydown", keys); } };
+  const show = async (i) => {
+    const it = await item(i);
+    if (!it) return;
+    at = i;
+    if (!shade) {
+      shade = document.createElement("div");
+      shade.className = "viewer";
+      shade.addEventListener("click", async (e) => {
+        const b = e.target.closest("[data-viewer]");
+        if (!b) { if (e.target === shade) close(); return; }
+        const act = b.dataset.viewer;
+        if (act === "close") close();
+        else if (act === "prev" || act === "next") step(act === "prev" ? -1 : 1);
+        else if (act === "open") {
+          const cur = page.items[at - page.offset];
+          close();
+          if (opts.follow && cur) { e.preventDefault(); opts.follow(cur); }
+        }
+      });
+      document.body.append(shade);
+      document.addEventListener("keydown", keys);
+    }
+    shade.innerHTML = viewerHtml(it, i, page.total);
+    const img = shade.querySelector(".viewer-img");
+    // a photo the photos step gave no preview: its thumbnail, larger
+    img.addEventListener("error", () => { if (!it.ref && !img.dataset.fell) { img.dataset.fell = "1"; img.src = pictureSrc(it, false); } }, { once: true });
+    shade.querySelector("[data-viewer=close]").focus();
+  };
+  const step = (d) => { const n = viewerStep(at, d, page.total); if (n !== null) show(n); };
+  function keys(e) {
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === "ArrowRight") step(1);
+    else return;
+    e.preventDefault();
+  }
+  box.addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-offset]");
+    if (a) { e.preventDefault(); draw(Number(a.dataset.offset)).then(() => box.scrollIntoView({ block: "nearest" })); return; }
+    const t = e.target.closest("a.gallery-tile");
+    if (!t || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;  // a new tab keeps the link
+    e.preventDefault();
+    e.stopPropagation();  // not the document page's data-scroll handler
+    show(Number(t.dataset.i));
+  });
+  await draw(offset);
+}
+
+// A picture set of the door's (GET /pictures) as a gallery's load.
+function pictureLoad(key, id) {
+  return (offset, limit) => api("/pictures", { [key]: id, offset, limit });
+}
+
+// A list already in hand as a gallery's load (a document's figures).
+function listLoad(items) {
+  return async (offset, limit) => ({ total: items.length, offset, limit, items: items.slice(offset, offset + limit) });
+}

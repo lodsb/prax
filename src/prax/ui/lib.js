@@ -110,6 +110,89 @@ function figureItems(chunks) {
   return out;
 }
 
+// The pages a pager names around the current one (1-based): the first,
+// the last and two either side, null where pages are left out.
+function pageWindow(current, pages) {
+  const want = new Set([1, pages]);
+  for (let p = current - 2; p <= current + 2; p++) if (p >= 1 && p <= pages) want.add(p);
+  const out = [];
+  let last = 0;
+  for (const p of [...want].sort((a, b) => a - b)) {
+    if (p - last > 1) out.push(null);
+    out.push(p);
+    last = p;
+  }
+  return out;
+}
+// A pager under a paged list: ‹ 1 … 4 5 6 7 8 … 30 › and where it is.
+// href(offset) is the link of the page starting there; each link carries
+// data-offset too, for a list paged in place. One page needs no pager.
+function pagerHtml(total, offset, limit, href) {
+  if (total <= limit) return "";
+  const pages = Math.ceil(total / limit);
+  const current = Math.floor(offset / limit) + 1;
+  const to = (p, text, cls) => `<a href="${esc(href((p - 1) * limit))}" data-offset="${(p - 1) * limit}"${cls ? ` class="${cls}"` : ""}>${text}</a>`;
+  const nums = pageWindow(current, pages).map((p) => p === null ? `<span class="muted">…</span>`
+    : p === current ? `<b aria-current="page">${p}</b>` : to(p, String(p)));
+  const prev = current > 1 ? to(current - 1, "‹", "step") : "";
+  const next = current < pages ? to(current + 1, "›", "step") : "";
+  const span = `${(offset + 1).toLocaleString()}–${Math.min(offset + limit, total).toLocaleString()} of ${total.toLocaleString()}`;
+  return `<div class="pager pager-pages" role="navigation" aria-label="pages">${prev}${nums.join("")}${next}<span class="muted">${span}</span></div>`;
+}
+// A picture of a set: a figure of a document (``ref``) or a photo. Its
+// tile's image and the viewer's, larger.
+function pictureSrc(it, large) {
+  if (it.ref) return `/doc/${it.doc_id}/figure/${it.ref}`;
+  return `/doc/${it.doc_id}/${large ? "preview" : "thumb"}`;
+}
+// What a tile says under its picture: a figure's caption and where it is,
+// a photo's day.
+function pictureLine(it) {
+  if (it.ref) {
+    const where = it.where != null ? it.where : it.page ? `p. ${it.page}` : "";
+    return { cap: it.caption || "", where };
+  }
+  return { cap: "", where: it.taken ? String(it.taken).slice(0, 10) : "" };
+}
+// One page of a picture set as a grid of tiles and its pager. ``page`` is
+// {total, offset, limit, items}; a tile's data-i is its place in the set.
+function galleryHtml(page, href, figures) {
+  const tiles = page.items.map((it, i) => {
+    const { cap, where } = pictureLine(it);
+    const title = it.caption || it.title || "";
+    return `<a class="gallery-tile" href="${esc(it.href || `#doc/${it.doc_id}`)}" data-i="${page.offset + i}" title="${esc(title)}">
+      <img loading="lazy" src="${esc(pictureSrc(it, false))}" alt="${esc(cap)}">${figures ? `<span class="cap">${esc(cap) || "<span class=muted>(no caption)</span>"}</span>` : ""}${where ? `<span class="muted where">${esc(where)}</span>` : ""}</a>`;
+  }).join("");
+  return `<div class="gallery-grid${figures ? " figures" : ""}">${tiles}</div>${pagerHtml(page.total, page.offset, page.limit, href)}`;
+}
+// The place in a set the viewer steps to, or null past either end.
+function viewerStep(index, delta, total) {
+  const next = index + delta;
+  return next >= 0 && next < total ? next : null;
+}
+// The viewer over a gallery: the picture large, what it is, and the way
+// to its document (or, for a figure, its place in the text).
+function viewerHtml(it, index, total) {
+  const { cap, where } = pictureLine(it);
+  const words = [it.title && !it.ref ? esc(it.title) : esc(cap), where ? esc(where) : ""].filter(Boolean).join(" · ");
+  const open = it.ref ? "its place in the text" : "open the document";
+  return `<div class="viewer-box" role="dialog" aria-modal="true" aria-label="picture ${index + 1} of ${total}">
+    <button type="button" class="viewer-close secondary" data-viewer="close" aria-label="close">×</button>
+    <button type="button" class="viewer-step prev secondary" data-viewer="prev" aria-label="previous"${index > 0 ? "" : " disabled"}>‹</button>
+    <img class="viewer-img" src="${esc(pictureSrc(it, true))}" alt="${esc(cap)}">
+    <button type="button" class="viewer-step next secondary" data-viewer="next" aria-label="next"${index + 1 < total ? "" : " disabled"}>›</button>
+    <p class="viewer-line"><span class="muted">${(index + 1).toLocaleString()} of ${total.toLocaleString()}</span>${words ? ` · ${words}` : ""}
+      · <a href="${esc(it.href || `#doc/${it.doc_id}`)}" data-viewer="open">${open}</a></p></div>`;
+}
+// The set a #photos view names, and its heading.
+const PICTURE_SETS = { depicts: "Photos of", event: "Photos at", place: "Photos in", candidate: "Photos of the group" };
+function pictureSetOf(params) {
+  for (const key of Object.keys(PICTURE_SETS)) {
+    if (params && params[key] && /^\d+$/.test(params[key])) return { key, id: Number(params[key]) };
+  }
+  return null;
+}
+
 // A document's reference chunks as a table of what each numbered entry
 // cites: number -> {href, title, chunk} — the cited document's page when
 // the references pass matched it, else the entry's own chunk. Entries
@@ -447,7 +530,7 @@ function eventRow(it) {
         <button type="button" class="secondary" data-event-undo>undo</button>
         <span class="decide-out muted"></span></div>`;
   return `<article class="decide-row event-row" data-candidate="${it.id}">
-    <p class="muted">${bits.join(" · ")}</p><div class="event-thumbs">${thumbs}</div>${acts}</article>`;
+    <p class="muted">${bits.join(" · ")} · <a href="#photos?candidate=${it.id}">all its photos</a></p><div class="event-thumbs">${thumbs}</div>${acts}</article>`;
 }
 // A burst of a group's photos (store.event_timeline): its day and hours,
 // the second day only when it runs past midnight.
@@ -620,9 +703,9 @@ function personHtml(got) {
     · <a href="#graph?${new URLSearchParams({ entity: name, type: got.type })}">in the graph</a></p>${known ? `<p class="muted">Also known as ${known}</p>` : ""}`;
   const counted = (items, link) => items.map((x) => `<li>${link(x)} <span class="muted">· ${x.photos} photo${x.photos === 1 ? "" : "s"}</span></li>`).join("");
   const photos = got.photos
-    ? `<section><h2>In photos</h2><div class="event-thumbs">${got.sample.map((d) => `<a href="#doc/${d}"><img loading="lazy" src="/doc/${d}/thumb" alt=""></a>`).join("")}</div>
-      ${got.events.length ? `<h3>At</h3><ul>${counted(got.events, (e) => `<a href="#graph?${new URLSearchParams({ entity: e.name, type: "event" })}">${esc(e.name)}</a>${e.first ? ` <span class="muted">${esc(eventDays(e.first, e.last))}</span>` : ""}`)}</ul>` : ""}
-      ${got.places.length ? `<h3>Where</h3><ul>${counted(got.places, (x) => esc(x.name))}</ul>` : ""}
+    ? `<section><h2>In photos</h2><div id="person-photos" class="gallery"></div>
+      ${got.events.length ? `<h3>At</h3><ul>${counted(got.events, (e) => `<a href="#graph?${new URLSearchParams({ entity: e.name, type: "event" })}">${esc(e.name)}</a>${e.first ? ` <span class="muted">${esc(eventDays(e.first, e.last))}</span>` : ""} <a class="muted" href="#photos?event=${e.id}">its photos</a>`)}</ul>` : ""}
+      ${got.places.length ? `<h3>Where</h3><ul>${counted(got.places, (x) => x.id ? `<a href="#photos?place=${x.id}">${esc(x.name)}</a>` : esc(x.name))}</ul>` : ""}
       ${got.with.length ? `<h3>With</h3><ul>${counted(got.with, (x) => `<a href="#person/${x.id}">${esc(x.name)}</a>`)}</ul>` : ""}</section>`
     : `<p class="muted">No photo depicts them yet: the faces step (plan item AT) names the people in pictures.</p>`;
   const dated = got.timeline.length
@@ -1170,5 +1253,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

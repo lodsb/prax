@@ -819,6 +819,35 @@ def person(entity_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/pictures")
+def pictures(
+    request: Request,
+    depicts: int | None = None,
+    event: int | None = None,
+    candidate: int | None = None,
+    place: int | None = None,
+    offset: int = 0,
+    limit: int = store.PICTURES_PAGE,
+) -> dict[str, Any]:
+    """One page of a set of pictures, the gallery's (``store.picture_set``):
+    a person's, an event's, an event candidate's or a place's. The
+    administrator's, as the people and the events are."""
+    try:
+        return store.picture_set(
+            _con(request),
+            depicts=depicts,
+            event=event,
+            candidate=candidate,
+            place=place,
+            offset=offset,
+            limit=limit,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 class PersonRenameReq(BaseModel):
     name: str
 

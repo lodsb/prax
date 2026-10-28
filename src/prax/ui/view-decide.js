@@ -202,8 +202,7 @@ async function viewGenres(p) {
   } catch (err) { showError(box, err); return; }
   document.getElementById("genre-count").textContent = ` — ${res.to_check} to check, ${res.labelled} labelled, ${res.skipped} set aside${["open", "ruled"].includes(state) ? `, ${res.total.toLocaleString()} ${state === "ruled" ? "placed by a rule" : "to go"}` : ""}`;
   const page = (o) => `#review?${new URLSearchParams({ list: "genre", state, offset: o })}`;
-  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
-    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  const pager = pagerHtml(res.total, offset, limit, page);
   box.innerHTML = res.items.length
     ? res.items.map((it) => genreRow(it, vocab)).join("") + pager
     : `<p class="muted">Nothing ${{ open: "left to label", check: "left to check", labelled: "labelled yet" }[state]}.</p>`;
@@ -252,8 +251,7 @@ async function viewVersions(p) {
   const c = res.counts;
   document.getElementById("version-count").textContent = ` — ${c.open} to answer, ${c.version} versions, ${c.copy} copies, ${c.different} different`;
   const page = (o) => `#review?${new URLSearchParams({ list: "versions", ...(verdict ? { verdict } : {}), offset: o })}`;
-  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
-    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  const pager = pagerHtml(res.total, offset, limit, page);
   box.innerHTML = res.items.length
     ? res.items.map(versionRow).join("") + pager
     : `<p class="muted">${verdict ? "None yet." : "Nothing to answer: no two documents of one title share enough text (the versions pass of prax maintain finds them, or look again)."}</p>`;
@@ -301,8 +299,7 @@ async function viewEvents(p) {
   const c = res.counts;
   document.getElementById("event-count").textContent = ` — ${c.open} to decide, ${c.event} events, ${c.not} not`;
   const page = (o) => `#review?${new URLSearchParams({ list: "events", state, offset: o })}`;
-  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
-    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  const pager = pagerHtml(res.total, offset, limit, page);
   box.innerHTML = res.items.length
     ? res.items.map(eventRow).join("") + pager
     : `<p class="muted">${state === "open" ? "Nothing to decide: no group of photos waits (the events pass of prax maintain finds them, or look again)." : "None yet."}</p>`;
@@ -381,8 +378,7 @@ async function viewFaceGroups(p) {
     const pick = document.getElementById("face-event");
     if (pick) pick.addEventListener("change", () => { location.hash = `#review?${new URLSearchParams(pick.value ? { list: "groups", event: pick.value } : { list: "groups" })}`; });
     const page = (o) => `#review?${new URLSearchParams({ list: "groups", offset: o, ...(event ? { event } : {}) })}`;
-    const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
-      ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+    const pager = pagerHtml(res.total, offset, limit, page);
     const loose = res.loose && res.loose.faces.length ? faceGroupRow(res.loose, true) : "";
     box.innerHTML = res.items.length || loose
       ? res.items.map((g) => faceGroupRow(g)).join("") + loose + pager
@@ -410,8 +406,7 @@ async function viewFaceMatches(p) {
     ? `<a href="#review?list=matches">every person</a> · ${line}`
     : `${res.offered.toLocaleString()} of ${res.open.toLocaleString()} open faces look like ${res.total.toLocaleString()} people you named: ${line}`;
   const page = (o) => `#review?${new URLSearchParams({ list: "matches", offset: o })}`;
-  const pager = person ? "" : `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
-    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  const pager = person ? "" : pagerHtml(res.total, offset, limit, page);
   box.innerHTML = res.items.some((m) => m.faces.length)
     ? res.items.map((m) => faceMatchRow(m, Boolean(person))).join("") + pager
     : `<p class="muted">No face to offer: name some faces in the face groups tab first, and each one named is matched against the rest.</p>`;
@@ -541,8 +536,7 @@ async function viewFaces(p) {
   try { res = await api("/faces", { order, offset, limit }); } catch (err) { showError(box, err); return; }
   document.getElementById("face-counts").innerHTML = faceCounts(res);
   const page = (o) => `#review?${new URLSearchParams({ list: "faces", order, offset: o })}`;
-  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
-    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  const pager = pagerHtml(res.total, offset, limit, page);
   box.innerHTML = res.items.length ? `<div class="face-grid">${res.items.map((f) => faceTile(f)).join("")}</div>${pager}` : `<p class="muted">No face found yet: the faces step reads the photos' previews.</p>`;
   bindAlike(box);
 }

@@ -593,12 +593,38 @@ a.moment { font-variant-numeric: tabular-nums; }
 .domains-form .tick { display: inline-flex; align-items: center; gap: .3rem; }
 .doc-actions a.open { text-decoration: underline; }
 /* the figure strip: a contact sheet of the document's pictures, each a link to its chunk */
-.figure-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .9rem 1rem; margin: .4rem 0 1.2rem; }
-.figure-strip[hidden] { display: none; }  /* folded until asked: display: grid would beat the attribute */
-.figure-strip a { display: block; font-size: .78rem; line-height: 1.25; text-decoration: none; color: var(--fg); }
-.figure-strip img { display: block; width: 100%; height: 8rem; object-fit: contain; background: var(--panel); border-radius: 2px; }
-.figure-strip .cap { display: block; margin-top: .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.figure-strip .where { display: block; font-size: .72rem; }
+/* a set of pictures a page at a time, and the viewer over it (core.js
+   mountGallery, lib.js galleryHtml): a person's photos, a place's, a
+   document's figures */
+.gallery { margin: .4rem 0 1.2rem; }
+.gallery[hidden] { display: none; }  /* the figures fold until asked */
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: .5rem; }
+.gallery-grid.figures { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .9rem 1rem; }
+.gallery-tile { display: block; font-size: .78rem; line-height: 1.25; text-decoration: none; color: var(--fg); min-width: 0; }
+.gallery-tile img { display: block; width: 100%; height: 7rem; object-fit: cover; background: var(--panel); border-radius: 2px; }
+.gallery-grid.figures .gallery-tile img { height: 8rem; object-fit: contain; }
+.gallery-tile:hover img, .gallery-tile:focus-visible img { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gallery-tile .cap { display: block; margin-top: .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-tile .where { display: block; font-size: .72rem; }
+.pager-pages { flex-wrap: wrap; gap: .25rem .55rem; align-items: baseline; }
+.pager-pages a, .pager-pages b { min-width: 1.4rem; text-align: center; }
+.pager-pages .muted:last-child { margin-left: .6rem; }
+.pager-pages .step { font-size: 1.15rem; line-height: 1; }
+.viewer { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg) 88%, transparent); }
+.viewer-box { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; align-items: center; gap: .4rem .6rem; width: min(96vw, 1400px); height: 94vh; padding: 0 16px; box-sizing: border-box; }
+.viewer-img { grid-column: 2; grid-row: 1; justify-self: center; max-width: 100%; max-height: 100%; object-fit: contain; background: var(--panel); }
+.viewer-step { grid-row: 1; font-size: 1.6rem; padding: .3rem .7rem; }
+.viewer-step.prev { grid-column: 1; }
+.viewer-step.next { grid-column: 3; }
+.viewer-step:disabled { visibility: hidden; }
+.viewer-close { position: absolute; top: 0; right: 16px; font-size: 1.3rem; padding: .1rem .6rem; }
+.viewer-line { grid-column: 1 / -1; grid-row: 2; margin: 0; text-align: center; font-size: .84rem; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); }
+  .gallery-tile img { height: 5.5rem; }
+  .viewer-box { gap: .3rem .2rem; padding: 0 4px; }
+  .viewer-step { font-size: 1.2rem; padding: .2rem .35rem; }
+}
 .reading-line { font-size: .84rem; margin: -.2rem 0 .8rem; }
 .ctx-domain select { font-size: .7rem; text-transform: none; letter-spacing: 0; margin-left: .4rem; padding: 0 .2rem; }
 h2 { font-weight: 600; letter-spacing: -.015em; }

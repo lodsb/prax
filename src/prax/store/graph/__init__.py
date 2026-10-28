@@ -29,6 +29,7 @@ ORDER = (
     "naming",
     "faces",
     "versions",
+    "pictures",
 )
 
 from .communities import (  # noqa: F401
@@ -237,6 +238,13 @@ from .people import (  # noqa: F401
     people,
     person_page,
     person_types,
+)
+from .pictures import (  # noqa: F401
+    PICTURE_SETS,
+    PICTURES_PAGE,
+    PICTURES_PAGE_MAX,
+    PLACE_DEPTH,
+    picture_set,
 )
 from .rules import (  # noqa: F401
     CONFLICT_PAIRS,

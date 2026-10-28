@@ -270,22 +270,32 @@ function renderFigure(c, docId) {
 }
 
 // The figure strip: every picture of the document at a glance (a
-// paper's figures, a talk's slides, a scan's pages), each a link to its
-// chunk. Folded under the actions; "figures…" opens it, ?figures=1 too.
-function figureStrip(chunks, docId) {
-  const items = figureItems(chunks);
-  if (!items.length) return "";
-  const where = (f) => {
-    // a frame's caption already opens with its moment
-    if (f.time != null) return f.caption.startsWith(fmtTime(f.time)) ? "" : "at " + fmtTime(f.time);
-    return f.page ? "p. " + f.page : "";
-  };
-  return `<section id="doc-figures" class="figure-strip" hidden>${items.map((f) => `
-    <a href="#chunk-${f.chunk_id}" data-scroll="${f.chunk_id}" title="${esc(f.caption)}">
-      <img src="/doc/${docId}/figure/${f.ref}" alt="${esc(f.caption)}" loading="lazy">
-      <span class="cap">${esc(f.caption) || "<span class=muted>(no caption)</span>"}</span>
-      <span class="muted where">${where(f)}</span>
-    </a>`).join("")}</section>`;
+// paper's figures, a talk's slides, a scan's pages), a page of them at a
+// time, each opening large and leading to its chunk. Folded under the
+// actions; "figures…" opens it, ?figures=1 too. The gallery is drawn into
+// it once the page is (bindFigures).
+function figureStrip(chunks) {
+  return figureItems(chunks).length ? `<section id="doc-figures" class="gallery" hidden></section>` : "";
+}
+// The figures as a gallery's items: a frame's caption already opens with
+// its moment, so it says no more.
+function figureSet(chunks, docId) {
+  return figureItems(chunks).map((f) => {
+    const at = f.time != null ? (f.caption.startsWith(fmtTime(f.time)) ? "" : "at " + fmtTime(f.time)) : null;
+    return { ...f, doc_id: docId, href: `#chunk-${f.chunk_id}`, where: at };
+  });
+}
+function bindFigures(strip, chunks, docId) {
+  return mountGallery(strip, {
+    load: listLoad(figureSet(chunks, docId)),
+    param: "figpage",
+    figures: true,
+    follow: (it) => {
+      DOC_VIEW.pages.ensure(it.chunk_id);
+      const el = document.getElementById("chunk-" + it.chunk_id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+  });
 }
 
 // A hit or a passage that is a figure shows the figure: the reading is what
@@ -773,7 +783,7 @@ async function viewDoc(id, p) {
     <div id="page-editor"></div>
   </header>
   ${rule()}
-  ${figureStrip(chunks, doc.id)}
+  ${figureStrip(chunks)}
   ${meta.video ? playerHtml(doc, chunks, meta) : mediaHtml(doc, meta)}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
@@ -856,7 +866,8 @@ async function viewDoc(id, p) {
       figLink.textContent = on ? "fold the figures" : label;  // the same link both ways
     };
     figLink.addEventListener("click", (e) => { e.preventDefault(); showStrip(strip.hidden); });
-    if (p.figures) showStrip(true);
+    if (p.figures || p.figpage) showStrip(true);
+    await bindFigures(strip, chunks, doc.id);
   }
   // the domains as boxes to tick: none ticked is every module; a change
   // is read again against the new set by the worker's next extract pass

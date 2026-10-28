@@ -131,14 +131,15 @@ def test_a_person_page_gathers_every_source(con: sqlite3.Connection) -> None:
     assert rels == {("authored_by", "in"): 2, ("affiliated_with", "out"): 1}
     assert {d["id"] for d in page["documents"]} == {docs["paper"], docs["letter"]}
     # the pictures: both, their event, their town, who else is in them
-    assert page["photos"] == 2 and page["sample"] == [docs["two"], docs["one"]]
+    assert page["photos"] == 2
     (event,) = page["events"]
     assert (event["name"], event["photos"], event["first"]) == (
         "Coast walk",
         2,
         "2019-05-03",
     )
-    assert page["places"] == [{"name": "Aldmouth", "photos": 2}]
+    aldmouth = _entity(con, "Aldmouth", "place")
+    assert page["places"] == [{"id": aldmouth, "name": "Aldmouth", "photos": 2}]
     bram = _entity(con, "Bram Tove")
     assert page["with"] == [{"id": bram, "name": "Bram Tove", "photos": 1}]
     # her alias's page is hers

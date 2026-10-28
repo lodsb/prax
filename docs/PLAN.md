@@ -876,6 +876,15 @@ The user asked on 2026-10-28 for every one to be fixed.
       changed) **The plugin writes `.prax/graph.jsonl`** at session end, beside
       `.prax-project`, with `prax export --project` (the last part of
       T's design).
+- [x] (2026-10-28, `docs/ui.md` "The gallery") **Photos a page at a time.** The user: "on a person you only see a
+      couple of photos … only, say 20 fotos and then you have pages
+      below … could be reusable for the document figures". One gallery
+      (`mountGallery`) over `GET /pictures` (`store.picture_set`: a
+      person's, an event's, an event group's, a place's) or a list in
+      hand (a document's figures), with a pager and a viewer that steps
+      across pages; `#photos` for a set on its own page. Left for later:
+      the face grids of the Review page (a face crop is not a picture of
+      a set), and a graph entity's "photos here".
 - [ ] **A procedural graph for the surfer** (later; the reference is in
       `docs/log.md`, "After the mathematics").
 - [ ] **If the UI still feels slow from the MacBook** — the next suspect

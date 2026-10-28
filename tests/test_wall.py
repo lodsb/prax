@@ -280,6 +280,7 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
     for method, path in (
         ("GET", "/communities"),
         ("GET", "/people"),
+        ("GET", "/pictures"),
         ("GET", "/faces/groups"),
         ("GET", "/tokens"),
         ("PUT", f"/doc/{bank}/sensitivity"),

@@ -37,6 +37,29 @@ async function viewPerson(id, note) {
   const head = view.querySelector("h1 + p");
   if (head) head.insertAdjacentHTML("afterend", personEditHtml(got));
   bindPersonEdit(got, note);
+  const photos = view.querySelector("#person-photos");
+  if (photos) await mountGallery(photos, { load: pictureLoad("depicts", got.id), param: "photos" });
+}
+
+// A set of pictures on a page of its own (#photos?place=N, ?event=N,
+// ?depicts=N, ?candidate=N): a person's, an event's, a place's with the
+// places in it, an event group's, as one gallery.
+async function viewPhotos(p) {
+  const set = pictureSetOf(p);
+  if (!set) { view.innerHTML = `<p class="muted">Which photos? A person's, an event's or a place's page links here.</p>`; return; }
+  loading();
+  const load = pictureLoad(set.key, set.id);
+  let first;
+  try { first = await load(0, 1); } catch (err) { showError(view, err); return; }
+  const name = esc(first.name || `#${first.id}`);
+  const named = set.key === "depicts" ? `<a href="#person/${first.id}">${name}</a>`
+    : set.key === "candidate" ? `<a href="#review?list=events">${name || "a group"}</a>`
+    : `<a href="#graph?${new URLSearchParams({ entity: first.name, type: set.key === "event" ? "event" : "place" })}">${name}</a>`;
+  const within = set.key === "place" ? " and the places in it" : "";
+  view.innerHTML = `<h1>${PICTURE_SETS[set.key]} ${named}</h1>
+    <p class="muted">${first.total.toLocaleString()} photo${first.total === 1 ? "" : "s"}${within}, ${set.key === "depicts" || set.key === "place" ? "the newest first" : "in the order they were taken"}.</p>
+    <div id="photo-set" class="gallery"></div>`;
+  await mountGallery(view.querySelector("#photo-set"), { load, param: "page", limit: 40, empty: `<p class="muted">None the wall lets you see.</p>` });
 }
 
 function bindPersonEdit(got, note) {
