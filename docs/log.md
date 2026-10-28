@@ -9184,3 +9184,16 @@ Looked at in headless Chrome on a throwaway store of 53 generated
 pictures and a document of 45 generated figures, never the owner's
 photos: the pages, the viewer, a step past a page's end, the figure's
 place in the text, a phone's width.
+
+## 2026-10-28: AP's two answers, and the spacing twins again
+
+- **AP.** The user's answers to the note's two questions. An import's
+  `likely` rows wait on the Review page, their edges held until the row
+  is decided; resolution's judges may answer first, a person's answer
+  replaces theirs. A page's global id is minted at random once, like an
+  entity's: a slug is renamed and is not unique across libraries, and a
+  hash changes with every revision. `docs/global-ids.md` says both.
+- **Spacing twins.** `prax heal --check spacing-twins --apply` folded
+  the 59 groups made since 2026-10-09 (job 1497), one run that
+  `unmerge_run` takes back. The check finds none now. The plan's line
+  that still said 783 waiting was the count from before the first run.
