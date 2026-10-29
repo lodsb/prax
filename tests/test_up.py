@@ -22,6 +22,29 @@ from prax.host import up
 PY = sys.executable
 
 
+def _status(data_dir: Path) -> dict[str, Any] | None:
+    """The supervisor's status file, or None while it is being replaced: on
+    Windows an open during the replace is refused (CI, 2026-10-28), and the
+    door's own reader tries again the same way (``process.status``)."""
+    try:
+        got: dict[str, Any] = json.loads(
+            (up.run_dir(data_dir) / up.STATUS).read_text(encoding="utf-8")
+        )
+        return got
+    except (OSError, ValueError):
+        return None
+
+
+def _read_status(data_dir: Path) -> dict[str, Any]:
+    """The status file, waited for through a replace."""
+    deadline = time.monotonic() + 20.0
+    while (got := _status(data_dir)) is None:
+        if time.monotonic() > deadline:
+            raise AssertionError("no status file in time")
+        time.sleep(0.02)
+    return got
+
+
 def wait_for(check: Any, *, seconds: float = 20.0) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -245,7 +268,7 @@ def test_a_dying_process_is_restarted_with_backoff_and_all_stop_in_order(
     thread.start()
     wait_for(lambda: runs_of(mark_a) >= 3)
     assert runs_of(mark_b) == 1
-    status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+    status = _read_status(data_dir)
     assert status["roles"]["b"]["state"] == "up"
     assert status["roles"]["a"]["restarts"] >= 2
     assert status["roles"]["a"]["exit"] == 3
@@ -477,11 +500,11 @@ def test_a_swap_hands_the_card_over_and_takes_it_back(
         assert runs_of(mark_b) == 0  # on demand: not started with the rest
         # the group is in the status file before any swap: the Jobs view
         # has something to offer from the start
-        before = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        before = _read_status(data_dir)
         assert before["groups"]["card"]["holder"] is None
         up.swap(data_dir, "marker")
         wait_for(lambda: runs_of(mark_b) >= 1)
-        status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        status = _read_status(data_dir)
         group = status["groups"]["card"]
         assert group["holder"] == "marker" and group["was_up"] == ["llama-server"]
         assert group["fits"] is False
@@ -489,7 +512,7 @@ def test_a_swap_hands_the_card_over_and_takes_it_back(
         # nothing waits any more: the card goes back on its own
         waiting.clear()
         wait_for(lambda: runs_of(mark_a) >= 2)
-        status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        status = _read_status(data_dir)
         card = status["groups"]["card"]  # still declared, nothing on loan
         assert card["holder"] is None and card["members"] == [
             "llama-server",
@@ -525,7 +548,7 @@ def test_a_borrower_that_fits_runs_beside_the_holder(
         wait_for(lambda: runs_of(mark_a) >= 1)
         up.swap(data_dir, "marker", back_when="never")
         wait_for(lambda: runs_of(mark_b) >= 1)
-        status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        status = _read_status(data_dir)
         group = status["groups"]["card"]
         assert group["fits"] is True and group["was_up"] == ["llama-server"]
         assert status["roles"]["llama-server"]["state"] == "up"  # never stopped
@@ -601,9 +624,10 @@ def test_a_quiet_server_stops_and_comes_back_when_work_asks(
         wait_for(lambda: "llama-server" in sup.idled)
         wait_for(
             lambda: (
-                json.loads((up.run_dir(data_dir) / up.STATUS).read_text())["roles"][
-                    "llama-server"
-                ]["state"]
+                (_status(data_dir) or {})
+                .get("roles", {})
+                .get("llama-server", {})
+                .get("state")
                 == "idle"
             )
         )
@@ -829,5 +853,5 @@ def test_a_load_time_is_noted_and_kept(
     again = up.Supervisor([server], data_dir=data_dir)
     assert again.loads["llama-server"] == [1.0, 180.0, 190.0, 170.0, 175.0]
     assert again.state["llama-server"]["load_s"] == 175.0
-    status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+    status = _read_status(data_dir)
     assert status["roles"]["llama-server"]["load_s"] is not None
