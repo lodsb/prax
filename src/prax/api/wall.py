@@ -134,6 +134,59 @@ def documents_suspected(
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/media")
+def media(request: Request, by: str = "folder", under: str = "") -> dict[str, Any]:
+    """The photos and recordings prax references, one level of a grouping
+    (``store.media_groups``): a folder's folders, a year's months, or the
+    events; with how many of each are suspected, open or personal."""
+    try:
+        got = store.media_groups(_con(request), by=by, under=under)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {**got, "counts": store.media_counts(_con(request))}
+
+
+@router.get("/media/pictures")
+def media_pictures(
+    request: Request,
+    by: str,
+    key: str,
+    offset: int = 0,
+    limit: int = store.MEDIA_PAGE,
+) -> dict[str, Any]:
+    """One page of a group's photos and recordings, for the gallery."""
+    try:
+        return store.media_pictures(_con(request), by, key, offset=offset, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class MediaDecideReq(BaseModel):
+    by: str
+    key: str
+    state: str  # open | personal
+
+
+@router.post("/media/decide")
+def media_decide(req: MediaDecideReq, request: Request) -> dict[str, Any]:
+    """A person's answer for a group (``store.decide_media``): released, or
+    personal for good; what a person decided one by one stays."""
+    try:
+        return store.decide_media(_con(request), req.by, req.key, req.state)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class MediaUndoReq(BaseModel):
+    run: str
+
+
+@router.post("/media/undo")
+def media_undo(req: MediaUndoReq, request: Request) -> dict[str, Any]:
+    """A group's answer taken back (``store.undo_media``)."""
+    return store.undo_media(_con(request), req.run)
+
+
 class SensitivityReq(BaseModel):
     state: str | None  # "personal", "suspected", or null: open
 

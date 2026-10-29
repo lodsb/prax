@@ -8,6 +8,7 @@ const ADMIN_TABS = [
   ["tokens", "tokens"],
   ["personal", "personal?"],
   ["marked", "marked personal"],
+  ["media", "media"],
   ["cleanup", "clean up"],
   ["checks", "text checks"],
 ];
@@ -24,8 +25,67 @@ async function viewAdmin(p) {
   if (tab === "personal") return viewDecide({ ...p, list: "personal" });
   if (tab === "marked") return viewDecide({ ...p, list: "marked" });
   if (tab === "cleanup") return viewCleanup(p);
+  if (tab === "media") return viewMedia(p);
   if (tab === "checks") return viewChecks(p);
   return viewTokens(p);
+}
+
+// The referenced photos and recordings as a library of their own (plan
+// item AQ, "A media view"): by folder, by month taken or by event, with a
+// group released or kept personal in one answer, and undo.
+const MEDIA_BY_LABEL = { folder: "folder", month: "month taken", event: "event" };
+async function viewMedia(p) {
+  const by = MEDIA_BY_LABEL[p.by] ? p.by : "folder";
+  const under = p.under || "";
+  const href = (u, b = by) => `#admin?${new URLSearchParams({ tab: "media", by: b, ...(u ? { under: u } : {}) })}`;
+  view.innerHTML = `${adminTabs("media")}<p class="muted">The photos and recordings prax finds on a share and does not copy. Each is set aside, kept from every token that may not see personal documents, until you release it. Release or personal answers for a whole group, with the groups under it; a photo you decided one by one keeps your answer. Undo takes a group's answer back.</p>
+    <p>${Object.entries(MEDIA_BY_LABEL).map(([k, l]) => k === by ? `<b>${esc(l)}</b>` : `<a href="${esc(href("", k))}">${esc(l)}</a>`).join(" · ")} <span id="media-count" class="muted"></span></p>
+    <p id="media-crumbs"></p><div id="media-list">${listPlaceholder("media-list")}</div>`;
+  const box = document.getElementById("media-list");
+  let res;
+  try { res = await api("/media", { by, under }); } catch (err) { showError(box, err); return; }
+  const c = res.counts;
+  document.getElementById("media-count").textContent = ` — ${(c.suspected + c.open + c.personal).toLocaleString()} in all: ${c.suspected.toLocaleString()} set aside, ${c.open.toLocaleString()} released, ${c.personal.toLocaleString()} personal`;
+  document.getElementById("media-crumbs").innerHTML = mediaCrumbs(by, res.under, (u) => href(u));
+  const leaf = (g) => by === "event" || (by === "month" && res.under) || g.key === res.under;
+  box.innerHTML = res.groups.length
+    ? res.groups.map((g) => mediaGroupRow(g, by, leaf(g) ? null : href(g.key))).join("")
+    : `<p class="muted">Nothing here: no photo or recording is referenced yet (prax crawl --reference, docs/media-by-reference.md).</p>`;
+  box.querySelectorAll("a.media-show").forEach((a) => a.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    const row = a.closest(".media-row");
+    const shelf = row.querySelector(".media-gallery");
+    if (shelf.innerHTML) { shelf.innerHTML = ""; a.textContent = "show"; return; }
+    a.textContent = "hide";
+    mountGallery(shelf, { limit: 40, load: (offset, limit) => api("/media/pictures", { by, key: a.dataset.key, offset, limit }), empty: `<p class="muted">Nothing to show.</p>` });
+  }));
+  box.querySelectorAll("button[data-media]").forEach((b) => b.addEventListener("click", async () => {
+    const row = b.closest(".media-row");
+    const out = row.querySelector(".decide-out");
+    const states = row.querySelector(".decide-acts .muted");
+    const before = states.textContent;
+    row.querySelectorAll("button[data-media]").forEach((x) => { x.disabled = true; });
+    try {
+      const r = await post("/media/decide", { by: b.dataset.by, key: b.dataset.key, state: b.dataset.media });
+      const left = r.left ? ` (${r.left.toLocaleString()} decided before, left as they were)` : "";
+      out.innerHTML = `${r.changed.toLocaleString()} ${r.state === "open" ? "released" : "kept personal"}${esc(left)} · <button type="button" class="secondary" data-undo-media="${esc(r.run)}">undo</button>`;
+      row.classList.add("done");
+      states.textContent = "answered";
+      out.querySelector("button[data-undo-media]").addEventListener("click", async (ev) => {
+        ev.target.disabled = true;
+        try {
+          const u = await post("/media/undo", { run: ev.target.dataset.undoMedia });
+          out.textContent = `undone: ${u.restored.toLocaleString()} as they were`;
+          states.textContent = before;
+          row.classList.remove("done");
+          row.querySelectorAll("button[data-media]").forEach((x) => { x.disabled = false; });
+        } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+      });
+    } catch (err) {
+      out.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+      row.querySelectorAll("button[data-media]").forEach((x) => { x.disabled = false; });
+    }
+  }));
 }
 
 // What the checks of a text found (stage AO, parsers.quality): how many

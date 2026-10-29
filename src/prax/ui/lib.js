@@ -145,6 +145,17 @@ function pictureSrc(it, large) {
   if (it.ref) return `/doc/${it.doc_id}/figure/${it.ref}`;
   return `/doc/${it.doc_id}/${large ? "preview" : "thumb"}`;
 }
+// The picture of an item, or, for one with no copy to show (a video, a
+// photo not read yet: ``thumb: false``), what it is in words.
+function pictureOrWord(it, large, cap) {
+  if (it.thumb === false) {
+    const kind = { video: "video", audio: "recording" }[it.kind] || "no picture yet";
+    return `<span class="${large ? "viewer-img " : ""}picture-none">${esc(kind)}${it.title ? `<br>${esc(it.title)}` : ""}</span>`;
+  }
+  return large
+    ? `<img class="viewer-img" src="${esc(pictureSrc(it, true))}" alt="${esc(cap)}">`
+    : `<img loading="lazy" src="${esc(pictureSrc(it, false))}" alt="${esc(cap)}">`;
+}
 // What a tile says under its picture: a figure's caption and where it is,
 // a photo's day.
 function pictureLine(it) {
@@ -161,7 +172,7 @@ function galleryHtml(page, href, figures) {
     const { cap, where } = pictureLine(it);
     const title = it.caption || it.title || "";
     return `<a class="gallery-tile" href="${esc(it.href || `#doc/${it.doc_id}`)}" data-i="${page.offset + i}" title="${esc(title)}">
-      <img loading="lazy" src="${esc(pictureSrc(it, false))}" alt="${esc(cap)}">${figures ? `<span class="cap">${esc(cap) || "<span class=muted>(no caption)</span>"}</span>` : ""}${where ? `<span class="muted where">${esc(where)}</span>` : ""}</a>`;
+      ${pictureOrWord(it, false, cap)}${figures ? `<span class="cap">${esc(cap) || "<span class=muted>(no caption)</span>"}</span>` : ""}${where ? `<span class="muted where">${esc(where)}</span>` : ""}</a>`;
   }).join("");
   return `<div class="gallery-grid${figures ? " figures" : ""}">${tiles}</div>${pagerHtml(page.total, page.offset, page.limit, href)}`;
 }
@@ -179,7 +190,7 @@ function viewerHtml(it, index, total) {
   return `<div class="viewer-box" role="dialog" aria-modal="true" aria-label="picture ${index + 1} of ${total}">
     <button type="button" class="viewer-close secondary" data-viewer="close" aria-label="close">×</button>
     <button type="button" class="viewer-step prev secondary" data-viewer="prev" aria-label="previous"${index > 0 ? "" : " disabled"}>‹</button>
-    <img class="viewer-img" src="${esc(pictureSrc(it, true))}" alt="${esc(cap)}">
+    ${pictureOrWord(it, true, cap)}
     <button type="button" class="viewer-step next secondary" data-viewer="next" aria-label="next"${index + 1 < total ? "" : " disabled"}>›</button>
     <p class="viewer-line"><span class="muted">${(index + 1).toLocaleString()} of ${total.toLocaleString()}</span>${words ? ` · ${words}` : ""}
       · <a href="${esc(it.href || `#doc/${it.doc_id}`)}" data-viewer="open">${open}</a></p></div>`;
@@ -453,6 +464,46 @@ function pairRow(it) {
       <button type="button" class="secondary" data-act="same" data-keep="${o.id}" data-other="${k.id}">same, keep “${esc(o.name)}”</button>
       <button type="button" class="secondary" data-act="different" data-keep="${k.id}" data-other="${o.id}">different</button>
       <span class="decide-out muted"></span></div></article>`;
+}
+// The media view (Admin, "media"): one level of a grouping of the
+// referenced photos and recordings. A group's line: its name (a way down
+// when it has groups under it), what it holds, how much of it is set
+// aside, and the two answers for all of it.
+const MEDIA_KINDS = { image: ["photo", "photos"], video: ["video", "videos"], audio: ["recording", "recordings"] };
+function mediaKinds(kinds) {
+  return Object.entries(kinds || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => {
+    const [one, many] = MEDIA_KINDS[k] || [k, k];
+    return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  }).join(" · ");
+}
+function mediaGroupRow(g, by, down) {
+  const states = [
+    g.suspected ? `${g.suspected.toLocaleString()} set aside` : "",
+    g.open ? `${g.open.toLocaleString()} released` : "",
+    g.personal ? `${g.personal.toLocaleString()} personal` : "",
+  ].filter(Boolean).join(" · ");
+  const name = down ? `<a href="${esc(down)}">${esc(g.label)}</a>` : `<b>${esc(g.label)}</b>`;
+  const act = (state, label, cls) => `<button type="button"${cls ? ` class="${cls}"` : ""} data-media="${state}" data-by="${esc(by)}" data-key="${esc(g.key)}"${g.suspected ? "" : " disabled"}>${label}</button>`;
+  return `<article class="decide-row media-row" data-key="${esc(g.key)}">
+    <div class="media-head">${name} <span class="muted">${esc(mediaKinds(g.kinds))}</span>
+      <a href="#" class="media-show" data-key="${esc(g.key)}">show</a></div>
+    <div class="decide-acts"><span class="muted">${esc(states)}</span>
+      ${act("open", "release")} ${act("personal", "personal", "secondary")}
+      <span class="decide-out muted"></span></div>
+    <div class="media-gallery"></div></article>`;
+}
+// The way back up a folder or a year: each step above ``under`` a link.
+function mediaCrumbs(by, under, href) {
+  if (!under) return "";
+  if (by === "month") return `<a href="${esc(href(""))}">all years</a> › <b>${esc(under)}</b>`;
+  const [root, path] = [under.split(":")[0], under.slice(under.indexOf(":") + 1)];
+  const parts = path ? path.split("/") : [];
+  const steps = [`<a href="${esc(href(""))}">${esc(root)}</a>`];
+  parts.forEach((p, i) => {
+    const key = `${root}:${parts.slice(0, i + 1).join("/")}`;
+    steps.push(i === parts.length - 1 ? `<b>${esc(p)}</b>` : `<a href="${esc(href(key))}">${esc(p)}</a>`);
+  });
+  return steps.join(" › ");
 }
 // One of another library's things whose name one here answers to
 // (GET /graph/imports/likely): theirs beside ours, and three answers.
@@ -1266,5 +1317,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureOrWord, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, mediaKinds, mediaGroupRow, mediaCrumbs, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

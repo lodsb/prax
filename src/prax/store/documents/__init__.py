@@ -23,6 +23,7 @@ ORDER = (
     "photos",
     "reads",
     "opens",
+    "media",
 )
 
 from .domains import (  # noqa: F401
@@ -95,6 +96,18 @@ from .library import (  # noqa: F401
     retire_set,
     similarity,
     unretire_document,
+)
+from .media import (  # noqa: F401
+    MEDIA_BY,
+    MEDIA_PAGE,
+    MEDIA_PAGE_MAX,
+    MEDIA_STATES,
+    decide_media,
+    media_counts,
+    media_groups,
+    media_members,
+    media_pictures,
+    undo_media,
 )
 from .meta import (  # noqa: F401
     _KIND_WORDS,

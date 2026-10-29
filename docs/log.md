@@ -9335,3 +9335,35 @@ hidden document gave; a failed record of an opening failed the reading;
 an entity line without its `gid` was a 500. Two quality fixes: format 1's
 edges go through `store.import_edge` like format 2's, and `export` is in
 three parts, its file unchanged.
+
+## 2026-10-29: a media view
+
+The user's idea of 2026-10-23 (plan item AQ): the referenced photos and
+recordings as a library of their own, with a group released or marked
+personal in one decision. On the live store they are 14,334 live
+documents (13,877 pictures, 599 videos, 22 recordings counted before
+retirements), all set aside, in 254 folders of one root, 12,982 with a
+taken date over 22 years, 9,430 in an event.
+
+- **The reads** (`store.documents.media`): `media_groups` gives one level
+  of a grouping by folder, month or event, with a count per state and
+  kind; `media_pictures` a page of a group for the gallery. Read once
+  over the members, in Python: 157 ms by folder, 125 by month, 296 by
+  event on the live store, read-only. The event grouping first scanned
+  every edge for the relation (1.0 s; no index serves `rel`) and now
+  reads by the members' documents.
+- **Where a share's folders part.** The live share holds everything one
+  folder inside another for two levels; the view opens below them
+  (`_descend`).
+- **The answer** (`decide_media`): `open` or `personal` for a group with
+  every group under it, changing only members still suspected and
+  decided by no person. Each keeps what it was in
+  `meta.sensitivity.before` under the decision's run, and `undo_media`
+  puts it back. No migration.
+- **The tab**: the Admin page's "media", linked from the "personal?"
+  list's count of set-aside media. A video has no thumbnail (none of the
+  599 has one), so a tile without one says what it is.
+
+Looked at in headless Chrome on a throwaway share of 37 generated
+pictures, never the owner's: the folder level, a gallery, a release and
+its undo, the month grouping at a phone's width.

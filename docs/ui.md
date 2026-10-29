@@ -406,6 +406,21 @@ photos". In the graph, a person's, an event's or a place's panel has
 "its photos" for the administrator; a node knows its name, so the click
 looks its id up (`GET /entities`, the name and type alike).
 
+### `#admin?tab=media&by=&under=`
+
+The referenced photos and recordings (`documents.held` 0), one level of
+a grouping at a time (`GET /media`, `store.media_groups`): `by` is
+`folder` (the default), `month` or `event`; `under` is a folder
+(`root:path`) or a year. A folder grouping opens where the folders
+part (`media._descend`). Each group's line is `lib.js`
+`mediaGroupRow`, its way back up `mediaCrumbs`. "show" mounts the
+gallery over `GET /media/pictures?by&key` (40 a page); an item with no
+copy to show (`thumb: false`, a video) is drawn in words
+(`pictureOrWord`). Release and personal post `/media/decide`, which
+changes only the members still suspected and decided by no person, and
+answer with the run that `/media/undo` takes back. The administrator's
+routes only.
+
 ### `#review?rel=&unmapped=&offset=`
 
 The review queue, filtered by relation and by unmapped versus typed.

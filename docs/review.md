@@ -9,7 +9,7 @@ The page has five tabs. The first holds the facts the reader could not
 place. Three ask you whether two names are the same thing. The **genre**
 tab asks what a document is and what it is about.
 Whether a document is personal, and what should not be in the library at
-all, are on the **Admin** page (its tabs "personal?" and "clean up"),
+all, are on the **Admin** page (its tabs "personal?", "media" and "clean up"),
 beside the tokens that decide who may read what.
 
 ## Facts that did not fit
@@ -74,6 +74,36 @@ The tab beside it, **marked personal**, lists every document you marked,
 the last first, with **not personal** to open one again. On a document's
 own page, **properties…** shows the same state, what the rules found and
 the same two buttons.
+
+## Media (on the Admin page)
+
+The photos and recordings prax finds on a share are referenced, not
+copied, and each one starts out set aside: no token that may not see
+personal documents sees it. This tab is where you let them out, a group
+at a time instead of one by one.
+
+You choose how to group them:
+
+- **folder**: the folders of the share. The view opens where the
+  folders start to differ, so a share of one folder inside another
+  does not make you click down through each. A folder's name leads
+  into it; its own files, beside its folders, are the group "(here)".
+- **month taken**: years, and the months of a year.
+- **event**: the events you named on the Review page.
+
+Each group says how many photos, videos and recordings it holds, and how
+many are set aside, released or personal. **show** opens its pictures
+below it, 40 a page, with the viewer.
+
+- **Release** lets the whole group out, with every group under it.
+- **Personal** keeps the whole group from those tokens for good.
+
+Either answer changes only what is still set aside and that nobody
+decided about. A photo you marked personal on its own stays personal
+when you release its folder. **Undo** takes the group's answer back, and
+each photo is as it was.
+
+A video has no picture yet: its tile says "video" and its name.
 
 ## Clean up (on the Admin page)
 

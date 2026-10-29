@@ -293,6 +293,24 @@ test("pairRow, splitRow, mergeRow: each button carries its decision", () => {
   assert.equal(lib.mergeRow({ why: "narrower", alias: null, into: null }), "");
 });
 
+test("mediaGroupRow and mediaCrumbs: a group's line and the way back up", () => {
+  const g = { key: "nas:Photos/Trips", label: "Trips", count: 5, suspected: 3, open: 2, personal: 0, kinds: { image: 4, video: 1 } };
+  const row = lib.mediaGroupRow(g, "folder", "#admin?tab=media&under=x");
+  assert.match(row, /<a href="#admin\?tab=media&amp;under=x">Trips<\/a>/);
+  assert.match(row, /4 photos · 1 video/);
+  assert.match(row, /3 set aside · 2 released/);
+  assert.match(row, /data-media="open" data-by="folder" data-key="nas:Photos\/Trips">release/);
+  assert.match(row, /data-media="personal"[^>]*>personal/);
+  // nothing set aside: nothing to answer
+  assert.match(lib.mediaGroupRow({ ...g, suspected: 0 }, "folder", null), /data-media="open"[^>]* disabled/);
+  assert.match(lib.mediaGroupRow(g, "event", null), /<b>Trips<\/b>/);
+  assert.equal(lib.mediaKinds({ audio: 1 }), "1 recording");
+  const href = (u) => `#u=${u}`;
+  assert.equal(lib.mediaCrumbs("folder", "", href), "");
+  assert.equal(lib.mediaCrumbs("folder", "nas:Photos/Trips", href), '<a href="#u=">nas</a> › <a href="#u=nas:Photos">Photos</a> › <b>Trips</b>');
+  assert.equal(lib.mediaCrumbs("month", "2019", href), '<a href="#u=">all years</a> › <b>2019</b>');
+});
+
 test("foreignRow: theirs beside ours, three answers each naming the import and the gid", () => {
   const row = lib.foreignRow({ source: "laptop", gid: "e:ABC", name: "wave digital filter", type: "method", labels: [{ label: "Wellendigitalfilter", lang: "de" }], held: 2,
     candidate: { id: 4, name: "wave-digital filter", type: "method", edges: 9 } });

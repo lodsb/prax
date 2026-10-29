@@ -1068,7 +1068,7 @@ not done.
             (migration 52) so every pass starts a group again there;
             "join with the one before" takes it back
             (`store.split_event`, `store.join_event`).
-      - [ ] **A media view**, the user's idea of 2026-10-23: the
+      - [x] (2026-10-29, the Admin page's "media" tab, `store.media_groups`, `docs/review.md` "Media") **A media view**, the user's idea of 2026-10-23: the
             referenced photos and recordings as a library of their own
             (by folder, by taken date once AR reads EXIF, by album),
             with a group released or marked personal in one decision.

@@ -604,6 +604,8 @@ a.moment { font-variant-numeric: tabular-nums; }
 .gallery-tile img { display: block; width: 100%; height: 7rem; object-fit: cover; background: var(--panel); border-radius: 2px; }
 .gallery-grid.figures .gallery-tile img { height: 8rem; object-fit: contain; }
 .gallery-tile:hover img, .gallery-tile:focus-visible img { outline: 2px solid var(--accent); outline-offset: 1px; }
+.picture-none { display: flex; align-items: center; justify-content: center; text-align: center; height: 7rem; padding: .4rem; overflow: hidden; background: var(--panel); border-radius: 2px; color: var(--muted); word-break: break-word; }
+.viewer-img.picture-none { height: 50vh; min-width: 50vw; }
 .gallery-tile .cap { display: block; margin-top: .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gallery-tile .where { display: block; font-size: .72rem; }
 .pager-pages { flex-wrap: wrap; gap: .25rem .55rem; align-items: baseline; }
