@@ -32,13 +32,20 @@ def get(
     offset: int = 0,
     max_chars: int | None = None,
     brief: bool = False,
+    via: str | None = None,
 ) -> dict[str, Any]:
     """One document and a window of its text; ``brief`` is what an agent
-    reads (``store.brief_document``: the meta without its histories)."""
+    reads (``store.brief_document``: the meta without its histories). The
+    first window is an opening of it (``store.note_open``): ``via=web`` from
+    the document page, an agent's brief read, or any other."""
     con = _con(request)
     found = store.get_document(con, doc_id, offset=offset, max_chars=max_chars)
     if found is None:
         raise HTTPException(404, "no such document")
+    if offset == 0:
+        store.note_open(
+            con, doc_id, "web" if via == "web" else "agent" if brief else "api"
+        )
     doc: dict[str, Any] = dict(found)  # the shape, and what the door adds
     # what it is waiting to be read by: a list since migration 21, and
     # `meta.reading` is the last reading that finished

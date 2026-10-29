@@ -9310,3 +9310,18 @@ are looked up 500 at a time (`pages._annotated`). Over all 571 pages:
 35.6 s in all, the slowest 0.27 s, the median 63 ms. The same export:
 0.34 s. Same sources in the same order; a test now covers a page whose
 source is named by its edge alone (`tests/test_stale.py`).
+
+## 2026-10-29: which documents are opened, recorded
+
+The plan's "reading activity as a signal" needs months of openings
+before a vote in ranking can be measured, and nothing recorded them.
+Migration 66 adds `document_opens`: the document, the viewer (a named
+token's name, or `admin`) and the way in (`web` for the document page,
+`agent` for an agent's brief read, `api` for any other whole read), with
+the moment. `GET /get/{id}` writes one at its first window
+(`store.note_open`); the page asks with `via=web`. A document, viewer and
+way in are written at most once in `OPEN_EVERY` (30 minutes), held in
+memory like a token's last use, because the page draws a document again
+on every change of the store and an agent reads a book in windows.
+`store.document_opens` counts them per document; it is scrubbed for a
+named viewer like any many-row read. Nothing reads it yet.

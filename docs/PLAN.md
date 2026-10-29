@@ -807,9 +807,14 @@ The user asked on 2026-10-28 for every one to be fixed.
       (Vectara's HHEM-2.1-Open) scores an answer against its passages;
       first as a measurement on the eval sets, then perhaps as a mark on
       the answer.
-- [ ] **Reading activity as a signal** (Glean's personal graph): what was
+- [ ] (2026-10-29: recorded from then on, migration 66,
+      `store.note_open` and `store.document_opens`; nothing ranks by it
+      yet) **Reading activity as a signal** (Glean's personal graph): what was
       opened, and when, as a measured vote in ranking; it is also the
-      first of the "outcome signals" of the private research note.
+      first of the "outcome signals" of the private research note. Next,
+      once there are months of it: the documents opened after a search
+      as the eval set's relevance, and a vote measured with
+      `scripts/eval_retrieval.py`.
 
 ## The graph
 

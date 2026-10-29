@@ -722,7 +722,7 @@ async function viewDoc(id, p) {
   loading(`Loading document ${esc(id)}…`);
   let doc, chunks;
   try {
-    [doc, chunks] = await Promise.all([api(`/get/${id}`, { max_chars: 0 }), api(`/doc/${id}/chunks`)]);
+    [doc, chunks] = await Promise.all([api(`/get/${id}`, { max_chars: 0, via: "web" }), api(`/doc/${id}/chunks`)]);
   } catch (err) {
     showError(view, err);
     return;
