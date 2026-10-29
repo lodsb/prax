@@ -129,6 +129,7 @@ def export(door: Door, a: Any) -> int:
             "type": a.type,
             "hops": a.hops,
             "history": "true" if a.history else None,
+            "as": a.as_token,
         }.items()
         if v not in (None, "")
     }

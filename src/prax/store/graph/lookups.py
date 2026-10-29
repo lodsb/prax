@@ -1,6 +1,7 @@
 """The small reads the door's steps and routes make of the graph and the
 documents: an entity's labels, the one answering to a name, a document's
-identities, the documents of hashes or entities, a page's slugs."""
+identities, the documents of hashes or entities, a page's slugs, and
+the global ids of entities and pages (docs/global-ids.md)."""
 
 from __future__ import annotations
 
@@ -102,6 +103,67 @@ def documents_by_hash(con: sqlite3.Connection, hashes: list[str]) -> dict[str, i
         ):
             out[str(r["hash"])] = int(r["id"])
     return out
+
+
+@_reading
+def entities_by_gid(con: sqlite3.Connection, gids: list[str]) -> dict[str, int]:
+    """This library's entity for each of these global ids it minted, the
+    canonical one: a folded row keeps its gid, so a twin's id is an alias
+    (migration 64)."""
+    out: dict[str, int] = {}
+    for start in range(0, len(gids), 500):
+        part = gids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT gid, COALESCE(canonical_id, id) AS id FROM entities"
+            f" WHERE gid IN ({marks})",
+            part,
+        ):
+            out[str(r["gid"])] = int(r["id"])
+    return out
+
+
+@_reading
+def gids_of_entities(con: sqlite3.Connection, ids: list[int]) -> dict[int, str]:
+    """The global id of each of these entities, as the row carries it."""
+    out: dict[int, str] = {}
+    for start in range(0, len(ids), 500):
+        part = ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT id, gid FROM entities WHERE id IN ({marks})", part
+        ):
+            out[int(r["id"])] = str(r["gid"])
+    return out
+
+
+@_reading
+def folded_gids(con: sqlite3.Connection, gids: list[str]) -> dict[str, list[str]]:
+    """The aliases another library may know each of these entities by: the
+    global ids of the rows folded into it, and those of other libraries'
+    entities an import decided are it (``foreign_entities``), so a file
+    that goes back lands on the rows it came from."""
+    out: dict[str, set[str]] = {}
+    for start in range(0, len(gids), 500):
+        part = gids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT c.gid AS keep, e.gid AS twin FROM entities c"
+            f" JOIN entities e ON e.canonical_id = c.id WHERE c.gid IN ({marks})"
+            f" UNION SELECT c.gid, f.gid FROM entities c"
+            f" JOIN foreign_entities f ON f.entity_id = c.id"
+            f" WHERE c.gid IN ({marks}) AND f.state IN ('same', 'new')",
+            part + part,
+        ):
+            out.setdefault(str(r["keep"]), set()).add(str(r["twin"]))
+    return {k: sorted(v) for k, v in out.items()}
+
+
+@_reading
+def page_by_gid(con: sqlite3.Connection, gid: str) -> int | None:
+    """The page document of this global id, or None."""
+    row = con.execute("SELECT doc_id FROM pages WHERE gid = ?", (gid,)).fetchone()
+    return int(row["doc_id"]) if row is not None else None
 
 
 @_reading

@@ -9254,3 +9254,43 @@ into it, so once every face on the page is answered the message offers
 
 Not looked at in a browser: faces are biometric, and the throwaway
 store's generated pictures have none.
+
+## 2026-10-29: ids that mean the same in another library (AP, built)
+
+The design of 2026-10-28 (`docs/global-ids.md`), with the user's two
+answers, built in its four steps.
+
+- **The ids.** Migration 64 gives every entity and page a `gid`: `e:` or
+  `p:` and 26 Crockford base32 characters, minted in SQL and by a trigger
+  for any row a writer makes later, and refused a change once set. On a
+  copy of the live store: 1.3 s for 263,677 entities and 571 pages, all
+  distinct, a 9.8 MB index. A document's is its hash, as before.
+- **An edge's is computed, not stored.** The design had an `edges.gid`
+  column filled by a pass. An edge's document can be mended (a
+  duplicate's edges move to the survivor), and a stored hash would then
+  name the wrong document. The export computes it (`graphio.edge_gid`),
+  and the import asks the local question it stands for: is there a live
+  edge of that relation between those ends, or rows folded into them,
+  for that document. That saves the 40 MB index the design priced.
+- **The file.** `prax-graph/2` names entities, edges and pages by `gid`.
+  An entity's `aliases` are the rows folded into it and the other
+  libraries' entities decided to be it, so a file that goes to a friend
+  and comes back lands on the rows it came from. A rule-derived edge is
+  left out. A `/1` file is still read, the old way.
+- **The import** (`store.graph.imports`, migration 65). Each entity lands
+  on its own row, on an earlier import's answer, as `likely` when a name
+  here answers to it, or as new. A likely one waits on the Review page
+  ("from other libraries") with its edges held in `import_held`. Same
+  thing, a thing of its own (named after the import when the name is
+  taken) or leave out; an undo ends what the answer wrote and holds it
+  again. A second import of one file writes nothing; a newer one ends
+  what it no longer says. A page is found by its `gid`, never by an
+  equal slug, and keeps the `gid` it was minted with.
+- **The wall.** `prax export --as <token>` holds only what that token
+  sees. `seed_documents` and `subgraph_edges` filter by the viewer, so it
+  is the store's. No export holds a `depicts` edge.
+
+Not done: the judges of resolution answering a likely one before a
+person (the route takes `by` for when they do), and sharing over a
+network. Tests: `tests/test_global_ids.py`,
+`tests/test_graph_import_gids.py`, two cases in `tests/test_wall.py`.

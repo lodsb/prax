@@ -15,7 +15,7 @@ from prax.graph import ontology
 from prax.text import names
 
 from ..base import _guards, _reading, domain_clause, hidden_documents
-from .edges import held_in_world
+from .edges import held_in_world, hidden_by_premise
 from .lookups import entity_named_in
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
@@ -522,7 +522,8 @@ def seed_documents(
     domain: str | None = None,
     tag: str | None = None,
 ) -> list[int]:
-    """The live documents a seed names: a project's (tagged
+    """The live documents a seed names that the viewer may see: a
+    project's (tagged
     ``project:<name>``, and its page ``project-<name>``), a domain's (set
     on the document; one without a set is in every module and is left
     out here), or a tag's. Ascending ids."""
@@ -554,14 +555,16 @@ def seed_documents(
                 f"SELECT d.id FROM documents d WHERE 1 = 1{clause}{live}", args
             )
         }
-    return sorted(ids)
+    return sorted(ids - hidden_documents(con))
 
 
 _SUBGRAPH_EDGE = """
     SELECT x.id, s.name AS src, s.type AS src_type, x.rel, t.name AS dst,
            t.type AS dst_type, x.confidence, x.evidence, x.producer, x.run,
            x.ontology_version, x.valid_from, x.valid_to, x.ingested_at,
-           x.source_doc, d.hash AS source_hash
+           x.source_doc, d.hash AS source_hash, s.gid AS src_gid,
+           t.gid AS dst_gid,
+           EXISTS (SELECT 1 FROM edge_premises p WHERE p.edge_id = x.id) AS premised
     FROM edges x
     JOIN entities s0 ON s0.id = x.src
     JOIN entities t0 ON t0.id = x.dst
@@ -580,10 +583,12 @@ def subgraph_edges(
     history: bool = False,
 ) -> list[dict[str, Any]]:
     """The edges of those documents, or those edges, under the canonical
-    names, with every provenance column and the source document's hash
-    (its identity in another library). Live ones only unless ``history``.
-    In a stable order (source document hash, then the triple) so an export
-    diffs well."""
+    names, with every provenance column, the source document's hash and
+    the ends' global ids (their identity in another library), and whether
+    a rule derived it from premises (``premised``). An edge whose document,
+    or a premise's, the viewer may not see is left out. Live ones only
+    unless ``history``. In a stable order (source document hash, then the
+    triple) so an export diffs well."""
     out: list[dict[str, Any]] = []
     live = "" if history else " AND x.valid_to IS NULL"
     for column, ids in (("x.source_doc", doc_ids), ("x.id", edge_ids)):
@@ -596,7 +601,12 @@ def subgraph_edges(
                     _SUBGRAPH_EDGE + f" WHERE {column} IN ({marks})" + live, part
                 )
             )
-    seen: dict[int, dict[str, Any]] = {int(e["id"]): e for e in out}
+    hidden = hidden_documents(con)
+    seen: dict[int, dict[str, Any]] = {
+        int(e["id"]): e for e in out if e["source_doc"] not in hidden
+    }
+    for eid in hidden_by_premise(con, list(seen), hidden):
+        seen.pop(eid)
     return sorted(
         seen.values(),
         key=lambda e: (

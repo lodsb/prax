@@ -8,17 +8,35 @@ ids). It is JSON lines in a stable order, so an export kept in a
 repository diffs line by line, and its first line names the ontology it
 was written against, with the modules' text.
 
-An import is a producer of its own, ``import:<source>``, with a run per
-file, so it never overwrites anything. Each edge goes through
-``store.link``: a name this library knows lands on its entity, and a
-triple the local ontology refuses goes to the review queue with the
-reason. The edge's original producer, run and document are kept in its
-evidence. Importing a newer export of the same source first retires
-what the last one linked (``retire_run``), so the graph converges on the
-file. A page that exists here with other text gets the imported text as
-a new revision with a note; nothing is merged by machine.
+Format 2 (``prax-graph/2``, plan item AP, ``docs/global-ids.md``) names
+every entity, edge and page by its global id: an entity's ``gid`` and the
+``aliases`` folded into it, an edge's ends by ``gid`` and its own ``gid``
+(the claim, ``edge_gid``), a page's ``gid``. An INFERRED edge a rule
+derived is left out: the receiving library derives its own.
 
-Not exported: chunks, vectors, the review queue, the originals.
+An import is a producer of its own, ``import:<source>``, with a run per
+file, so it never overwrites anything. A file of format 2 settles each
+entity first (``store.settle_foreign``): one of this library's own ids
+lands on its row, one an earlier import of the source decided lands
+there, one whose name a thing here answers to waits on the Review page
+with its edges held, and one nothing answers to is new. An edge already
+live for its document is counted and not written again, and the
+source's live edges the file no longer has are ended, so a second
+import of one file writes nothing and a newer file converges the graph
+on it. A file of format 1 names entities by name alone: each edge goes
+through ``store.link`` by name, after the last import of the source is
+retired (``retire_run``).
+
+Either way a triple the local ontology refuses goes to the review queue
+with the reason, and the edge's original producer, run and document are
+kept in its evidence. A page that exists here with other text gets the
+imported text as a new revision with a note; nothing is merged by
+machine. Format 2 finds the page by its ``gid``, never by an equal slug.
+
+Not exported: chunks, vectors, the review queue, the originals, and
+anything of a face (``FACE_RELATIONS``). An export runs as the request's
+viewer: made for a named token (``prax export --as``), it holds only what
+that token sees.
 
 Line kinds, each a JSON object with ``kind``: ``header`` first, then
 ``document``, ``entity``, ``edge`` and ``page`` lines, each group in a
@@ -27,6 +45,7 @@ stable order.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections.abc import Iterable, Iterator
@@ -37,7 +56,11 @@ from prax import store
 from prax.graph import ontology
 from prax.text import markup
 
-FORMAT = "prax-graph/1"
+FORMAT = "prax-graph/2"
+# who a picture shows is a person's answer about a face: faces are
+# biometric and never leave the library, whoever the file is for
+FACE_RELATIONS = frozenset({store.DEPICTS})
+READS = ("prax-graph/1", FORMAT)
 MAX_HOPS = 2
 
 
@@ -81,7 +104,13 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
         for page in (store.get_page(con, slug) for slug in slugs)
         if page is not None
     }
-    edges = [e for e in edges if e["source_doc"] not in page_docs]
+    edges = [
+        e
+        for e in edges
+        if e["source_doc"] not in page_docs
+        and not e["premised"]
+        and e["rel"] not in FACE_RELATIONS
+    ]
     onto = ontology.current()
     yield _line(
         {
@@ -97,17 +126,20 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
     documents = store.document_identities(con, held)
     for d in documents:
         yield _line({"kind": "document", **d})
-    names = sorted(
-        {(e["src"], e["src_type"]) for e in edges}
-        | {(e["dst"], e["dst_type"]) for e in edges}
-    )
+    gids = {(e["src"], e["src_type"]): e["src_gid"] for e in edges} | {
+        (e["dst"], e["dst_type"]): e["dst_gid"] for e in edges
+    }
+    names = sorted(gids)
     labels = store.labels_of_entities(con, names)
+    aliases = store.folded_gids(con, sorted(gids.values()))
     for name, etype in names:
         yield _line(
             {
                 "kind": "entity",
                 "name": name,
                 "type": etype,
+                "gid": gids[(name, etype)],
+                "aliases": aliases.get(gids[(name, etype)], []),
                 "labels": labels.get((name, etype), []),
             }
         )
@@ -115,7 +147,8 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
         yield _line(
             {
                 "kind": "edge",
-                **{k: e[k] for k in e if k not in ("id", "source_doc")},
+                "gid": edge_gid(e),
+                **{k: e[k] for k in e if k not in ("id", "source_doc", "premised")},
             }
         )
     for slug in slugs:
@@ -125,6 +158,7 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
         yield _line(
             {
                 "kind": "page",
+                "gid": page["gid"],
                 "slug": slug,
                 "title": page["title"],
                 "page_kind": page["kind"],
@@ -140,6 +174,16 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
                 ],
             }
         )
+
+
+def edge_gid(edge: dict[str, Any]) -> str:
+    """An edge's global id: the claim, not the row. The sha256 of its source
+    document's hash (empty for none), its relation and its two ends' gids,
+    so every reading of one claim from one document has the same one."""
+    said = "\x1f".join(
+        (edge.get("source_hash") or "", edge["rel"], edge["src_gid"], edge["dst_gid"])
+    )
+    return "c:" + hashlib.sha256(said.encode("utf-8")).hexdigest()
 
 
 def _walk(
@@ -188,8 +232,14 @@ class Report:
     documents_held: int = 0
     entities: int = 0
     labels: int = 0
+    # format 2: where their entities landed (own, likely, same, new,
+    # left_out) and what became of their edges beyond linked and queued
+    landed: dict[str, int] = field(default_factory=dict)
     edges: int = 0
     linked: int = 0
+    same: int = 0
+    held: int = 0
+    left_out: int = 0
     queued: int = 0
     ended_skipped: int = 0
     retired: int = 0
@@ -218,8 +268,11 @@ def import_lines(
     if not records or records[0].get("kind") != "header":
         raise ValueError("not a prax graph file: the first line is no header")
     head = records[0]
-    if head.get("format") != FORMAT:
-        raise ValueError(f"format {head.get('format')!r}; this prax reads {FORMAT}")
+    if head.get("format") not in READS:
+        raise ValueError(
+            f"format {head.get('format')!r}; this prax reads {', '.join(READS)}"
+        )
+    by_gid = head["format"] != "prax-graph/1"
     rep.ontology = head.get("ontology")
     docs = [r for r in records if r["kind"] == "document"]
     rep.documents = len(docs)
@@ -229,20 +282,72 @@ def import_lines(
     # the ids the pages' links used in the other library, to this one's
     old_ids = {int(d["id"]): d["hash"] for d in docs if d.get("id") is not None}
     if dry_run:
-        return _dry(con, records, rep, local)
-    # a newer export of the same source replaces the last one's edges
-    rep.retired = store.retire_run(con, producer=producer)
-    for r in records:
-        if r["kind"] == "edge":
-            _import_edge(con, r, rep, local, titles, producer, run)
-    for r in records:
-        if r["kind"] == "entity":
-            rep.entities += 1
-            rep.labels += _import_labels(con, r, producer, run)
+        return _dry(con, records, rep, local, source if by_gid else None)
+    if by_gid:
+        _import_by_gid(con, records, rep, local, titles, source)
+    else:
+        # a newer export of the same source replaces the last one's edges
+        rep.retired = store.retire_run(con, producer=producer)
+        for r in records:
+            if r["kind"] == "edge":
+                _import_edge(con, r, rep, local, titles, producer, run)
+        for r in records:
+            if r["kind"] == "entity":
+                rep.entities += 1
+                rep.labels += _import_labels(con, r, producer, run)
     for r in records:
         if r["kind"] == "page":
             _import_page(con, r, rep, source, local, old_ids, titles)
     return rep
+
+
+def _import_by_gid(
+    con: sqlite3.Connection,
+    records: list[dict[str, Any]],
+    rep: Report,
+    local: dict[str, int],
+    titles: dict[str, str],
+    source: str,
+) -> None:
+    """Format 2: the entities settled, then each live edge between them
+    written, held or counted, then what the file no longer says ended."""
+    producer = f"import:{source}"
+    store.hold_again(con, source)  # this file's held edges replace the last one's
+    landed: dict[str, store.Landing] = {}
+    for r in records:
+        if r["kind"] != "entity":
+            continue
+        rep.entities += 1
+        landing = store.settle_foreign(con, source, r, run=rep.run)
+        landed[landing.gid] = landing
+        rep.landed[landing.state] = rep.landed.get(landing.state, 0) + 1
+        rep.labels += store.add_foreign_labels(con, source, landing, run=rep.run)
+    keep: set[int] = set()
+    for r in records:
+        if r["kind"] != "edge":
+            continue
+        rep.edges += 1
+        if r.get("valid_to"):
+            rep.ended_skipped += 1  # history of the other library, not a fact here
+            continue
+        ends = (landed.get(r["src_gid"]), landed.get(r["dst_gid"]))
+        if ends[0] is None or ends[1] is None:
+            raise ValueError(f"edge {r.get('gid')}: an end with no entity line")
+        doc = local.get(r["source_hash"]) if r.get("source_hash") else None
+        said, edge_id = store.import_edge(
+            con,
+            r,
+            (ends[0], ends[1]),
+            doc=doc,
+            source=source,
+            producer=producer,
+            run=rep.run,
+            titles=titles,
+        )
+        setattr(rep, said, getattr(rep, said) + 1)
+        if edge_id is not None:
+            keep.add(edge_id)
+    rep.retired = store.end_unconfirmed(con, producer, keep, run=rep.run)
 
 
 def _dry(
@@ -250,12 +355,18 @@ def _dry(
     records: list[dict[str, Any]],
     rep: Report,
     local: dict[str, int],
+    source: str | None,
 ) -> Report:
+    """What an import would do, writing nothing; with ``source`` (format
+    2), where each entity would land too."""
     onto = ontology.current()
     for r in records:
         if r["kind"] == "entity":
             rep.entities += 1
             rep.labels += len(r.get("labels") or [])
+            if source is not None:
+                state = store.foreign_state(con, source, r).state
+                rep.landed[state] = rep.landed.get(state, 0) + 1
         elif r["kind"] == "edge":
             rep.edges += 1
             if r.get("valid_to"):
@@ -379,6 +490,11 @@ def _import_page(
     revisions = sorted(r.get("revisions") or [], key=lambda x: x["revision"])
     if not revisions:
         return
+    gid = r.get("gid")
+    if gid:  # format 2: the page of that gid, never one with an equal slug
+        doc = store.page_by_gid(con, gid)
+        slugs = store.page_slugs_of(con, [doc]) if doc is not None else []
+        slug = slugs[0] if slugs else _free_slug(con, slug)
     here = store.get_page(con, slug)
     if here is None:
         for rev in revisions:
@@ -391,6 +507,7 @@ def _import_page(
                 author=rev.get("author") or "human",
                 note=_note(rev, source),
                 force=True,  # the other library's own history, in its order
+                gid=gid,  # the page it was minted as there, so it comes back here
             )
         rep.pages_new += 1
         return
@@ -415,6 +532,15 @@ def _import_page(
         # an agent's text over a person's page: the door refuses that here
         # as it does anywhere, and the import says so instead of forcing it
         rep.pages_refused.append(slug)
+
+
+def _free_slug(con: sqlite3.Connection, slug: str) -> str:
+    """``slug``, or the first of ``slug-2``, ``slug-3`` … no page here has."""
+    n, free = 1, slug
+    while store.get_page(con, free) is not None or store.page_id(con, free):
+        n += 1
+        free = f"{slug}-{n}"
+    return free
 
 
 def _note(rev: dict[str, Any], source: str) -> str:

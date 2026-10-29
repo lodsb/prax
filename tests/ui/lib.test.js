@@ -293,6 +293,18 @@ test("pairRow, splitRow, mergeRow: each button carries its decision", () => {
   assert.equal(lib.mergeRow({ why: "narrower", alias: null, into: null }), "");
 });
 
+test("foreignRow: theirs beside ours, three answers each naming the import and the gid", () => {
+  const row = lib.foreignRow({ source: "laptop", gid: "e:ABC", name: "wave digital filter", type: "method", labels: [{ label: "Wellendigitalfilter", lang: "de" }], held: 2,
+    candidate: { id: 4, name: "wave-digital filter", type: "method", edges: 9 } });
+  for (const verdict of ["same", "new", "left_out"]) {
+    assert.match(row, new RegExp(`data-act="foreign" data-source="laptop" data-gid="e:ABC" data-verdict="${verdict}"`));
+  }
+  assert.match(row, /from laptop · 2 facts wait/);
+  assert.match(row, /also: Wellendigitalfilter/);
+  assert.match(row, /href="#graph\?entity=wave-digital%20filter&type=method"/);
+  assert.match(lib.foreignRow({ source: "x", gid: "e:1", name: "a", type: "concept", held: 1, candidate: null }), /1 fact waits[\s\S]*\(gone\)/);
+});
+
 test("pairRow shows the local model's number; sameRule folds the rule above the pairs", () => {
   const side = (id, name) => ({ id, name, type: "method", edges: 1 });
   const pair = lib.pairRow({ type: "method", score: 0.95, p_same: 0.734, keep: side(1, "windowing"), other: side(2, "windowing techniques") });

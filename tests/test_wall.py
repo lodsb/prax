@@ -532,3 +532,52 @@ def test_a_readers_ask_spends_nothing(client: TestClient) -> None:
     finally:
         (config.data_dir() / config.CONFIG_NAME).unlink()
         models.reset()
+
+
+def test_an_export_for_a_token_holds_only_what_it_sees(client: TestClient) -> None:
+    """``prax export --as`` (``docs/global-ids.md``, "The wall on an
+    export"): the administrator's file for a named token's holder."""
+    con = client.app.state.con
+    lib = _library(con, client)
+    bank_hash = con.execute(
+        "SELECT hash FROM documents WHERE id = ?", (lib["bank"],)
+    ).fetchone()[0]
+    seed = {"entity": "wavelet transform", "type": "method"}
+    whole = client.get("/graph/export", params=seed, headers=_as(ADMIN))
+    assert whole.status_code == 200
+    assert _says_text(whole.text, "Landlord Smith", bank_hash)
+    got = client.get("/graph/export", params={**seed, "as": "mcp"}, headers=_as(ADMIN))
+    assert got.status_code == 200
+    assert "Open paper" in got.text
+    assert "Bank statement" not in got.text and bank_hash not in got.text
+    assert "Landlord Smith" not in got.text
+    nobody = client.get(
+        "/graph/export", params={**seed, "as": "nobody"}, headers=_as(ADMIN)
+    )
+    assert nobody.status_code == 400
+    # a named token may not export at all, as itself or as another
+    assert client.get(
+        "/graph/export", params=seed, headers=_as(lib["secret"])
+    ).status_code in (401, 403)
+
+
+def test_no_export_holds_who_a_picture_shows(client: TestClient) -> None:
+    con = client.app.state.con
+    photo = int(store.ingest_text(con, "A photo. " * 30, title="Holiday")["doc_id"])
+    meta = store.get_meta(con, photo)
+    store.set_meta(con, photo, {**meta, "tags": ["project:trip"]})
+    for rel, dst, dtype in (
+        ("depicts", "Ada", "person"),
+        ("mentions", "Rome", "place"),
+    ):
+        store.link(
+            con,
+            store.Edge("Holiday", "document", rel, dst, dtype),
+            source_doc=photo,
+            producer="human",
+        )
+    got = client.get("/graph/export", params={"project": "trip"}, headers=_as(ADMIN))
+    assert got.status_code == 200
+    # past the header, which carries the ontology's text
+    body = "".join(got.text.splitlines()[1:])
+    assert "Rome" in body and "Ada" not in body and '"depicts"' not in body

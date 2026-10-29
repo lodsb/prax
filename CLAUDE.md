@@ -44,7 +44,10 @@ revisit threshold, under "Decision thresholds" below.
    `--reference` saw, `places.reference`) is never copied into the
    archive, so no backup holds it.
    `store.original_file` is the one answer to where an original is read
-   from. The database stores metadata and the hash only. Never store blobs in SQLite. The document
+   from. The hash is also the document's global id, what it is called in
+   another library; an entity and a page carry a minted one, `gid`
+   (migration 64, plan item AP, `docs/global-ids.md`), and an edge's is
+   computed from its document's hash, relation and ends. The database stores metadata and the hash only. Never store blobs in SQLite. The document
    hash is the sha256 of the **original bytes**, never of extracted
    text. Parsed text is its own content-addressed artifact
    (`documents.text_hash`). Chunks are a disposable index derived from
@@ -71,7 +74,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
-   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures), `retrieval` (knobs, compounds, query, legs,
+   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures, imports), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag

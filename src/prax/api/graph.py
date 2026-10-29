@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from prax import store
@@ -585,11 +585,13 @@ def graph_export(
     type: str | None = None,
     hops: int = 1,
     history: bool = False,
+    as_: str | None = Query(None, alias="as"),
 ) -> Response:
     """A piece of the graph as a file (``prax.graph.graphio``): what a project,
     a domain, a tag or an entity reaches, as JSON lines. Built whole here:
     the request's connection belongs to its thread, and a streamed body is
-    read on another."""
+    read on another. With ``as``, a named token's name, it holds only what
+    that token sees (``docs/global-ids.md``, "The wall on an export")."""
     from prax.graph import graphio
 
     seed = graphio.Seed(
@@ -601,10 +603,20 @@ def graph_export(
         hops=hops,
         history=history,
     )
+    con = _con(request)
+    viewer = store.named_viewer(con, as_) if as_ else None
+    if as_ and viewer is None:
+        raise HTTPException(400, f"no token named {as_!r}")
+    # a named token's own request is already its viewer; the administrator's
+    # export for one becomes it for as long as the file takes
+    held = store.VIEWER.set(viewer) if viewer is not None else None
     try:
-        body = "".join(graphio.export(_con(request), seed))
+        body = "".join(graphio.export(con, seed))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    finally:
+        if held is not None:
+            store.VIEWER.reset(held)
     name = project or domain or tag or entity or "graph"
     return Response(
         body,
@@ -639,6 +651,56 @@ async def graph_import(
     try:
         return await anyio.to_thread.run_sync(run)
     except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/graph/imports/likely")
+def graph_imports_likely(
+    request: Request, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """Another library's entities whose name a thing here answers to, waiting
+    with their edges for an answer (``store.foreign_likely``)."""
+    return store.foreign_likely(_con(request), offset=offset, limit=limit)
+
+
+class ForeignReq(BaseModel):
+    source: str  # the import's name
+    gid: str  # their entity's
+    verdict: str  # same | new | left_out
+    entity: int | None = None  # ours, for "same" when not the candidate
+    by: str | None = None  # a judge's name; a person's answer by default
+
+
+@router.post("/graph/imports/decide")
+def graph_imports_decide(req: ForeignReq, request: Request) -> dict[str, Any]:
+    """An answer for one of their entities (``store.decide_foreign``): the
+    held edges whose ends are all decided are written."""
+    by = (req.by or "").strip() or store.PERSON
+    try:
+        return store.decide_foreign(
+            _con(request),
+            req.source,
+            req.gid,
+            req.verdict,
+            entity_id=req.entity,
+            by=by,
+        )
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class ForeignUndoReq(BaseModel):
+    source: str
+    gid: str
+
+
+@router.post("/graph/imports/undo")
+def graph_imports_undo(req: ForeignUndoReq, request: Request) -> dict[str, Any]:
+    """An answer for one of their entities taken back (``store.undo_foreign``):
+    the edges written onto it end and wait with it again."""
+    try:
+        return store.undo_foreign(_con(request), req.source, req.gid)
+    except (ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
 

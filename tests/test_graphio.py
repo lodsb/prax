@@ -111,9 +111,10 @@ def test_an_import_links_everything_and_a_second_one_converges(
     page = store.get_page(other, "project-synth")
     assert page is not None and page["revision"] == 2
     assert f"(#doc/{held})" in page["text"]
-    # the same source again: the last import's edges retired, the new linked
+    # the same source again: what it says is there already, nothing written
     again = graphio.import_lines(other, lines, source="laptop")
-    assert again.retired == 2 and again.linked == 2 and again.pages_same == 1
+    assert (again.retired, again.linked, again.same) == (0, 0, 2)
+    assert again.pages_same == 1
     live = other.execute(
         "SELECT count(*) FROM edges WHERE valid_to IS NULL"
         " AND producer = 'import:laptop'"
@@ -126,6 +127,19 @@ def test_an_import_links_everything_and_a_second_one_converges(
     )
 
 
+def _format_1(lines: list[str]) -> list[str]:
+    """An export as a prax of before the global ids wrote it."""
+    out = []
+    for line in lines:
+        r = json.loads(line)
+        if r["kind"] == "header":
+            r["format"] = "prax-graph/1"
+        for key in ("gid", "aliases", "src_gid", "dst_gid"):
+            r.pop(key, None)
+        out.append(json.dumps(r) + "\n")
+    return out
+
+
 def test_what_does_not_fit_is_queued_and_a_changed_page_gets_a_revision(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -135,6 +149,7 @@ def test_what_does_not_fit_is_queued_and_a_changed_page_gets_a_revision(
     bad = json.loads(next(x for x in lines if '"kind": "edge"' in x))
     bad["rel"] = "sings_to"
     lines.append(json.dumps(bad) + "\n")
+    lines = _format_1(lines)  # which names entities and pages by name alone
     other = _other(monkeypatch, tmp_path)
     store.write_page(other, "project-synth", "# Synth\n\nMy own notes.", kind="project")
     rep = graphio.import_lines(other, lines, source="laptop")

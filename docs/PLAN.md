@@ -71,8 +71,8 @@ About 115 commits; `docs/log.md` has each night.
    backup's `referenced` count, heal's `unreachable-originals`, and the
    document page's places.
 4. **Without the card, in any order.** AS, versions of a work (steps 1
-   to 4 need no model; done 2026-10-28). AP's design note (global ids beside the integer
-   keys; written 2026-10-28, `docs/global-ids.md`). The engineering leftovers: typed shapes (a
+   to 4 need no model; done 2026-10-28). AP, global ids beside the integer keys
+   (designed 2026-10-28, `docs/global-ids.md`; built 2026-10-29). The engineering leftovers: typed shapes (a
    search hit first) and the remaining complex functions. The measured
    improvements that need no model ("Retrieval and ask", "The graph").
 5. **Once the card runs.** AO's queued fixes: marker for the 586
@@ -982,7 +982,7 @@ not done.
 
 ## Two architectural stages (the user, 2026-10-18; not yet ordered)
 
-- [ ] (designed 2026-10-28, `docs/global-ids.md`; its two questions answered the same day) **AP. Ids that mean the same in another library.** "the document
+- [x] (designed 2026-10-28, `docs/global-ids.md`; its two questions answered the same day; built 2026-10-29, its four steps: migrations 64 and 65, `prax-graph/2`, the Review tab "from other libraries", `prax export --as`. Left: a judge's answer for a likely one, and sharing over a network) **AP. Ids that mean the same in another library.** "the document
       ids should probably be derived from stable hashes, so i can merge a
       friend's library in, or networking etc and also share a subgraph".
       A document has one already: its original's sha256 (invariant 2);

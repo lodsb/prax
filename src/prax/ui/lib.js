@@ -454,6 +454,19 @@ function pairRow(it) {
       <button type="button" class="secondary" data-act="different" data-keep="${k.id}" data-other="${o.id}">different</button>
       <span class="decide-out muted"></span></div></article>`;
 }
+// One of another library's things whose name one here answers to
+// (GET /graph/imports/likely): theirs beside ours, and three answers.
+function foreignRow(it) {
+  const c = it.candidate;
+  const labels = (it.labels || []).map((l) => l.label).filter(Boolean);
+  const theirs = `<div class="decide-side">${esc(it.name)}
+    <span class="muted">${esc(it.type)} · from ${esc(it.source)} · ${it.held} ${it.held === 1 ? "fact waits" : "facts wait"}</span>
+    ${labels.length ? `<div class="muted">also: ${esc(labels.join(", "))}</div>` : ""}</div>`;
+  const act = (verdict, label, cls) => `<button type="button"${cls ? ` class="${cls}"` : ""} data-act="foreign" data-source="${esc(it.source)}" data-gid="${esc(it.gid)}" data-verdict="${verdict}">${label}</button>`;
+  return `<article class="decide-row">${c ? nameDiff(it.name, c.name) : ""}<div class="decide-pair">${theirs}${entitySide(c)}</div>
+    <div class="decide-acts">${act("same", "same thing")} ${act("new", "a thing of its own", "secondary")} ${act("left_out", "leave out", "secondary")}
+      <span class="decide-out muted"></span></div></article>`;
+}
 // What "the same thing" means (GET /graph/sameness), folded above the
 // pairs: the rule the models are asked with, so a person decides by it too.
 function sameRule(r) {
@@ -1253,5 +1266,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

@@ -710,6 +710,12 @@ the queue of facts that did not fit; the guide is `docs/review.md`):
   into a narrower one (`Kalman smoother` into `extended Kalman
   smoother`). Right marks it checked; wrong splits it
   (`POST /graph/unmerge-entity`, one merge rather than a whole run).
+- *from other libraries* — another library's entities, from a graph
+  file of `prax-graph/2` (`prax import graph`), whose name a thing here
+  answers to (`foreign_entities`, state `likely`). Their edges are held
+  until the answer: same thing, a thing of its own, or leave out
+  (`POST /graph/imports/decide`; undo is `POST /graph/imports/undo`).
+  `docs/global-ids.md` has the order an import settles them in.
 
 Every decision is a pair in `entity_candidates` signed `human`. That is
 what keeps it from being asked again. It is also the gold sample a

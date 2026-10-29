@@ -1033,6 +1033,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--hops", type=int, default=1, help="1 or 2 (--entity)")
     s.add_argument("--history", action="store_true", help="ended edges too")
     s.add_argument(
+        "--as",
+        dest="as_token",
+        metavar="TOKEN",
+        help="only what this named token sees: a file for its holder",
+    )
+    s.add_argument(
         "-o", "--output", metavar="FILE", help="where to write (default: stdout)"
     )
     s.set_defaults(func=importing.export, needs_door=True)

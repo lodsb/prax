@@ -30,6 +30,7 @@ ORDER = (
     "faces",
     "versions",
     "pictures",
+    "imports",
 )
 
 from .communities import (  # noqa: F401
@@ -161,6 +162,20 @@ from .geo import (  # noqa: F401
     place_run,
     places_due,
 )
+from .imports import (  # noqa: F401
+    FOREIGN_STATES,
+    FOREIGN_VERDICTS,
+    Landing,
+    add_foreign_labels,
+    decide_foreign,
+    end_unconfirmed,
+    foreign_likely,
+    foreign_state,
+    hold_again,
+    import_edge,
+    settle_foreign,
+    undo_foreign,
+)
 from .labels import (  # noqa: F401
     PERSON,
     PRINTED_MAX,
@@ -209,11 +224,15 @@ from .lookups import (  # noqa: F401
     documents_as_pages,
     documents_by_hash,
     documents_sharing,
+    entities_by_gid,
     entities_of_documents,
     entity_answering,
     entity_named_in,
+    folded_gids,
+    gids_of_entities,
     labels_of_entities,
     own_type,
+    page_by_gid,
     page_slugs_of,
 )
 from .naming import (  # noqa: F401

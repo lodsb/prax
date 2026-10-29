@@ -91,7 +91,7 @@ def page_titles(con: sqlite3.Connection) -> set[str]:
 def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
     """A page with its current text and revision list, or None."""
     row = con.execute(
-        "SELECT p.doc_id, p.slug, p.kind, d.title, d.text_hash, d.meta"
+        "SELECT p.doc_id, p.slug, p.kind, p.gid, d.title, d.text_hash, d.meta"
         " FROM pages p JOIN documents d ON d.id = p.doc_id WHERE p.slug = ?",
         (slug,),
     ).fetchone()
@@ -111,6 +111,7 @@ def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
         "doc_id": row["doc_id"],
         "slug": row["slug"],
         "kind": row["kind"],
+        "gid": row["gid"],
         "title": row["title"],
         "text": text,
         "revision": revisions[-1]["revision"] if revisions else 0,
@@ -275,6 +276,7 @@ def write_page(
     parent: str | None = None,
     force: bool = False,
     sensitivity: str | None = None,
+    gid: str | None = None,
 ) -> dict[str, Any]:
     """Create or replace a page's text as a new revision.
 
@@ -292,8 +294,10 @@ def write_page(
     paper`` edges, the page as source document); ``part_of`` names a
     project page by slug (``page --part_of--> project``). An ``agent``
     revision over a ``human`` one is refused unless ``force``; use
-    ``append_page`` for agent additions. Returns ``{doc_id, slug, revision,
-    created}``.
+    ``append_page`` for agent additions. ``gid`` is a new page's global id
+    when it has one already: a page imported from another library keeps the
+    one it was minted with there (migration 64); else the database mints it.
+    Returns ``{doc_id, slug, revision, created}``.
     """
     if kind not in PAGE_KINDS:
         raise ValueError(f"kind must be one of {PAGE_KINDS}")
@@ -319,7 +323,7 @@ def write_page(
     )
     created = existing is None
     if created:
-        doc_id, revision = _new_page(con, slug, text, title=title, kind=kind)
+        doc_id, revision = _new_page(con, slug, text, title=title, kind=kind, gid=gid)
     else:
         doc_id, kind = int(existing["doc_id"]), existing["kind"]
         revision = _next_revision(con, existing, slug, author=author, force=force)
@@ -371,7 +375,13 @@ def write_page(
 
 
 def _new_page(
-    con: sqlite3.Connection, slug: str, text: str, *, title: str | None, kind: str
+    con: sqlite3.Connection,
+    slug: str,
+    text: str,
+    *,
+    title: str | None,
+    kind: str,
+    gid: str | None = None,
 ) -> tuple[int, int]:
     """A new page's document row and its ``pages`` row; its revision is 1."""
     title = title or slug.replace("-", " ").capitalize()
@@ -384,8 +394,8 @@ def _new_page(
     )
     doc_id = int(reg["doc_id"])
     con.execute(
-        "INSERT INTO pages (doc_id, slug, kind) VALUES (?, ?, ?)",
-        (doc_id, slug, kind),
+        "INSERT INTO pages (doc_id, slug, kind, gid) VALUES (?, ?, ?, ?)",
+        (doc_id, slug, kind, gid),
     )
     return doc_id, 1
 

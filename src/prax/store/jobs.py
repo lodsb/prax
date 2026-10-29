@@ -574,8 +574,20 @@ def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
             )
         }
     row = _tokens.get(_token_hash(secret))
-    if row is None:
-        return None
+    return None if row is None else _viewer_of(row)
+
+
+@_reading
+def named_viewer(con: sqlite3.Connection, name: str) -> Viewer | None:
+    """The viewer of the named token ``name``, or None: what an export made
+    for that token's holder may hold (``prax export --as``)."""
+    row = con.execute(
+        "SELECT name, domains, personal, role FROM tokens WHERE name = ?", (name,)
+    ).fetchone()
+    return None if row is None else _viewer_of(dict(row))
+
+
+def _viewer_of(row: dict[str, Any]) -> Viewer:
     domains = None
     if row["domains"]:
         onto = ontology.current()

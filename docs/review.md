@@ -116,6 +116,26 @@ kinds of risky merge.
 **Right** keeps the merge and marks it as checked. **Wrong: split them**
 gives the folded name its own place in the graph again.
 
+## From other libraries
+
+A friend's library can send you a piece of its graph as a file, and
+you read it in with `prax import graph`. Most of what the file names is
+either yours already (it came from you) or new to you. This tab holds
+the rest: things whose name matches something in your library. A
+friend's *wave digital filter* is probably your *wave digital filter*,
+but prax does not assume so. Their facts about it wait until you answer.
+
+- **Same thing** writes their facts onto yours.
+- **A thing of its own** makes a new entry for theirs. When the name is
+  taken, the new entry is named after the import, for example *wave
+  digital filter (laptop)*.
+- **Leave out** drops their facts that reach it.
+
+Each row shows how many of their facts wait on it. When the same
+friend sends a newer file, it lands where you answered, and you are not
+asked again. Undo takes the answer back: the facts it wrote are ended
+and wait again.
+
 ## Genre
 
 Here you say what a document is: a paper, a datasheet, an opinion essay,

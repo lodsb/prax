@@ -28,6 +28,8 @@ const DECIDE_LISTS = {
     about: "Faces nobody has answered for yet that look like a person you named: each face against every face you named, so every name helps the next. The person whose answer settles the most pictures comes first, with a face you named of them beside. Click away a face that is not them and name the rest; the ones clicked away are not them, and are never offered as them again. Not them answers that for every face left. Nothing is named until you say so." },
   groups: { title: "face groups", view: (p) => viewFaceGroups(p),
     about: "Faces that are probably one person, grouped each night by how alike they look (the facegroups pass): the group with the most faces to name first. Click a face that is not them, then name the rest: a person the graph has (pick one as you type) or a new name. Each picture then depicts them, and a picture with a named face is kept from tokens that may not see personal documents. Naming two groups as one person joins them; a face clicked away stays to name. Not faces and nobody to name answer for the faces too. Every answer can be undone. Where a picture holds two of a group's faces, it is surely more than one person. Choose an event to name the faces of one occasion, those in no group too." },
+  imports: { path: "/graph/imports/likely", title: "from other libraries", render: foreignRow,
+    about: "Things another library's graph file names (prax import graph) that a thing here answers to by name. Their facts about it wait until you answer. Same: theirs is the one here, and the facts are written onto it. A thing of its own: it is made here, named after the import when the name is taken. Leave out: their facts that reach it are not written. A later file from the same library lands where you answered." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -35,7 +37,7 @@ const DECIDE_LISTS = {
 // The tabs by what is reviewed in them: the graph's facts and things,
 // what a document is, the photos. "" is the review queue (view-review.js).
 const DECIDE_GROUPS = [
-  { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges"] },
+  { title: "the graph", what: "facts and things the extraction was not sure of", keys: ["", "pairs", "names", "merges", "imports"] },
   { title: "documents", what: "what each document is and is about, and which are versions of one work", keys: ["genre", "versions"] },
   { title: "photos", what: "pictures grouped into events, and the faces in them", keys: ["events", "faces", "groups", "matches"] },
 ];
@@ -113,6 +115,13 @@ async function decideAct(button) {
     } else if (d.act === "personal" || d.act === "open") {
       await post(`/doc/${Number(d.doc)}/sensitivity`, { state: d.act === "personal" ? "personal" : null }, "PUT");
       said = d.act === "personal" ? "personal: kept from the restricted tokens" : "not personal: open";
+    } else if (d.act === "foreign") {
+      const r = await post("/graph/imports/decide", { source: d.source, gid: d.gid, verdict: d.verdict });
+      const facts = `${r.linked} of their facts written${r.queued ? `, ${r.queued} to the review queue` : ""}`;
+      said = (r.state === "same" ? `the same thing · ${facts}`
+        : r.state === "new" ? `a thing of its own · ${facts}`
+        : `left out · ${r.left_out} of their facts not written`)
+        + ` · <button type="button" class="secondary" data-undo-import="${esc(JSON.stringify([d.source, d.gid]))}">undo</button>`;
     } else if (d.act === "split") {
       await post("/graph/unmerge-entity", { entity: Number(d.entity) });
       said = "split: it stands on its own again";
@@ -127,6 +136,16 @@ async function decideAct(button) {
       out.textContent = "undone: open again";
       row.classList.remove("done");
       row.querySelectorAll("button[data-act]").forEach((b) => { b.disabled = false; });
+    }));
+    out.querySelectorAll("button[data-undo-import]").forEach((u) => u.addEventListener("click", async () => {
+      u.disabled = true;
+      const [source, gid] = JSON.parse(u.dataset.undoImport);
+      try {
+        const r = await post("/graph/imports/undo", { source, gid });
+        out.textContent = `undone: open again${r.ended ? `, ${r.ended} of their facts taken back` : ""}`;
+        row.classList.remove("done");
+        row.querySelectorAll("button[data-act]").forEach((b) => { b.disabled = false; });
+      } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
     }));
   } catch (err) {
     out.innerHTML = `<span class="error">${esc(err.message)}</span>`;
