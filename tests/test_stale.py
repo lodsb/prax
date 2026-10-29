@@ -116,3 +116,24 @@ def test_a_page_resting_on_a_superseded_document_is_stale(
     assert (source["doc_id"], source["state"]) == (old, "superseded")
     assert source["replaced_by"] == [{"doc_id": new, "title": "Tuning v2"}]
     assert "From [the table]" in page["text"]  # the page itself is not changed
+
+
+def test_a_page_annotating_a_superseded_document_is_stale(
+    con: sqlite3.Connection,
+) -> None:
+    """A source named by the page's edges alone, not its text (``annotates``),
+    found by its title (``pages._annotated``)."""
+    old, new = _two(con)
+    store.write_page(
+        con, "tuning-remarks", "# Remarks\n\nNo link here.", annotates=[old]
+    )
+    assert store.get_page(con, "tuning-remarks")["lifecycle"] == "active"
+    store.link(
+        con,
+        store.Edge("Tuning v2", "document", "supersedes", "Tuning v1", "document"),
+        source_doc=new,
+        producer="test",
+    )
+    page = store.get_page(con, "tuning-remarks")
+    assert page["lifecycle"] == "stale"
+    assert [s["doc_id"] for s in page["stale_sources"]] == [old]

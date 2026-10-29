@@ -9294,3 +9294,19 @@ Not done: the judges of resolution answering a likely one before a
 person (the route takes `by` for when they do), and sharing over a
 network. Tests: `tests/test_global_ids.py`,
 `tests/test_graph_import_gids.py`, two cases in `tests/test_wall.py`.
+
+## 2026-10-29: a page of many links opened in minutes
+
+Found while timing the export of AP: an entity's file took 70 s on the
+live store, read-only, and 69 s of it was `get_page` for three pages.
+A page's lifecycle (`pages._lifecycle`, whether its sources are still
+current) looked up the document of every `annotates` or `synthesizes`
+edge by its title, one query an edge, and no index serves a title: 48 ms
+each. It did so even when the page's own links already filled the 200
+sources it looks at. The largest page holds 14,499 links.
+
+Now the edges are read only when the links leave room, and their titles
+are looked up 500 at a time (`pages._annotated`). Over all 571 pages:
+35.6 s in all, the slowest 0.27 s, the median 63 ms. The same export:
+0.34 s. Same sources in the same order; a test now covers a page whose
+source is named by its edge alone (`tests/test_stale.py`).

@@ -147,6 +147,34 @@ def _ancestors(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
 PAGE_SOURCES = 200  # sources of one page looked at for staleness
 
 
+def _annotated(con: sqlite3.Connection, doc_id: int) -> list[int]:
+    """The documents a page annotates or synthesizes, by its edges: each
+    target's title to the first document of that title, looked up a batch
+    at a time. No index serves a title, and one lookup an edge was 48 ms
+    on the live store: a page of 14,499 links took minutes to open
+    (2026-10-29)."""
+    names = [
+        str(r[0])
+        for r in con.execute(
+            "SELECT DISTINCT t.name FROM edges x JOIN entities t ON t.id = x.dst"
+            " WHERE x.source_doc = ? AND x.valid_to IS NULL"
+            " AND x.rel IN ('annotates', 'synthesizes')",
+            (doc_id,),
+        )
+    ]
+    first: dict[str, int] = {}
+    for start in range(0, len(names), 500):
+        part = names[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for title, got in con.execute(
+            f"SELECT title, min(id) FROM documents WHERE title IN ({marks})"
+            " GROUP BY title",
+            part,
+        ):
+            first[str(title)] = int(got)
+    return [first[n] for n in names if n in first]
+
+
 def _lifecycle(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any]:
     """Whether what the page rests on still holds: ``lifecycle`` is
     ``stale`` when one of its sources (the documents its links name, and
@@ -154,19 +182,10 @@ def _lifecycle(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any
     (``staleness``: superseded, retired, invalid), else ``active``; and
     ``stale_sources`` names them with what replaced each. A page is never
     changed for it: the person or the agent decides what follows."""
-    ids = list(dict.fromkeys(linked_documents(text)))
-    for r in con.execute(
-        "SELECT DISTINCT t.name FROM edges x JOIN entities t ON t.id = x.dst"
-        " WHERE x.source_doc = ? AND x.valid_to IS NULL"
-        " AND x.rel IN ('annotates', 'synthesizes')",
-        (doc_id,),
-    ):
-        got = con.execute(
-            "SELECT id FROM documents WHERE title = ? ORDER BY id LIMIT 1", (r[0],)
-        ).fetchone()
-        if got is not None and int(got[0]) not in ids:
-            ids.append(int(got[0]))
-    ids = [i for i in ids if i != doc_id][:PAGE_SOURCES]
+    ids = [i for i in dict.fromkeys(linked_documents(text)) if i != doc_id]
+    if len(ids) < PAGE_SOURCES:
+        ids += [i for i in _annotated(con, doc_id) if i not in ids and i != doc_id]
+    ids = ids[:PAGE_SOURCES]
     if not ids:
         return {"lifecycle": "active", "stale_sources": []}
     marks = ",".join("?" * len(ids))
