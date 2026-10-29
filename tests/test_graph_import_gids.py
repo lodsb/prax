@@ -300,3 +300,18 @@ def test_the_door_lists_and_answers_the_likely_ones(client: TestClient) -> None:
     assert undone["state"] == "likely"
     assert client.get("/graph/imports/likely").json()["total"] == 1
     assert client.post("/graph/imports/undo", json=answer).status_code == 400
+
+
+def test_an_entity_line_without_its_gid_is_refused(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    lines = _theirs(con)
+    broken = [
+        json.dumps({k: v for k, v in json.loads(x).items() if k != "gid"})
+        if json.loads(x)["kind"] == "entity"
+        else x.strip()
+        for x in lines
+    ]
+    other = _other(monkeypatch, tmp_path)
+    with pytest.raises(ValueError, match="no gid"):
+        graphio.import_lines(other, broken, source="laptop")

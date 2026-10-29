@@ -9,7 +9,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ..base import _reading
+from ..base import _reading, hidden_documents
 
 
 @_reading
@@ -17,16 +17,22 @@ def labels_of_entities(
     con: sqlite3.Connection, names: list[tuple[str, str]]
 ) -> dict[tuple[str, str], list[dict[str, Any]]]:
     """Each ``(name, type)`` entity's labels other than its own name: what
-    else it is called, and in which language."""
+    else it is called, and in which language. A name only a document the
+    viewer may not see gave is left out, as on a person's page."""
     out: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    hidden = hidden_documents(con)
     for name, etype in names:
-        rows = con.execute(
-            "SELECT l.label, l.lang, l.kind FROM entities e"
-            " JOIN entity_labels l ON l.entity_id = e.id"
-            " WHERE e.name = ? AND e.type = ? AND e.canonical_id IS NULL"
-            " AND l.label != e.name AND l.was = 0 ORDER BY l.label, l.lang",
-            (name, etype),
-        ).fetchall()
+        rows = [
+            r
+            for r in con.execute(
+                "SELECT l.label, l.lang, l.kind, l.source_doc FROM entities e"
+                " JOIN entity_labels l ON l.entity_id = e.id"
+                " WHERE e.name = ? AND e.type = ? AND e.canonical_id IS NULL"
+                " AND l.label != e.name AND l.was = 0 ORDER BY l.label, l.lang",
+                (name, etype),
+            )
+            if r["source_doc"] is None or int(r["source_doc"]) not in hidden
+        ]
         if rows:
             out[(name, etype)] = [
                 {"label": r["label"], "lang": r["lang"], "kind": r["kind"]}

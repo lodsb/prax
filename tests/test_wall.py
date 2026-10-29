@@ -542,15 +542,20 @@ def test_an_export_for_a_token_holds_only_what_it_sees(client: TestClient) -> No
     bank_hash = con.execute(
         "SELECT hash FROM documents WHERE id = ?", (lib["bank"],)
     ).fetchone()[0]
+    # a name of the method that only the statement gave
+    wavelet = store.entity_answering(con, "wavelet transform", "method")
+    assert wavelet is not None
+    store.add_label(con, wavelet, "zebrafinch transform", source_doc=lib["bank"])
     seed = {"entity": "wavelet transform", "type": "method"}
     whole = client.get("/graph/export", params=seed, headers=_as(ADMIN))
     assert whole.status_code == 200
-    assert _says_text(whole.text, "Landlord Smith", bank_hash)
+    assert _says_text(whole.text, "Landlord Smith", bank_hash, "zebrafinch transform")
     got = client.get("/graph/export", params={**seed, "as": "mcp"}, headers=_as(ADMIN))
     assert got.status_code == 200
     assert "Open paper" in got.text
     assert "Bank statement" not in got.text and bank_hash not in got.text
     assert "Landlord Smith" not in got.text
+    assert "zebrafinch" not in got.text
     nobody = client.get(
         "/graph/export", params={**seed, "as": "nobody"}, headers=_as(ADMIN)
     )

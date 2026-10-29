@@ -3,6 +3,8 @@ a figure, the text, the chunks, the context."""
 
 from __future__ import annotations
 
+import logging
+import sqlite3
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -43,9 +45,15 @@ def get(
     if found is None:
         raise HTTPException(404, "no such document")
     if offset == 0:
-        store.note_open(
-            con, doc_id, "web" if via == "web" else "agent" if brief else "api"
-        )
+        try:
+            store.note_open(
+                con, doc_id, "web" if via == "web" else "agent" if brief else "api"
+            )
+        except sqlite3.Error:
+            # a record of the reading is not worth the reading itself
+            logging.getLogger("prax.door").warning(
+                "an opening of %s was not recorded", doc_id, exc_info=True
+            )
     doc: dict[str, Any] = dict(found)  # the shape, and what the door adds
     # what it is waiting to be read by: a list since migration 21, and
     # `meta.reading` is the last reading that finished

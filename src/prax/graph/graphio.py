@@ -48,7 +48,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -123,9 +123,25 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
             "counts": {"documents": len(held), "edges": len(edges)},
         }
     )
-    documents = store.document_identities(con, held)
-    for d in documents:
+    for d in store.document_identities(con, held):
         yield _line({"kind": "document", **d})
+    yield from _entity_lines(con, edges)
+    for e in edges:
+        yield _line(
+            {
+                "kind": "edge",
+                "gid": edge_gid(e),
+                **{k: e[k] for k in e if k not in ("id", "source_doc", "premised")},
+            }
+        )
+    yield from _page_lines(con, slugs)
+
+
+def _entity_lines(
+    con: sqlite3.Connection, edges: list[dict[str, Any]]
+) -> Iterator[str]:
+    """The entities the edges reach, by type and name, each with its gid,
+    its aliases and its labels."""
     gids = {(e["src"], e["src_type"]): e["src_gid"] for e in edges} | {
         (e["dst"], e["dst_type"]): e["dst_gid"] for e in edges
     }
@@ -143,14 +159,10 @@ def export(con: sqlite3.Connection, seed: Seed) -> Iterator[str]:
                 "labels": labels.get((name, etype), []),
             }
         )
-    for e in edges:
-        yield _line(
-            {
-                "kind": "edge",
-                "gid": edge_gid(e),
-                **{k: e[k] for k in e if k not in ("id", "source_doc", "premised")},
-            }
-        )
+
+
+def _page_lines(con: sqlite3.Connection, slugs: list[str]) -> Iterator[str]:
+    """Each page with every revision's text."""
     for slug in slugs:
         page = store.get_page(con, slug)
         if page is None:
@@ -288,9 +300,7 @@ def import_lines(
     else:
         # a newer export of the same source replaces the last one's edges
         rep.retired = store.retire_run(con, producer=producer)
-        for r in records:
-            if r["kind"] == "edge":
-                _import_edge(con, r, rep, local, titles, producer, run)
+        _import_edges(con, records, rep, local, titles, source, _by_name)
         for r in records:
             if r["kind"] == "entity":
                 rep.entities += 1
@@ -317,11 +327,44 @@ def _import_by_gid(
     for r in records:
         if r["kind"] != "entity":
             continue
+        if not r.get("gid") or not r.get("name") or not r.get("type"):
+            raise ValueError(f"an entity line with no gid, name or type: {r}")
         rep.entities += 1
         landing = store.settle_foreign(con, source, r, run=rep.run)
         landed[landing.gid] = landing
         rep.landed[landing.state] = rep.landed.get(landing.state, 0) + 1
         rep.labels += store.add_foreign_labels(con, source, landing, run=rep.run)
+
+    def ends(r: dict[str, Any]) -> tuple[store.Landing, store.Landing]:
+        src, dst = landed.get(r["src_gid"]), landed.get(r["dst_gid"])
+        if src is None or dst is None:
+            raise ValueError(f"edge {r.get('gid')}: an end with no entity line")
+        return src, dst
+
+    keep = _import_edges(con, records, rep, local, titles, source, ends)
+    rep.retired = store.end_unconfirmed(con, producer, keep, run=rep.run)
+
+
+def _by_name(r: dict[str, Any]) -> tuple[store.Landing, store.Landing]:
+    """Format 1's ends: by name alone, as ``store.link`` lands them."""
+    return (
+        store.Landing("", "named", None, r["src"], r["src_type"]),
+        store.Landing("", "named", None, r["dst"], r["dst_type"]),
+    )
+
+
+def _import_edges(
+    con: sqlite3.Connection,
+    records: list[dict[str, Any]],
+    rep: Report,
+    local: dict[str, int],
+    titles: dict[str, str],
+    source: str,
+    ends: Callable[[dict[str, Any]], tuple[store.Landing, store.Landing]],
+) -> set[int]:
+    """Each live edge line through ``store.import_edge`` between the ends
+    ``ends`` lands it on, counted in the report; the edges it wrote or found
+    here already."""
     keep: set[int] = set()
     for r in records:
         if r["kind"] != "edge":
@@ -330,24 +373,21 @@ def _import_by_gid(
         if r.get("valid_to"):
             rep.ended_skipped += 1  # history of the other library, not a fact here
             continue
-        ends = (landed.get(r["src_gid"]), landed.get(r["dst_gid"]))
-        if ends[0] is None or ends[1] is None:
-            raise ValueError(f"edge {r.get('gid')}: an end with no entity line")
         doc = local.get(r["source_hash"]) if r.get("source_hash") else None
         said, edge_id = store.import_edge(
             con,
             r,
-            (ends[0], ends[1]),
+            ends(r),
             doc=doc,
             source=source,
-            producer=producer,
+            producer=f"import:{source}",
             run=rep.run,
             titles=titles,
         )
         setattr(rep, said, getattr(rep, said) + 1)
         if edge_id is not None:
             keep.add(edge_id)
-    rep.retired = store.end_unconfirmed(con, producer, keep, run=rep.run)
+    return keep
 
 
 def _dry(
@@ -391,55 +431,6 @@ def _dry(
             else:
                 rep.pages_revised += 1
     return rep
-
-
-def _import_edge(
-    con: sqlite3.Connection,
-    r: dict[str, Any],
-    rep: Report,
-    local: dict[str, int],
-    titles: dict[str, str],
-    producer: str,
-    run: str,
-) -> None:
-    rep.edges += 1
-    if r.get("valid_to"):
-        rep.ended_skipped += 1  # history of the other library, not a fact here
-        return
-    doc_hash = r.get("source_hash")
-    doc = local.get(doc_hash) if doc_hash else None
-    origin = f"{r.get('producer') or '?'}/{r.get('run') or '?'}"
-    if doc_hash and doc is None:
-        origin += (
-            f", from “{titles.get(doc_hash) or doc_hash[:12]}” (sha256 {doc_hash[:12]})"
-        )
-    evidence = ((r.get("evidence") or "").strip() + f" [imported: {origin}]").strip()
-    edge = store.Edge(r["src"], r["src_type"], r["rel"], r["dst"], r["dst_type"])
-    try:
-        store.link(
-            con,
-            edge,
-            confidence=r.get("confidence") or "AMBIGUOUS",
-            source_doc=doc,
-            evidence=evidence,
-            producer=producer,
-            run=run,
-        )
-        rep.linked += 1
-    except ValueError as exc:
-        store.queue_review(
-            con,
-            src=edge.src,
-            src_type=edge.src_type,
-            rel=edge.rel,
-            dst=edge.dst,
-            dst_type=edge.dst_type,
-            reason=f"{exc} (imported, written against {r.get('ontology_version')})",
-            source_doc=doc,
-            evidence=evidence,
-            ontology_version=r.get("ontology_version"),
-        )
-        rep.queued += 1
 
 
 def _import_labels(

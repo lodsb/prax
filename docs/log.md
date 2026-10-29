@@ -9325,3 +9325,13 @@ memory like a token's last use, because the page draws a document again
 on every change of the store and an agent reads a book in windows.
 `store.document_opens` counts them per document; it is scrubbed for a
 named viewer like any many-row read. Nothing reads it yet.
+
+## 2026-10-29: the review of the day's work
+
+Both reviews of AP, the page lifecycle and the opens:
+`docs/eval/review-2026-10-29.md`. Three safety findings, each fixed with
+a test that fails before: an export for a token carried a label only a
+hidden document gave; a failed record of an opening failed the reading;
+an entity line without its `gid` was a 500. Two quality fixes: format 1's
+edges go through `store.import_edge` like format 2's, and `export` is in
+three parts, its file unchanged.

@@ -72,3 +72,16 @@ def test_the_door_records_the_page_an_agent_and_a_read(client: TestClient) -> No
     assert client.get(f"/get/{doc}", params={"offset": 50}).status_code == 200
     assert client.get("/get/999").status_code == 404
     assert [via for _, _, via in _rows(con)] == ["web", "agent", "api"]
+
+
+def test_a_record_that_fails_does_not_fail_the_reading(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    con = client.app.state.con
+    doc = int(store.ingest_text(con, "A text to open. " * 20)["doc_id"])
+
+    def locked(*a: object, **k: object) -> bool:
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(store, "note_open", locked)
+    assert client.get(f"/get/{doc}", params={"via": "web"}).status_code == 200

@@ -45,9 +45,10 @@ FOREIGN_VERDICTS = ("same", "new", "left_out")
 @dataclass(frozen=True)
 class Landing:
     """Where one of their entities lands here: ``state`` is ``own`` (a gid
-    of this library's), or a ``foreign_entities`` state; ``entity_id`` is
-    ours when there is one; ``name`` and ``type`` are what an edge to it
-    is linked by."""
+    of this library's), a ``foreign_entities`` state, or ``named`` (a file
+    of format 1, which names it alone: ``store.link`` lands it by name);
+    ``entity_id`` is ours when there is one; ``name`` and ``type`` are what
+    an edge to it is linked by."""
 
     gid: str
     state: str
