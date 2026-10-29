@@ -362,43 +362,7 @@ def lint(types: dict[str, EntityType], relations: dict[str, Relation]) -> list[s
     other way round, an ``inverse_of`` that names nothing or is not
     mutual, a ``chain`` that is not two known relations, an unknown
     ``kind``, a subtype cycle."""
-    out: list[str] = []
-    for r in relations.values():
-        if r.transitive and r.functional:
-            out.append(f"relation {r.name!r} is transitive and functional")
-        if r.symmetric and r.domain and r.range and r.domain != r.range:
-            out.append(
-                f"relation {r.name!r} is symmetric but its domain is not its range"
-            )
-        if r.inverse_of:
-            other = relations.get(r.inverse_of)
-            if other is None:
-                out.append(
-                    f"relation {r.name!r}: inverse_of {r.inverse_of!r} is unknown"
-                )
-            elif other.inverse_of and other.inverse_of != r.name:
-                out.append(
-                    f"relation {r.name!r}: inverse_of {r.inverse_of!r}, which says"
-                    f" {other.inverse_of!r}"
-                )
-            elif r.symmetric:
-                out.append(f"relation {r.name!r} is symmetric and has an inverse")
-        if r.chain:
-            steps = [s.removeprefix("~") for s in r.chain]
-            if len(steps) != 2:
-                out.append(f"relation {r.name!r}: a chain is two relations")
-            for s in steps:
-                if s not in relations:
-                    out.append(f"relation {r.name!r}: chain names {s!r}, unknown")
-                elif s == r.name:
-                    out.append(f"relation {r.name!r}: a chain through itself")
-        if r.kind and r.kind not in RELATION_KINDS:
-            out.append(f"relation {r.name!r}: kind {r.kind!r}, one of {RELATION_KINDS}")
-        if r.strength and r.strength not in RELATION_STRENGTHS:
-            out.append(
-                f"relation {r.name!r}: strength {r.strength!r},"
-                f" one of {RELATION_STRENGTHS}"
-            )
+    out = [m for r in relations.values() for m in _relation_faults(r, relations)]
     for t in types.values():
         seen = {t.name}
         parent = t.parent
@@ -409,6 +373,45 @@ def lint(types: dict[str, EntityType], relations: dict[str, Relation]) -> list[s
             seen.add(parent)
             parent = types[parent].parent if parent in types else None
     return out
+
+
+def _relation_faults(r: Relation, relations: dict[str, Relation]) -> list[str]:
+    """What one relation says that contradicts itself or the others."""
+    out: list[str] = []
+    if r.transitive and r.functional:
+        out.append(f"relation {r.name!r} is transitive and functional")
+    if r.symmetric and r.domain and r.range and r.domain != r.range:
+        out.append(f"relation {r.name!r} is symmetric but its domain is not its range")
+    if r.inverse_of:
+        out += _inverse_faults(r, relations)
+    if r.chain:
+        steps = [s.removeprefix("~") for s in r.chain]
+        if len(steps) != 2:
+            out.append(f"relation {r.name!r}: a chain is two relations")
+        for s in steps:
+            if s not in relations:
+                out.append(f"relation {r.name!r}: chain names {s!r}, unknown")
+            elif s == r.name:
+                out.append(f"relation {r.name!r}: a chain through itself")
+    if r.kind and r.kind not in RELATION_KINDS:
+        out.append(f"relation {r.name!r}: kind {r.kind!r}, one of {RELATION_KINDS}")
+    if r.strength and r.strength not in RELATION_STRENGTHS:
+        out.append(
+            f"relation {r.name!r}: strength {r.strength!r}, one of {RELATION_STRENGTHS}"
+        )
+    return out
+
+
+def _inverse_faults(r: Relation, relations: dict[str, Relation]) -> list[str]:
+    other = relations.get(r.inverse_of)
+    if other is None:
+        return [f"relation {r.name!r}: inverse_of {r.inverse_of!r} is unknown"]
+    if other.inverse_of and other.inverse_of != r.name:
+        said = f"inverse_of {r.inverse_of!r}, which says {other.inverse_of!r}"
+        return [f"relation {r.name!r}: {said}"]
+    if r.symmetric:
+        return [f"relation {r.name!r} is symmetric and has an inverse"]
+    return []
 
 
 def parse_module(text: str, *, name: str | None = None) -> Module:

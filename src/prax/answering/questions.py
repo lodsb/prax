@@ -433,6 +433,56 @@ def _run_of(model: str) -> str:
     return _RUN_CHARS.sub("-", model).strip("-") or "ask"
 
 
+def _ask_block(
+    con: sqlite3.Connection,
+    b: blocks.Block,
+    text: str,
+    seen: dict[str, Any],
+    answerer: Any,
+    on_event: Any,
+) -> tuple[dict[str, Any] | None, str]:
+    """One block asked: its earlier interior as the conversation so far, the
+    change as a note; the result, or None and why it is not filled."""
+    opts = dict(b.options)
+    steps = opts.get("steps")
+    if steps is None:
+        steps = ask_mod.default_steps()
+    previous = blocks.answer_of(text[b.interior[0] : b.interior[1]]) if b.filled else ""
+    history = [{"question": b.question, "answer": previous}] if previous else None
+    try:
+        result = ask_mod.ask(
+            con,
+            b.question,
+            limit=int(opts.get("limit") or ask_mod.PASSAGES),
+            doctype=opts.get("doctype"),
+            answerer=answerer,
+            history=history,
+            steps=max(0, int(steps)),
+            on_event=on_event,
+            note=_asked_again(seen["new"], seen["reread"]) if previous else "",
+        )
+    except ValueError as exc:  # an option written by hand the ask refuses
+        return None, f"not asked: {exc}"
+    if not (result.get("answer") or "").strip():
+        return None, "the model gave no answer"
+    return result, ""
+
+
+def _why_asked(seen: dict[str, Any]) -> str:
+    """What the revision's note says of one block: what was new, or why it
+    was asked."""
+    what = ", ".join(n["title"] for n in seen["new"][:2])
+    if len(seen["new"]) > 2:
+        what += f" and {len(seen['new']) - 2} more"
+    if what:
+        return f"new: {what}"
+    if seen["reread"]:
+        return "a source read again"
+    if seen["why"] in ("not yet asked", "released"):
+        return str(seen["why"])
+    return "asked again"
+
+
 def refresh_blocks(
     con: sqlite3.Connection,
     page: dict[str, Any],
@@ -482,31 +532,9 @@ def refresh_blocks(
         if answerer is None:
             report[b.id] = {"filled": False, "why": "no model to ask"}
             continue
-        opts = dict(b.options)
-        steps = opts.get("steps")
-        if steps is None:
-            steps = ask_mod.default_steps()
-        previous = (
-            blocks.answer_of(text[b.interior[0] : b.interior[1]]) if b.filled else ""
-        )
-        history = [{"question": b.question, "answer": previous}] if previous else None
-        try:
-            result = ask_mod.ask(
-                con,
-                b.question,
-                limit=int(opts.get("limit") or ask_mod.PASSAGES),
-                doctype=opts.get("doctype"),
-                answerer=answerer,
-                history=history,
-                steps=max(0, int(steps)),
-                on_event=on_event,
-                note=_asked_again(seen["new"], seen["reread"]) if previous else "",
-            )
-        except ValueError as exc:  # an option written by hand the ask refuses
-            report[b.id] = {"filled": False, "why": f"not asked: {exc}"}
-            continue
-        if not (result.get("answer") or "").strip():
-            report[b.id] = {"filled": False, "why": "the model gave no answer"}
+        result, why = _ask_block(con, b, text, seen, answerer, on_event)
+        if result is None:
+            report[b.id] = {"filled": False, "why": why}
             continue
         section, docs = ask_mod.section_of(result, trail=False)
         fills[b.id] = section
@@ -514,20 +542,9 @@ def refresh_blocks(
     revision = page.get("revision")
     if fills:
         model = str(next(iter(results.values()))[0].get("model") or "?")
-        parts = []
-        for b_id, (_, _, seen) in results.items():
-            what = ", ".join(n["title"] for n in seen["new"][:2])
-            if len(seen["new"]) > 2:
-                what += f" and {len(seen['new']) - 2} more"
-            if what:
-                parts.append(f"{b_id}: new: {what}")
-            elif seen["reread"]:
-                parts.append(f"{b_id}: a source read again")
-            elif seen["why"] in ("not yet asked", "released"):
-                parts.append(f"{b_id}: {seen['why']}")
-            else:
-                parts.append(f"{b_id}: asked again")
-        note = f"ask {model}; " + "; ".join(parts)
+        note = f"ask {model}; " + "; ".join(
+            f"{b_id}: {_why_asked(seen)}" for b_id, (_, _, seen) in results.items()
+        )
         written = store.fill_blocks(
             con,
             slug,

@@ -9367,3 +9367,21 @@ taken date over 22 years, 9,430 in an event.
 Looked at in headless Chrome on a throwaway share of 37 generated
 pictures, never the owner's: the folder level, a gallery, a release and
 its undo, the month grouping at a phone's width.
+
+## 2026-10-29: the five functions at 18, split
+
+`cite_link`, `refresh_blocks`, `ontology.lint`, `venues.read` and the
+maths tool's `request_of` were the top of the complexity list (18, the
+ceiling 21). Each is in parts now, 16 or under: a document's folded
+passages and the index's holders of a phrase; a block asked and the
+note on why; one relation's faults and its inverse's; the number of an
+edition; a step's shape and its arguments. The same answers before and
+after, fingerprinted on the live store read-only: 400 seeded passages'
+links, 14,130 entity names read as venues, the composed ontology's
+lint, 153 calculator steps with their errors. The top is 17 now.
+
+One full run of the suite that day failed
+`test_send.py::test_the_sender_sends_what_the_door_lacks_and_nothing_twice`
+once; it passed alone, beside the new tests, five times on its own and
+in the next full run. It reads folder times on the disk, which is where
+such a test goes wrong; not chased further.

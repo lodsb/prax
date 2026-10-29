@@ -969,7 +969,11 @@ not done.
       after: the elements of 2,996 of the live store's texts, 900 seeded
       groupings, every one of its 32,919 documents' fields. The top is
       18 again: `refresh_blocks`, `lint`, `venues.read`, `request_of`,
-      `cite_link`.)
+      `cite_link`.) (2026-10-29: those five split, each 16 or under, the
+      same answers before and after on the live store: 400 passages'
+      links, 14,130 names read as venues, the ontology's lint, 153
+      calculator steps. The top is 17: `resolution.apply`, `up._command`,
+      `parse.hand_out`.)
 - [x] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests

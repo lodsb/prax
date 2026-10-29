@@ -220,22 +220,7 @@ def shown(got: dict[str, Any]) -> str:
 def request_of(step: dict[str, Any]) -> dict[str, Any]:
     """The JSON step as a calculator request, held to the step's shape;
     ValueError says what is wrong."""
-    for key, value in step.items():
-        want = STEP_KEYS.get(key)
-        if want is None:
-            raise ValueError(
-                f"the step has no {key!r}; it takes {', '.join(STEP_KEYS)}"
-            )
-        if not isinstance(value, want):
-            # a ValueError: the step's caller reads it as what to write
-            raise ValueError(f'"{key}" is a {want.__name__}')  # noqa: TRY004
-    if any(not isinstance(f, str) for f in step.get("then") or []):
-        raise ValueError('"then" is a list of formulas')
-    if any(
-        not isinstance(v, str | int | float)
-        for v in (step.get("values") or {}).values()
-    ):
-        raise ValueError('"values" maps a name to a value or a formula')
+    _check_shape(step)
     op = str(step.get("op") or "")
     if op not in OPERATIONS:
         raise ValueError(f"op is one of {', '.join(OPERATIONS)}")
@@ -252,6 +237,35 @@ def request_of(step: dict[str, Any]) -> dict[str, Any]:
         if not then:
             raise ValueError('chain takes "formula" and "then", the steps after it')
         request["steps"] = [formula, *then]
+    args = _args_of(op, step)
+    if args:
+        request["args"] = args
+    return request
+
+
+def _check_shape(step: dict[str, Any]) -> None:
+    """Every key one the step takes, of its type; ValueError otherwise."""
+    for key, value in step.items():
+        want = STEP_KEYS.get(key)
+        if want is None:
+            raise ValueError(
+                f"the step has no {key!r}; it takes {', '.join(STEP_KEYS)}"
+            )
+        if not isinstance(value, want):
+            # a ValueError: the step's caller reads it as what to write
+            raise ValueError(f'"{key}" is a {want.__name__}')  # noqa: TRY004
+    if any(not isinstance(f, str) for f in step.get("then") or []):
+        raise ValueError('"then" is a list of formulas')
+    if any(
+        not isinstance(v, str | int | float)
+        for v in (step.get("values") or {}).values()
+    ):
+        raise ValueError('"values" maps a name to a value or a formula')
+
+
+def _args_of(op: str, step: dict[str, Any]) -> dict[str, Any]:
+    """The calculator's arguments of an operation: its variable, where a
+    series or a limit is taken, the values, the language."""
     args: dict[str, Any] = {}
     if op in WITH_VAR:
         if not step.get("var"):
@@ -263,9 +277,7 @@ def request_of(step: dict[str, Any]) -> dict[str, Any]:
         args["values"] = {str(k): str(v) for k, v in step["values"].items()}
     if step.get("language"):
         args["language"] = str(step["language"])
-    if args:
-        request["args"] = args
-    return request
+    return args
 
 
 def with_chunks(s: Any, text: str) -> str:

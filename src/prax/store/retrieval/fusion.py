@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 import time
+from collections.abc import Callable
 from typing import Any, cast
 from urllib.parse import quote_plus
 
@@ -241,19 +242,9 @@ def cite_link(
     if late():
         return base
     if count <= CITE_LOCAL:
-        cache = folded_docs if folded_docs is not None else {}
-        if doc_id not in cache:
-            got: list[tuple[int, str]] = []
-            for n, r in enumerate(
-                con.execute("SELECT id, text FROM chunks WHERE doc_id = ?", (doc_id,))
-            ):
-                if n % 200 == 0 and late():
-                    return base  # folding a long document ran past the budget
-                got.append(
-                    (int(r[0]), " ".join(_FOLD.findall(str(r[1] or "").lower())))
-                )
-            cache[doc_id] = got
-        folded = cache[doc_id]
+        folded = _folded(con, doc_id, folded_docs, late)
+        if folded is None:
+            return base  # folding a long document ran past the budget
     tries = 0
     asked = {w for w in _FOLD.findall((near or "").lower()) if w not in STOPWORDS}
     notice = _notice_pattern()
@@ -275,23 +266,49 @@ def cite_link(
                 tries += 1
                 if tries > CITE_INDEX_TRIES:
                     return base
-                # bounded by the document's own range of chunk ids, so the
-                # keyword index walks its postings, not the library's: a
-                # common phrase took 31 s unbounded, 43 ms bounded (the
-                # quality review of 2026-10-05)
-                holders = [
-                    int(r[0])
-                    for r in con.execute(
-                        "SELECT c.id FROM chunks_fts JOIN chunks c"
-                        " ON c.id = chunks_fts.rowid"
-                        " WHERE chunks_fts MATCH ? AND chunks_fts.rowid BETWEEN ? AND ?"
-                        " AND c.doc_id = ? LIMIT 2",
-                        ('"' + phrase + '"', low, high, doc_id),
-                    )
-                ]
+                holders = _index_holders(con, phrase, doc_id, (low, high))
             if holders == [chunk_id]:
                 return f"{base}&find={quote_plus(phrase)}"
     return base
+
+
+def _folded(
+    con: sqlite3.Connection,
+    doc_id: int,
+    cache: dict[int, list[tuple[int, str]]] | None,
+    late: Callable[[], bool],
+) -> list[tuple[int, str]] | None:
+    """A document's passages as the UI folds them, kept in ``cache`` for the
+    other hits of one search; None when folding ran past the budget."""
+    cache = cache if cache is not None else {}
+    if doc_id not in cache:
+        got: list[tuple[int, str]] = []
+        for n, r in enumerate(
+            con.execute("SELECT id, text FROM chunks WHERE doc_id = ?", (doc_id,))
+        ):
+            if n % 200 == 0 and late():
+                return None
+            got.append((int(r[0]), " ".join(_FOLD.findall(str(r[1] or "").lower()))))
+        cache[doc_id] = got
+    return cache[doc_id]
+
+
+def _index_holders(
+    con: sqlite3.Connection, phrase: str, doc_id: int, ids: tuple[int, int]
+) -> list[int]:
+    """At most two passages of the document that hold ``phrase``, by the
+    keyword index. Bounded by the document's own range of chunk ids, so the
+    index walks its postings, not the library's: a common phrase took 31 s
+    unbounded, 43 ms bounded (the quality review of 2026-10-05)."""
+    return [
+        int(r[0])
+        for r in con.execute(
+            "SELECT c.id FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid"
+            " WHERE chunks_fts MATCH ? AND chunks_fts.rowid BETWEEN ? AND ?"
+            " AND c.doc_id = ? LIMIT 2",
+            ('"' + phrase + '"', ids[0], ids[1], doc_id),
+        )
+    ]
 
 
 def _cite_starts(words: list[str], n: int, asked: set[str]) -> list[int]:

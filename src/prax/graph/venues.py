@@ -241,29 +241,9 @@ def read(name: str) -> Venue:
     if tail and any(a.upper() not in w.not_acronym for a in _ACRONYM.findall(head)):
         text = head
     text = text.replace("_th", "th")
-    ordinal = w.ordinal.search(text)
-    if ordinal:
-        number = int(ordinal.group(1))
+    number, text, acronyms = _numbered(text, w, acronyms)
+    if number is not None:
         edition = edition or f"#{number}"
-        text = text[: ordinal.start()] + " " + text[ordinal.end() :]
-    else:
-        spelled = w.spelled.search(text)
-        if spelled:
-            tens = dict(w.tens).get((spelled.group(1) or "").lower(), 0)
-            unit = spelled.group(2).lower()
-            tenths = dict(w.tenths)
-            n = tens + (tenths[unit] if unit in tenths else w.units.index(unit) + 1)
-            number = n
-            edition = edition or f"#{n}"
-            text = text[: spelled.start()] + " " + text[spelled.end() :]
-        else:
-            roman = _roman_edition(text, w)
-            if roman is not None:
-                number, start, end = roman
-                edition = edition or f"#{number}"
-                numeral = text[start:end]
-                acronyms = [a for a in acronyms if a != numeral]  # XXV is no name
-                text = text[:start] + " " + text[end:]
     # "Proceedings of the 5th Conference on X" is the conference; but
     # "Proceedings of the IEEE" and "Proceedings of the Musical
     # Association" are journals, not the body that publishes them
@@ -273,20 +253,24 @@ def read(name: str) -> Venue:
         own = [a for a in _ACRONYM.findall(stripped) if a.upper() not in w.not_acronym]
         if rest & w.event_words or own:
             text = stripped
-    kept = []
     # a plain number stays: "Lecture 6" and "Lecture 10" are two things
-    for raw in re.split(r"[^\w]+", _fold(text)):
-        if not raw:
-            continue
-        word = dict(w.abbreviations).get(raw, raw)
-        if word not in w.stop:
-            kept.append(word)
-    acronym = None
-    for a in acronyms:
-        a = re.sub(r"\d+$", "", a)
-        if 3 <= len(a) <= 10 and a.upper() not in w.not_acronym:
-            acronym = a.upper()
-            break
+    kept = [
+        word
+        for word in (
+            dict(w.abbreviations).get(raw, raw)
+            for raw in re.split(r"[^\w]+", _fold(text))
+            if raw
+        )
+        if word not in w.stop
+    ]
+    acronym = next(
+        (
+            a.upper()
+            for a in (re.sub(r"\d+$", "", x) for x in acronyms)
+            if 3 <= len(a) <= 10 and a.upper() not in w.not_acronym
+        ),
+        None,
+    )
     if kept and all(k in w.when for k in kept):
         kept = []  # a date, not a venue
     if "joint" in kept and edition is None:
@@ -304,6 +288,38 @@ def read(name: str) -> Venue:
             )
         )
     return Venue(" ".join(kept), edition, acronym, stated, number, others)
+
+
+def _numbered(
+    text: str, w: Words, acronyms: list[str]
+) -> tuple[int | None, str, list[str]]:
+    """The edition's number a name says, an ordinal ("5th"), spelled out
+    ("Twenty-First") or a Roman numeral ("XXV Simposio"), and the text and
+    acronyms without it."""
+    ordinal = w.ordinal.search(text)
+    if ordinal:
+        return (
+            int(ordinal.group(1)),
+            text[: ordinal.start()] + " " + text[ordinal.end() :],
+            acronyms,
+        )
+    spelled = w.spelled.search(text)
+    if spelled:
+        tens = dict(w.tens).get((spelled.group(1) or "").lower(), 0)
+        unit = spelled.group(2).lower()
+        tenths = dict(w.tenths)
+        n = tens + (tenths[unit] if unit in tenths else w.units.index(unit) + 1)
+        return n, text[: spelled.start()] + " " + text[spelled.end() :], acronyms
+    roman = _roman_edition(text, w)
+    if roman is None:
+        return None, text, acronyms
+    number, start, end = roman
+    numeral = text[start:end]
+    return (
+        number,
+        text[:start] + " " + text[end:],
+        [a for a in acronyms if a != numeral],  # XXV is no name
+    )
 
 
 _ROMAN = re.compile(r"\b([IVXL]{1,6})\s+(\w+)")
