@@ -8,86 +8,55 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
-## Where things stand (2026-10-20)
+## Where things stand (2026-11-03)
 
-This replaces the order of 2026-10-05. That order is in `docs/log.md`
-under "Moved from the plan"; its items 1 to 5 are done, and 6 to 8 are
-below.
+This replaces the state and the order of 2026-10-20. That order is in
+`docs/log.md` under "Moved from the plan"; its items 1 to 4 are done,
+and its item 5 is items 1 and 2 below.
 
 ### The state
 
-- **The library.** 18,387 documents, every one held in the archive
-  (`documents.held` = 1). The database is at migration 49. No `places`
-  rows yet.
-- **The code.** The suite has 1,549 tests. The full run of 2026-10-19
-  gave one failure, a swap test that read the machine's memory. It is
-  fixed (a5aac19); the full suite has not run since.
+- **The library.** 33,104 documents, 14,498 of them referenced
+  (`documents.held` 0: photos and recordings that stay on the NAS,
+  16,292 `places` rows). 336,770 live facts over 267,842 entities, and
+  8,919 faces. The database is at migration 67.
+- **The code.** The full suite of 2026-11-03 passed: 1,723 tests, 4
+  skipped, and the 88 UI tests. CI is green on 4579be8.
 - **What runs.** The door and the worker run on the desktop under `prax
-  up`. The card is off until its hardware is fixed: llama-server is
-  held, so the local-model steps and the readings that need the card
-  (marker, the OCR readers, the figure readings) wait. Do not start
-  card work before then.
-- **Reviews.** The safety review and the quality review of 2026-10-18
-  are closed. All 20 defects and all 23 findings were fixed by
-  2026-10-19 (below). The next review is due after some weeks of
-  commits, over the range since 2026-10-18.
-
-### Done since 2026-10-05
-
-About 115 commits; `docs/log.md` has each night.
-
-- The 2026-10-05 order's items 1 to 5: N3's rest, AL "as Utopia does
-  it", the standard-names and world-dates measurements, the wire
-  checks, AJ's reader contract and AK's split as code.
-- The `worlddates` step on (2026-10-07), G2 and the spacing twins
-  applied (2026-10-09).
-- A PDF gets the reader that suits it (2026-10-17). AO steps 1 to 5:
-  the text checks, `meta.quality`, the counts over the library, the
-  document page's line and the Admin tab. The fixes the checks ask for
-  are queued for when the card runs.
-- The UI: pages as a tree, the graph view filtered and steady, the web
-  files cached and compressed, craft alone or with what builds on it,
-  a module's browse list without the unassigned.
-- The door's time for a worker's hand-outs. `store.graph.context` split
-  into `lookups`, `context` and `views`.
-- AQ designed (`docs/media-by-reference.md`) and its stage 1 built:
-  `places`, `places.roots`, `store.original_file`.
+  up`. The card is back since 2026-11-02 (the bigger power supply):
+  `llama-server`, `marker` and `ocr-server` are in `run:` again, and the
+  backlog of unextracted documents was cleared that day.
+- **Reviews.** The quality review of 2026-10-28 and the safety review
+  of 2026-10-29 are closed. The next one covers e5e183f..4579be8 (the
+  media view, the five splits, the page moves), safety first.
 
 ### Next, in order
 
-1. (done 2026-10-22; its first run on the NAS is the user's) **AQ stage 2: the crawl and `where`.** This stage needs no mount and
-   no card. It adds `POST /places` and `prax_send.py --places <root>`,
-   run on the NAS: every file hashed in full and posted in batches,
-   unseen rows marked `gone`. Then `GET /places` (by doc, hash, or root
-   and path), `GET /places/single`, `GET /places/duplicates`, and the
-   MCP `where` tool behind the wall. The first run over 5 TB takes about
-   14 hours at the NAS's hashing speed.
-2. (answered 2026-10-23) **The user's answer on what is referenced.**
-   Photos, audio and video are; everything else is held
-   (`docs/media-by-reference.md`, the question at the end).
-3. (done 2026-10-23; its first run on the NAS is the user's, with the
-   share mounted on the door's host) **AQ stage 3: references.** `POST
-   /ingest/reference`, `--reference`, range serving from a place, the
-   backup's `referenced` count, heal's `unreachable-originals`, and the
-   document page's places.
-4. **Without the card, in any order.** AS, versions of a work (steps 1
-   to 4 need no model; done 2026-10-28). AP, global ids beside the integer keys
-   (designed 2026-10-28, `docs/global-ids.md`; built 2026-10-29). The engineering leftovers: typed shapes (a
-   search hit first) and the remaining complex functions. The measured
-   improvements that need no model ("Retrieval and ask", "The graph").
-5. **Once the card runs.** AO's queued fixes: marker for the 586
-   documents with maths as text and the 353 scans read from their OCR
-   layer, and the crops. Then the latex2html re-import and its formulas.
-   Then AJ's trial on marker and its routing rules, AI's measurement
-   from `run/swaps.jsonl`, and AK. AQ stage 4 (a transcription step)
-   comes last.
+1. **AO's fixes, now the card runs.** The counts of 2026-11-03 (`GET
+   /documents/quality`): 528 documents with maths as text (marker), 203
+   scans read from their OCR layer, 1,216 with bare captions (the
+   crops), 345 with leftovers. Asked for in batches with `POST
+   /readings/bulk {"finding": …, "limit": …}`, the first 50 of the
+   maths on 2026-11-03, timed before the rest is asked for.
+2. **The card's other work, in this order.** The latex2html re-import
+   and its formulas. AJ's trial on marker and its routing rules. AI's
+   measurement from `run/swaps.jsonl`, once the card has been busy for
+   some days. AK, the dense 27B. AQ stage 4, a transcription step.
+3. **The review** of e5e183f..4579be8, safety then quality.
+4. **Without the card, in any order.** CI's runner: `ubuntu-latest`
+   moves to Ubuntu 26, so pin `ubuntu-24.04` or test on 26 first. A page
+   split by the door (R3a, "The UI and the agent"). The engineering
+   leftovers: typed shapes (a search hit first) and the remaining complex
+   functions. The measured improvements that need no model ("Retrieval
+   and ask", "The graph").
 
 **Waiting on the user:**
 
-- the list below, whose numbers are of 2026-10-06;
+- the list below, whose numbers are of 2026-10-06; the extraction of
+  2026-11-02 added 691 triples to the review queue;
 - AE, the distilled surfer;
 - AH, the Rust spike, which waits until the schema stops moving
-  (migration 49 landed on 2026-10-19);
+  (migration 67 landed on 2026-11-03);
 - the move to the board (not now, 2026-10-12);
 - AA's labeller, retrained as genres are labelled.
 
