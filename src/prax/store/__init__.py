@@ -673,6 +673,7 @@ from .maintain import (  # noqa: F401
 from .pages import (  # noqa: F401
     PAGE_AUTHORS,
     PAGE_KINDS,
+    PAGE_LARGE,
     PROJECT_SOURCE,
     _page_original,
     add_to_project,
@@ -683,6 +684,7 @@ from .pages import (  # noqa: F401
     list_pages,
     list_projects,
     mark_open_answer,
+    move_page,
     note_project_sync,
     open_answer_documents,
     page_blocks,
@@ -694,6 +696,7 @@ from .pages import (  # noqa: F401
     project_at,
     project_documents,
     project_named,
+    rename_page,
     save_project,
     scope_documents,
     set_page_parent,

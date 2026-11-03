@@ -87,41 +87,188 @@ def page_titles(con: sqlite3.Connection) -> set[str]:
     }
 
 
-@_reading
-def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
-    """A page with its current text and revision list, or None."""
+def _slug_of(con: sqlite3.Connection, slug: str) -> str:
+    """The slug a page has now: ``slug`` itself, or the page's current one
+    when ``slug`` is an old name of it (``page_aliases``, migration 67)."""
     row = con.execute(
-        "SELECT p.doc_id, p.slug, p.kind, p.gid, d.title, d.text_hash, d.meta"
-        " FROM pages p JOIN documents d ON d.id = p.doc_id WHERE p.slug = ?",
+        "SELECT p.slug FROM page_aliases a JOIN pages p ON p.doc_id = a.doc_id"
+        " WHERE a.slug = ?",
         (slug,),
+    ).fetchone()
+    return str(row[0]) if row else slug
+
+
+# a page past this many characters is worth splitting: an append or a
+# section written to it says so (``large`` in the answer). The nlbank log
+# reached 407,101 characters in 183 revisions (2026-11-03)
+PAGE_LARGE: Final = 200_000
+
+
+@_reading
+def get_page(
+    con: sqlite3.Connection,
+    slug: str,
+    *,
+    text: bool = True,
+    offset: int = 0,
+    limit: int | None = None,
+) -> dict[str, Any] | None:
+    """A page with its current text and revision list, or None. A slug the
+    page had before a rename finds it too, and ``asked_as`` then names the
+    old one. ``text`` False leaves the text, its ask blocks and its
+    lifecycle out: where the page sits, its size and its history only.
+    ``offset`` and ``limit`` give a window of the text, in characters;
+    ``text_len`` and ``text_hash`` (the sha256 of the whole stored text's
+    UTF-8 bytes) let a reader check that the windows it read are the page."""
+    asked = slug
+    current = _slug_of(con, asked)
+    row = con.execute(
+        "SELECT p.doc_id, p.slug, p.kind, p.gid, d.title, d.text_hash, d.text_len,"
+        " d.meta FROM pages p JOIN documents d ON d.id = p.doc_id WHERE p.slug = ?",
+        (current,),
     ).fetchone()
     if row is None or document_hidden(con, int(row["doc_id"])):
         return None
+    doc_id = int(row["doc_id"])
     meta = json.loads(row["meta"] or "{}")
-    text = _read_archive(row["text_hash"]).decode("utf-8") if row["text_hash"] else ""
     revisions = [
         dict(r)
         for r in con.execute(
-            "SELECT revision, author, note, created_at, text_hash FROM page_revisions"
-            " WHERE doc_id = ? ORDER BY revision",
-            (row["doc_id"],),
+            "SELECT revision, author, note, created_at, text_hash, change"
+            " FROM page_revisions WHERE doc_id = ? ORDER BY revision",
+            (doc_id,),
         )
     ]
-    return {
-        "doc_id": row["doc_id"],
+    written = [r for r in revisions if r["change"] == "text"]
+    out: dict[str, Any] = {
+        "doc_id": doc_id,
         "slug": row["slug"],
         "kind": row["kind"],
         "gid": row["gid"],
         "title": row["title"],
-        "text": text,
         "revision": revisions[-1]["revision"] if revisions else 0,
-        "author": revisions[-1]["author"] if revisions else None,
+        # who wrote the text: a move or a rename writes no one's words
+        "author": written[-1]["author"] if written else None,
         "revisions": revisions,
         "meta": meta,
-        "blocks": page_blocks(text, meta),
-        "ancestors": _ancestors(con, int(row["doc_id"])),
-        **_lifecycle(con, int(row["doc_id"]), text),
+        "text_len": int(row["text_len"] or 0),
+        "text_hash": row["text_hash"],
+        "ancestors": _ancestors(con, doc_id),
+        "children": _children(con, doc_id),
+        "projects": _projects_of(con, doc_id),
+        "aliases": _aliases(con, doc_id),
     }
+    if row["kind"] == "project":
+        out["members"] = _members(con, str(row["title"]))
+    if current != asked:
+        out["asked_as"] = asked
+    if not text:
+        return out
+    whole = _read_archive(row["text_hash"]).decode("utf-8") if row["text_hash"] else ""
+    if offset or limit is not None:
+        start = max(0, offset)
+        end = len(whole) if limit is None else start + max(0, limit)
+        out["text"] = whole[start:end]
+        out["offset"] = start
+        out["next_offset"] = end if end < len(whole) else None
+    else:
+        out["text"] = whole
+    out["blocks"] = page_blocks(whole, meta)
+    return {**out, **_lifecycle(con, doc_id, whole)}
+
+
+def _aliases(con: sqlite3.Connection, doc_id: int) -> list[str]:
+    return [
+        str(r[0])
+        for r in con.execute(
+            "SELECT slug FROM page_aliases WHERE doc_id = ? ORDER BY created_at, slug",
+            (doc_id,),
+        )
+    ]
+
+
+def _children(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """The pages directly under this one in the tree, the viewer's to see."""
+    rows = con.execute(
+        "SELECT p.doc_id, p.slug, d.title FROM pages p"
+        " JOIN documents d ON d.id = p.doc_id"
+        " WHERE json_extract(d.meta, '$.page.parent') = ? ORDER BY p.slug",
+        (doc_id,),
+    ).fetchall()
+    return [dict(r) for r in rows if not document_hidden(con, int(r["doc_id"]))]
+
+
+def _page_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
+    """A page as a node of the graph: its title, and ``project`` or ``page``."""
+    row = con.execute(
+        "SELECT d.title, p.kind FROM pages p JOIN documents d ON d.id = p.doc_id"
+        " WHERE p.doc_id = ?",
+        (doc_id,),
+    ).fetchone()
+    return str(row["title"]), "project" if row["kind"] == "project" else "page"
+
+
+def _project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Row]:
+    """The live ``part_of`` edges from a page to a project page, whoever
+    wrote them (``write_page``, a project's member, a ``link`` by hand),
+    each with the project page's id and slug."""
+    name, node_type = _page_node(con, doc_id)
+    return con.execute(
+        "SELECT x.id, p.doc_id, p.slug, d.title FROM edges x"
+        " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
+        " JOIN documents d ON d.title = t.name"
+        " JOIN pages p ON p.doc_id = d.id AND p.kind = 'project'"
+        " WHERE s.name = ? AND s.type = ? AND t.type = 'project'"
+        " AND x.rel = 'part_of' AND x.valid_to IS NULL ORDER BY x.id",
+        (name, node_type),
+    ).fetchall()
+
+
+def _projects_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """The projects a page is part of, the viewer's to see."""
+    seen: dict[int, dict[str, Any]] = {}
+    for r in _project_edges(con, doc_id):
+        if int(r["doc_id"]) not in seen and not document_hidden(con, int(r["doc_id"])):
+            seen[int(r["doc_id"])] = {
+                "doc_id": int(r["doc_id"]),
+                "slug": r["slug"],
+                "title": r["title"],
+            }
+    return list(seen.values())
+
+
+PROJECT_MEMBERS = 500  # members a project page's read lists
+
+
+def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
+    """What is part of a project: the documents and pages with a live
+    ``part_of`` edge to it, the viewer's to see, ``PROJECT_MEMBERS`` at
+    most, ``count`` all of them."""
+    rows = con.execute(
+        "SELECT DISTINCT s.name, s.type FROM edges x"
+        " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
+        " WHERE x.rel = 'part_of' AND x.valid_to IS NULL"
+        " AND t.name = ? AND t.type = 'project' ORDER BY s.name",
+        (title,),
+    ).fetchall()
+    names = [str(r["name"]) for r in rows]
+    first: dict[str, int] = {}
+    for start in range(0, len(names), 500):
+        part = names[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for got, doc in con.execute(
+            f"SELECT title, min(id) FROM documents WHERE title IN ({marks})"
+            " GROUP BY title",
+            part,
+        ):
+            first[str(got)] = int(doc)
+    hidden = hidden_documents(con)
+    items = [
+        {"title": str(r["name"]), "type": r["type"], "doc_id": first.get(r["name"])}
+        for r in rows
+        if first.get(r["name"]) not in hidden
+    ]
+    return {"count": len(items), "items": items[:PROJECT_MEMBERS]}
 
 
 def _ancestors(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
@@ -244,7 +391,7 @@ def page_revision_text(con: sqlite3.Connection, slug: str, revision: int) -> str
     row = con.execute(
         "SELECT r.text_hash FROM page_revisions r JOIN pages p ON p.doc_id = r.doc_id"
         " WHERE p.slug = ? AND r.revision = ?",
-        (slug, revision),
+        (_slug_of(con, slug), revision),
     ).fetchone()
     if row is None:
         raise KeyError(f"no revision {revision} of page {slug!r}")
@@ -266,7 +413,7 @@ def list_pages(
                (SELECT max(revision) FROM page_revisions r WHERE r.doc_id = p.doc_id)
                    AS revision,
                (SELECT author FROM page_revisions r WHERE r.doc_id = p.doc_id
-                ORDER BY revision DESC LIMIT 1) AS author,
+                AND r.change = 'text' ORDER BY revision DESC LIMIT 1) AS author,
                (SELECT max(created_at) FROM page_revisions r WHERE r.doc_id = p.doc_id)
                    AS updated_at,
                json_extract(d.meta, '$.page.parent') AS parent,
@@ -296,8 +443,15 @@ def write_page(
     force: bool = False,
     sensitivity: str | None = None,
     gid: str | None = None,
+    expected_text_hash: str | None = None,
 ) -> dict[str, Any]:
     """Create or replace a page's text as a new revision.
+
+    A slug the page had before a rename writes to that page, never to a
+    new one. ``expected_text_hash`` is the text hash the writer read
+    (``get_page``): a page whose text changed since is refused
+    (PermissionError), so a writer that reassembles a long page from
+    windows never writes over a revision it did not see.
 
     What can refuse the write (a document to annotate, a project, a parent
     that is not there, a parent that would make a cycle) is checked before
@@ -316,15 +470,15 @@ def write_page(
     ``append_page`` for agent additions. ``gid`` is a new page's global id
     when it has one already: a page imported from another library keeps the
     one it was minted with there (migration 64); else the database mints it.
-    Returns ``{doc_id, slug, revision, created}``.
+    Returns ``{doc_id, slug, revision, created, text_hash, text_len}``.
     """
     if kind not in PAGE_KINDS:
         raise ValueError(f"kind must be one of {PAGE_KINDS}")
     if author not in PAGE_AUTHORS:
         raise ValueError(f"author must be one of {PAGE_AUTHORS}")
-    slug = slugify(slug)
+    slug = _slug_of(con, slugify(slug))
     existing = con.execute(
-        "SELECT p.doc_id, p.kind, d.title FROM pages p"
+        "SELECT p.doc_id, p.kind, d.title, d.text_hash FROM pages p"
         " JOIN documents d ON d.id = p.doc_id"
         " WHERE p.slug = ?",
         (slug,),
@@ -332,6 +486,13 @@ def write_page(
     if existing is not None and document_hidden(con, int(existing["doc_id"])):
         # a restricted viewer writes to nothing it may not see: as if absent
         raise KeyError(f"no page {slug!r}")
+    if expected_text_hash is not None and expected_text_hash != (
+        existing["text_hash"] if existing is not None else ""
+    ):
+        raise PermissionError(
+            f"page {slug!r} changed since it was read: its text hash is not"
+            f" {expected_text_hash}; read it again"
+        )
     _refuse_write(
         con,
         None if existing is None else int(existing["doc_id"]),
@@ -390,7 +551,19 @@ def write_page(
         if above != doc_id:
             set_page_parent(con, doc_id, above, by=author)
     con.commit()
-    return {"doc_id": doc_id, "slug": slug, "revision": revision, "created": created}
+    return {
+        "doc_id": doc_id,
+        "slug": slug,
+        "revision": revision,
+        "created": created,
+        "text_hash": indexed["text_hash"],
+        "text_len": int(
+            con.execute(
+                "SELECT text_len FROM documents WHERE id = ?", (doc_id,)
+            ).fetchone()[0]
+            or 0
+        ),
+    }
 
 
 def _new_page(
@@ -428,9 +601,10 @@ def _next_revision(
     force: bool,
 ) -> int:
     """The revision a write over an existing page makes; an agent's over a
-    person's is refused unless ``force``."""
+    person's text is refused unless ``force``. Whose the text is, is the
+    last revision that wrote text: a move or a rename writes no one's."""
     last = con.execute(
-        "SELECT revision, author FROM page_revisions WHERE doc_id = ?"
+        "SELECT author FROM page_revisions WHERE doc_id = ? AND change = 'text'"
         " ORDER BY revision DESC LIMIT 1",
         (existing["doc_id"],),
     ).fetchone()
@@ -439,7 +613,14 @@ def _next_revision(
             f"page {slug!r} was last written by a person; append_page adds"
             " a section, force=True overwrites"
         )
-    return int(last["revision"] if last else 0) + 1
+    return _revision_after(con, int(existing["doc_id"]))
+
+
+def _revision_after(con: sqlite3.Connection, doc_id: int) -> int:
+    top = con.execute(
+        "SELECT max(revision) FROM page_revisions WHERE doc_id = ?", (doc_id,)
+    ).fetchone()[0]
+    return int(top or 0) + 1
 
 
 def _rename_page(
@@ -573,7 +754,7 @@ def _parent_of(con: sqlite3.Connection, doc_id: int) -> int | None:
 def page_id(con: sqlite3.Connection, slug: str) -> int | None:
     """The document id of the page at ``slug``, or None."""
     row = con.execute(
-        "SELECT doc_id FROM pages WHERE slug = ?", (slugify(slug),)
+        "SELECT doc_id FROM pages WHERE slug = ?", (_slug_of(con, slugify(slug)),)
     ).fetchone()
     return int(row[0]) if row else None
 
@@ -801,16 +982,33 @@ def append_page(
     if heading:
         block = f"## {heading}\n\n{block}"
     text = page["text"].rstrip() + "\n\n" + block + "\n"
-    return write_page(
-        con,
-        page["slug"],
-        text,
-        author=author,
-        note=note,
-        force=True,
-        kind=page["kind"],
-        annotates=annotates,
+    return _sized(
+        write_page(
+            con,
+            page["slug"],
+            text,
+            author=author,
+            note=note,
+            force=True,
+            kind=page["kind"],
+            annotates=annotates,
+        )
     )
+
+
+def _sized(written: dict[str, Any]) -> dict[str, Any]:
+    """A write's answer, with ``large`` when the page has grown past
+    ``PAGE_LARGE``: what it holds, and that a split would serve it."""
+    if int(written.get("text_len") or 0) <= PAGE_LARGE:
+        return written
+    return {
+        **written,
+        "large": (
+            f"the page holds {written['text_len']:,} characters, past"
+            f" {PAGE_LARGE:,}: an index page with a child page a part"
+            " (move_page puts a page under another) keeps each one readable"
+        ),
+    }
 
 
 def update_section(
@@ -852,7 +1050,7 @@ def update_section(
     if author == "agent" and not force and current:
         human = con.execute(
             "SELECT r.text_hash FROM page_revisions r WHERE r.doc_id = ?"
-            " AND r.author = 'human'",
+            " AND r.author = 'human' AND r.change = 'text'",
             (page["doc_id"],),
         ).fetchall()
         for row in human:
@@ -879,7 +1077,252 @@ def update_section(
         force=True,
         kind=page["kind"],
     )
-    return {**written, "section": "replaced"}
+    return _sized({**written, "section": "replaced"})
+
+
+# what a move or a rename writes about itself in the page's history and
+# the evidence of its edges
+_MOVED = "moved"
+
+
+@_serialized
+def move_page(
+    con: sqlite3.Connection,
+    slug: str,
+    *,
+    part_of: str | None = None,
+    parent: str | None = None,
+    author: str = "agent",
+    note: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Move a page to another project, another place in the tree of pages,
+    or both, without touching its text.
+
+    ``part_of`` names the project page it is then part of, by slug, and
+    ``""`` none; ``parent`` the page it sits under, and ``""`` the top;
+    None leaves either as it is. A page's projects become exactly the one
+    named: its other live ``part_of`` edges to a project are ended
+    (``valid_to``, so a walk at an earlier moment still finds them), and
+    whoever wrote them, ``link`` by hand included. When the project
+    changes and no parent is named, a page that sat under its old project's
+    page (or at the top) moves under the new one's.
+
+    The move is a revision of its own (``change`` ``move``) with the text
+    hash of the one before, the note and the author, and is allowed on a
+    page a person wrote: it writes no one's words. Refused before anything
+    is written: a page, project or parent that is not there (KeyError), a
+    parent under the page itself or not in the page's project (ValueError).
+    A move to where the page is changes nothing and says so (``changed``
+    false); ``dry_run`` says what would change and writes nothing.
+    """
+    if author not in PAGE_AUTHORS:
+        raise ValueError(f"author must be one of {PAGE_AUTHORS}")
+    doc_id = page_id(con, slug)
+    if doc_id is None or document_hidden(con, doc_id):
+        raise KeyError(f"no page {slug!r}")
+    current_slug = str(
+        con.execute("SELECT slug FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()[0]
+    )
+    edges = _project_edges(con, doc_id)
+    before = list(dict.fromkeys(str(r["slug"]) for r in edges))
+    above = _parent_of(con, doc_id)
+    project: sqlite3.Row | None = None
+    if part_of:
+        project = con.execute(
+            "SELECT p.doc_id, p.slug, d.title FROM pages p"
+            " JOIN documents d ON d.id = p.doc_id"
+            " WHERE p.slug = ? AND p.kind = 'project'",
+            (_slug_of(con, slugify(part_of)),),
+        ).fetchone()
+        if project is None or document_hidden(con, int(project["doc_id"])):
+            raise KeyError(f"no project page {part_of!r}")
+        if int(project["doc_id"]) == doc_id:
+            raise ValueError("a project is not part of itself")
+    after = before if part_of is None else ([str(project["slug"])] if project else [])
+    if parent is not None:
+        under = page_id(con, parent) if parent else None
+        if parent and (under is None or document_hidden(con, under)):
+            raise KeyError(f"no page {parent!r}")
+    elif after != before and (above is None or above in _project_ids(con, before)):
+        # the page sat under its project: it goes with its project
+        under = int(project["doc_id"]) if project is not None else None
+    else:
+        under = above
+    if under is not None:
+        if under == doc_id:
+            raise ValueError("a page does not sit under itself")
+        _refuse_cycle(con, doc_id, under)
+        if after:
+            _refuse_elsewhere(con, under, after[0], doc_id)
+    plan = {
+        "doc_id": doc_id,
+        "slug": current_slug,
+        "part_of": {"from": before, "to": after},
+        "parent": {"from": _slug_at(con, above), "to": _slug_at(con, under)},
+    }
+    if after == before and under == above:
+        return {**plan, "changed": False, "why": "the page is there already"}
+    if dry_run:
+        return {**plan, "changed": True, "dry_run": True}
+    revision = _revision_after(con, doc_id)
+    name, node_type = _page_node(con, doc_id)
+    ended: list[int] = []
+    kept = False  # one live edge to the project stays; any other ends
+    target = int(project["doc_id"]) if project is not None else None
+    for r in edges if part_of is not None else []:
+        if int(r["doc_id"]) == target and not kept:
+            kept = True
+            continue
+        invalidate_edge(con, int(r["id"]))
+        ended.append(int(r["id"]))
+    if project is not None and not kept:
+        link(
+            con,
+            Edge(name, node_type, "part_of", str(project["title"]), "project"),
+            confidence="EXTRACTED",
+            source_doc=doc_id,
+            evidence=f"page {current_slug} {_MOVED}, revision {revision}",
+            producer="page",
+            run=f"{current_slug}@{revision}",
+        )
+    if under != above:
+        set_page_parent(con, doc_id, under, by=author)
+    said = note or _move_note(plan)
+    _bookkeeping_revision(con, doc_id, revision, author, said, "move")
+    con.commit()
+    return {**plan, "changed": True, "revision": revision, "ended_edges": ended}
+
+
+def _project_ids(con: sqlite3.Connection, slugs: list[str]) -> set[int]:
+    return {i for i in (page_id(con, s) for s in slugs) if i is not None}
+
+
+def _slug_at(con: sqlite3.Connection, doc_id: int | None) -> str | None:
+    if doc_id is None:
+        return None
+    row = con.execute("SELECT slug FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()
+    return str(row[0]) if row else None
+
+
+def _refuse_elsewhere(
+    con: sqlite3.Connection, under: int, project_slug: str, doc_id: int
+) -> None:
+    """ValueError when the page a page is to sit under is not in the page's
+    project: neither the project's page, nor under it, nor part of it."""
+    project = page_id(con, project_slug)
+    if under == project:
+        return
+    seen: set[int] = {doc_id}
+    at: int | None = under
+    while at is not None and at not in seen:
+        if at == project or project_slug in (
+            str(r["slug"]) for r in _project_edges(con, at)
+        ):
+            return
+        seen.add(at)
+        at = _parent_of(con, at)
+    raise ValueError(
+        f"page {_slug_at(con, under)!r} is not in project {project_slug!r}:"
+        " a page sits under its project's page or a page of its project"
+    )
+
+
+def _move_note(plan: dict[str, Any]) -> str:
+    parts = []
+    if plan["part_of"]["from"] != plan["part_of"]["to"]:
+        was = ", ".join(plan["part_of"]["from"]) or "no project"
+        now = ", ".join(plan["part_of"]["to"]) or "no project"
+        parts.append(f"project {was} -> {now}")
+    if plan["parent"]["from"] != plan["parent"]["to"]:
+        parts.append(
+            f"under {plan['parent']['from'] or 'the top'}"
+            f" -> {plan['parent']['to'] or 'the top'}"
+        )
+    return f"{_MOVED}: " + "; ".join(parts)
+
+
+def _bookkeeping_revision(
+    con: sqlite3.Connection,
+    doc_id: int,
+    revision: int,
+    author: str,
+    note: str,
+    change: str,
+) -> None:
+    """A revision that changed no text: the text hash it had, a new number."""
+    text_hash = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()[0]
+    con.execute(
+        "INSERT INTO page_revisions (doc_id, revision, text_hash, author, note, change)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (doc_id, revision, text_hash, author, note, change),
+    )
+    meta = get_meta(con, doc_id)
+    meta["page"] = {**(meta.get("page") or {}), "revision": revision}
+    set_meta(con, doc_id, meta)
+
+
+@_serialized
+def rename_page(
+    con: sqlite3.Connection,
+    slug: str,
+    new_slug: str,
+    *,
+    author: str = "agent",
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Give a page a new slug. The old one stays its name for ever
+    (``page_aliases``): a read, an append or a write under it reaches the
+    page, and no other page takes it. The document, its id, its text and
+    its edges are unchanged; the rename is a revision of its own
+    (``change`` ``rename``). Refused: a page that is not there (KeyError),
+    a slug another page has or had, an empty one, and a project's page,
+    whose slug is its project's name (ValueError). A rename to the slug
+    the page has changes nothing; one back to an old slug of its own
+    takes that alias out."""
+    if author not in PAGE_AUTHORS:
+        raise ValueError(f"author must be one of {PAGE_AUTHORS}")
+    doc_id = page_id(con, slug)
+    if doc_id is None or document_hidden(con, doc_id):
+        raise KeyError(f"no page {slug!r}")
+    row = con.execute(
+        "SELECT slug, kind FROM pages WHERE doc_id = ?", (doc_id,)
+    ).fetchone()
+    if not any(c.isalnum() for c in new_slug):
+        raise ValueError("a page needs a slug: letters or digits")
+    old, new = str(row["slug"]), slugify(new_slug)
+    if new == old:
+        return {"doc_id": doc_id, "slug": old, "changed": False}
+    if row["kind"] == "project":
+        raise ValueError(f"{old!r} is a project's page: its slug is the project's name")
+    if con.execute("SELECT 1 FROM pages WHERE slug = ?", (new,)).fetchone():
+        raise ValueError(f"page {new!r} exists")
+    other = con.execute(
+        "SELECT doc_id FROM page_aliases WHERE slug = ?", (new,)
+    ).fetchone()
+    if other is not None and int(other[0]) != doc_id:
+        raise ValueError(f"{new!r} is an old name of another page")
+    con.execute("DELETE FROM page_aliases WHERE slug = ?", (new,))
+    con.execute("INSERT INTO page_aliases (slug, doc_id) VALUES (?, ?)", (old, doc_id))
+    con.execute("UPDATE pages SET slug = ? WHERE doc_id = ?", (new, doc_id))
+    meta = get_meta(con, doc_id)
+    meta["page"] = {**(meta.get("page") or {}), "slug": new}
+    set_meta(con, doc_id, meta)
+    revision = _revision_after(con, doc_id)
+    _bookkeeping_revision(
+        con, doc_id, revision, author, note or f"renamed: {old} -> {new}", "rename"
+    )
+    con.commit()
+    return {
+        "doc_id": doc_id,
+        "slug": new,
+        "was": old,
+        "changed": True,
+        "revision": revision,
+        "aliases": _aliases(con, doc_id),
+    }
 
 
 @_serialized

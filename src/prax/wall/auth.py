@@ -107,6 +107,8 @@ CONTRIBUTOR_ROUTES = READER_ROUTES + _routes(
     ("PUT", r"/page/[^/]+"),
     ("POST", r"/page/[^/]+/append"),
     ("PUT", r"/page/[^/]+/section"),
+    ("POST", r"/page/[^/]+/move"),
+    ("POST", r"/page/[^/]+/rename"),
     ("POST", r"/link"),
     ("PUT", r"/doc/\d+/domains"),
     ("POST", r"/doc/\d+/promote"),

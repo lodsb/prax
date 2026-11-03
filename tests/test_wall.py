@@ -124,6 +124,8 @@ WALKED = (
     ("PUT", "/page/x"),
     ("POST", "/page/x/append"),
     ("PUT", "/page/x/section"),
+    ("POST", "/page/x/move"),
+    ("POST", "/page/x/rename"),
     ("POST", "/ask"),
     ("POST", "/link"),
     ("PUT", "/doc/1/domains"),
@@ -242,6 +244,18 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
     assert (
         client.post(
             "/page/private-notes/append", json={"section": "more"}, headers=me
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/page/private-notes/move", json={"parent": ""}, headers=me
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/page/private-notes/rename", json={"slug": "public-notes"}, headers=me
         ).status_code
         == 404
     )

@@ -180,6 +180,7 @@ def _page_lines(con: sqlite3.Connection, slugs: list[str]) -> Iterator[str]:
                         "author": r["author"],
                         "note": r["note"],
                         "created_at": r["created_at"],
+                        "change": r["change"],
                         "text": store.page_revision_text(con, slug, r["revision"]),
                     }
                     for r in page["revisions"]
@@ -478,7 +479,12 @@ def _import_page(
     titles: dict[str, str],
 ) -> None:
     slug = r["slug"]
-    revisions = sorted(r.get("revisions") or [], key=lambda x: x["revision"])
+    # the revisions that wrote text: a move or a rename was the other
+    # library's bookkeeping (its project, its tree), not this one's
+    revisions = sorted(
+        (x for x in r.get("revisions") or [] if (x.get("change") or "text") == "text"),
+        key=lambda x: x["revision"],
+    )
     if not revisions:
         return
     gid = r.get("gid")

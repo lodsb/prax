@@ -714,10 +714,22 @@ def documents(
 
 
 @mcp.tool()
-def get_page(slug: str) -> dict[str, Any]:
+def get_page(
+    slug: str, text: bool = True, offset: int = 0, limit: int | None = None
+) -> dict[str, Any]:
     """A page of the library's wiki: its Markdown text, kind (addendum,
-    project, topic), author of the latest revision and revision list."""
-    return _answer(lambda: door().get_json(f"/page/{slug}"))
+    project, topic), who wrote its text last, its revision list, where it
+    sits (``projects``, ``ancestors``, ``children``; a project's page also
+    its ``members``) and its old slugs (``aliases``; an old slug finds the
+    page, ``asked_as`` says so). ``text=False`` leaves the text out: for
+    where a page sits or how large it is (``text_len``). ``offset`` and
+    ``limit`` read a long page in windows of characters (``next_offset``
+    until the end); ``text_hash`` is the sha256 of the whole text's UTF-8
+    bytes, to check the windows add up to the page."""
+    params: dict[str, Any] = {"text": text, "offset": offset}
+    if limit is not None:
+        params["limit"] = limit
+    return _answer(lambda: door().get_json(f"/page/{slug}", params=params))
 
 
 @mcp.tool()
@@ -731,10 +743,14 @@ def write_page(
     note: str | None = None,
     sensitivity: str | None = None,
     parent: str | None = None,
+    expected_text_hash: str | None = None,
 ) -> dict[str, Any]:
     """Create a page (kind addendum, project or topic) or replace its text
-    as the agent. Refused when a person wrote the latest revision: use
-    append_page then. ``annotates`` lists document ids the page is about;
+    as the agent. Refused when a person wrote the latest text: use
+    append_page then. ``expected_text_hash``, the ``text_hash`` you read,
+    refuses the write when the page changed since; the answer carries the
+    stored text's hash. To change only where a page sits, use move_page,
+    not a rewrite. ``annotates`` lists document ids the page is about;
     ``part_of`` names a project page's slug. ``parent`` names the page this
     one sits under in the tree of pages (a project's page, a topic's
     overview), by slug; without it the ``part_of`` project is the parent.
@@ -760,7 +776,46 @@ def write_page(
                 "part_of": part_of,
                 "parent": parent,
                 "sensitivity": sensitivity,
+                "expected_text_hash": expected_text_hash,
             },
+        )
+    )
+
+
+@mcp.tool()
+def move_page(
+    slug: str,
+    part_of: str | None = None,
+    parent: str | None = None,
+    note: str | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Move a page to another project or place in the tree of pages,
+    without touching its text: ``part_of`` the project page's slug it then
+    belongs to (``""`` none), ``parent`` the page it sits under (``""`` the
+    top); leave either out to keep it. Its old project memberships end
+    (still seen in a walk at an earlier date); a page that sat under its
+    old project's page moves under the new one's. Allowed on a page a
+    person wrote. Recorded as a revision with your note, the text hash
+    unchanged. ``dry_run`` says what would change and changes nothing."""
+    body: dict[str, Any] = {"author": "agent", "note": note, "dry_run": dry_run}
+    if part_of is not None:
+        body["part_of"] = part_of
+    if parent is not None:
+        body["parent"] = parent
+    return _answer(lambda: door().post_json(f"/page/{slug}/move", body))
+
+
+@mcp.tool()
+def rename_page(slug: str, new_slug: str, note: str | None = None) -> dict[str, Any]:
+    """Give a page a new slug. The old slug keeps finding it for ever
+    (get_page, append_page, update_section and write_page under it reach
+    the same page) and no other page may take it; the page's id, text and
+    links are unchanged. A project's page keeps its slug."""
+    return _answer(
+        lambda: door().post_json(
+            f"/page/{slug}/rename",
+            {"slug": new_slug, "author": "agent", "note": note},
         )
     )
 

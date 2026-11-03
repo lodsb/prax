@@ -892,6 +892,22 @@ The user asked on 2026-10-28 for every one to be fixed.
       panel has "its photos" too (the same day). The face grids of the
       Review page (2026-10-29): a group opened whole and one person's
       matches, 60 faces a page.
+- [x] (2026-11-03, migration 67, `docs/howto.md` "Moving and renaming a
+      page") **Pages moved, renamed and read in windows** — the nlbank
+      agent's request: `move_page` (project and place in the tree, the
+      text untouched, allowed on a person's page), `rename_page` (the old
+      slug an alias for ever), `get_page` without the text or in windows
+      with the text's hash, `write_page(expected_text_hash=)`, a warning
+      past 200,000 characters.
+- [ ] **A page split by the door** (the same request's R3a, after the
+      moves): cut a long page at its headings into an index page and
+      child pages, the children's text adding up to the original byte for
+      byte (refused otherwise), each child in the page's project with its
+      sensitivity and domains. The hard part is the old citations: a
+      `#doc/N?chunk=…&find=…` link into the original has to land in the
+      child holding the words, and the original's `annotates` edges go to
+      the children whose text holds the link. Until then an agent splits a
+      page itself with windowed reads, `write_page` and `move_page`.
 - [ ] **A procedural graph for the surfer** (later; the reference is in
       `docs/log.md`, "After the mathematics").
 - [ ] **If the UI still feels slow from the MacBook** — the next suspect

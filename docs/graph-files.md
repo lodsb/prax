@@ -66,8 +66,10 @@ Then, in this order:
   page makes them again, and so is an INFERRED edge a rule derived from
   premises: the receiving library derives its own.
 - **`page`**, by slug: `gid`, `slug`, `title`, `page_kind`, and `revisions`,
-  each with `revision`, `author`, `note`, `created_at` and the full
-  `text`.
+  each with `revision`, `author`, `note`, `created_at`, `change` and the
+  full `text`. `change` is `text` for a save, `move` or `rename` for a
+  revision that changed only where the page sits or its slug (migration
+  67); a file without it is read as `text`.
 
 Not exported: chunks, vectors, the review queue, the originals, the
 regions of the library (they are rebuilt from the graph), the faces and
@@ -123,6 +125,8 @@ alone, and is read as before:
    `<slug>-2`, and keeps the `gid` it was minted with. A page of format 1
    is found by its slug. A page that does not exist here is written with all its revisions, in
    order, each with a note naming the source and the original revision.
+   Only the revisions that wrote text are replayed: a move or a rename
+   was the other library's bookkeeping.
    One that exists with the same text is left alone. One with other
    text gets the imported text as a new revision, and the note says
    this library's page differed. An agent's text over a person's page

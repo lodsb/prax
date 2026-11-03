@@ -33,6 +33,22 @@ class PageReq(BaseModel):
     parent: str | None = None  # the page this one sits under, by slug
     force: bool = False
     sensitivity: str | None = None  # "personal": behind the wall (stage U)
+    # the text hash the writer read; a page changed since is a 409
+    expected_text_hash: str | None = None
+
+
+class MoveReq(BaseModel):
+    part_of: str | None = None  # a project page's slug; "" none; None unchanged
+    parent: str | None = None  # the page it sits under; "" the top; None unchanged
+    author: str = "agent"
+    note: str | None = None
+    dry_run: bool = False
+
+
+class RenameReq(BaseModel):
+    slug: str
+    author: str = "agent"
+    note: str | None = None
 
 
 class ParentReq(BaseModel):
@@ -65,16 +81,62 @@ def pages(request: Request, kind: str | None = None) -> list[dict[str, Any]]:
 
 
 @router.get("/page/{slug}")
-def page(slug: str, request: Request) -> dict[str, Any]:
+def page(
+    slug: str,
+    request: Request,
+    text: bool = True,
+    offset: int = 0,
+    limit: int | None = None,
+) -> dict[str, Any]:
     """The page, with what the questions pass is doing to it right now:
     ``asking`` the ids of the ask blocks being answered, ``asking_page``
-    when the page is a standing question being asked again."""
-    p = store.get_page(_con(request), store.slugify(slug))
+    when the page is a standing question being asked again. ``text``
+    false: where the page sits, its size and history, no text;
+    ``offset`` and ``limit`` a window of the text (``store.get_page``)."""
+    p = store.get_page(
+        _con(request), store.slugify(slug), text=text, offset=offset, limit=limit
+    )
     if p is None:
         raise HTTPException(404, "no such page")
-    p["asking"] = _asking(p["slug"], [b["id"] for b in p["blocks"]])
-    p["asking_page"] = p["kind"] == questions.KIND and _asking_page(p["slug"])
+    if text:
+        p["asking"] = _asking(p["slug"], [b["id"] for b in p["blocks"]])
+        p["asking_page"] = p["kind"] == questions.KIND and _asking_page(p["slug"])
     return p
+
+
+@router.post("/page/{slug}/move")
+def move_page(slug: str, req: MoveReq, request: Request) -> dict[str, Any]:
+    """Another project or place in the tree for a page, its text untouched
+    (``store.move_page``): 404 for a page, project or parent that is not
+    there, 409 for a cycle or a parent outside the project."""
+    try:
+        return store.move_page(
+            _con(request),
+            slug,
+            part_of=req.part_of,
+            parent=req.parent,
+            author=req.author,
+            note=req.note,
+            dry_run=req.dry_run,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/page/{slug}/rename")
+def rename_page(slug: str, req: RenameReq, request: Request) -> dict[str, Any]:
+    """A new slug for a page, the old one its name still
+    (``store.rename_page``): 409 for a slug that is taken."""
+    try:
+        return store.rename_page(
+            _con(request), slug, req.slug, author=req.author, note=req.note
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.put("/doc/{doc_id}/page-parent")
@@ -124,6 +186,7 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             # marked before its text is indexed, and nothing written when
             # the write is refused (the review of 2026-10-18)
             sensitivity=req.sensitivity,
+            expected_text_hash=req.expected_text_hash,
         )
         job = _answer_new_blocks(con, written["slug"], req.text)
         written = {**written, "url": ui_url(request, int(written["doc_id"]))}

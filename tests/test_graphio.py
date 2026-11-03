@@ -166,6 +166,26 @@ def test_what_does_not_fit_is_queued_and_a_changed_page_gets_a_revision(
     assert "See [WDF paper]." in page["text"]
 
 
+def test_a_page_s_moves_travel_and_only_its_text_is_replayed(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _library(con)
+    store.write_page(con, "home", "# Home\n\nThe top.", kind="topic")
+    store.move_page(con, "project-synth", parent="home", note="under home")
+    lines = _export(con)
+    page = next(json.loads(x) for x in lines if '"kind": "page"' in x)
+    assert [r["change"] for r in page["revisions"]] == ["text", "text", "move"]
+    other = _other(monkeypatch, tmp_path)
+    graphio.import_lines(other, lines, source="laptop")
+    here = store.get_page(other, "project-synth")
+    # the other library's tree is its own: its move is not replayed here
+    assert here is not None and [r["change"] for r in here["revisions"]] == [
+        "text",
+        "text",
+    ]
+    assert here["ancestors"] == []
+
+
 def test_a_file_that_is_not_an_export_is_refused(con: sqlite3.Connection) -> None:
     with pytest.raises(ValueError, match="no header"):
         graphio.import_lines(con, ['{"kind": "edge"}'], source="x")

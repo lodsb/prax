@@ -99,7 +99,8 @@ front of any MCP client as tools. Reading: `search`, `get`,
 `get_chunk`, `context`, `documents`, `references`, `cited_but_missing`,
 `status` and `health`. The graph: `traverse`, `connect`, `changes`,
 `why` and `link`. Asking: `ask` and `maths`. Pages: `get_page`,
-`write_page`, `append_page` and `update_section`. Bringing documents
+`write_page`, `append_page`, `update_section`, `move_page` and
+`rename_page`. Bringing documents
 in: `ingest`, `ingest_file`, `capture_url`, `capture_urls` and
 `sync_project`. Asking for work: `promote`, `set_domains`, `set_title`
 and `request_reading`. Two answer with a picture: `figure` (a figure

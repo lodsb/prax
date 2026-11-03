@@ -9385,3 +9385,72 @@ One full run of the suite that day failed
 once; it passed alone, beside the new tests, five times on its own and
 in the next full run. It reads folder times on the disk, which is where
 such a test goes wrong; not chased further.
+
+## 2026-11-02: the card back, the backlog extracted
+
+The bigger power supply is in, so the card's three roles are back in
+`prax.yaml` (`llama-server`, `marker`, `ocr-server`; off since
+2026-10-17) and `ask` answers with the local model again. `prax up`
+reads its roles at start, so it was stopped and started from its
+Task Scheduler entry. The planner gave the card to marker first (8
+re-reads waiting since 2026-10-17), then back to llama-server at 14:12.
+
+271 indexed documents were never extracted (213 wiki pages, 31 uploads,
+22 captures, 5 from Zotero). The watching worker cleared what waited for
+the model in two weeks (vocabulary, sections, communities, figures,
+formulas) and extracted every capture, the other agent's 113 new ones
+among them, but nothing else: by day its scope is `captures`, and the
+rest waits for the nightly pass, 100 documents a step. A one-off `prax
+work --scope all --steps extract -n 300` (with `PRAX_DATA_DIR` set:
+without it the worker read the built-in defaults, where extraction is a
+paid model, and refused it unasked) extracted 241 documents in 1 h 15
+min beside the watching worker: 4,057 facts linked, 691 queued for
+review, 164 rejected. The watching worker had managed some 30 an hour
+while it shared the model with everything else.
+
+## 2026-11-03: a page moved, renamed and read in windows
+
+The nlbank agent's request (written 2026-11-03 from a real case): three
+pages that grew in one project's tree belong to another, the largest a
+research log of 407,101 characters in 183 revisions. Its tools could not
+move a page without sending its whole text through `write_page`, which
+is refused over a person's revision anyway, nor rename a slug, nor read
+a long page without taking all of it. What the door had: the tree of
+pages as metadata (`set_page_parent`, the web page's), membership as
+`part_of` edges with a way in (`add_to_project`) and none out.
+
+- **A revision that writes no text** (migration 67,
+  `page_revisions.change`: `text`, `move`, `rename`). A move or a rename
+  is in the page's history with its note and author and the text hash
+  before it. The rule that an agent never writes over a person's words
+  read the latest revision's author, so a move by an agent would have
+  lifted it from a person's page; it reads the last `text` revision now,
+  and so do `get_page`'s `author`, the page list and `update_section`'s
+  check of a person's section.
+- **`store.move_page`**: the project a page is part of (exactly the one
+  named, its other live `part_of` edges to a project ended, a hand-made
+  one included) and the page it sits under, which follows the project
+  when it sat under the old one's page. Refused before anything is
+  written: a missing page, project or parent, a cycle, a parent outside
+  the project. A move to where the page is changes nothing; a dry run
+  says what would.
+- **`store.rename_page`**: the old slug in `page_aliases` for ever. Every
+  read and write by slug resolves it, so a write under an old slug
+  reaches the renamed page and never makes a new one; two triggers keep
+  a page from taking another's old slug. A project's page keeps its
+  slug, the name its sync finds it by.
+- **A long page in windows**: `get_page` without the text (where the
+  page sits, its children, a project's members, its aliases, its size)
+  or a window of it, with `text_len` and `text_hash` to check the windows
+  add up; `write_page(expected_text_hash=)` refuses a write over a
+  revision the writer did not read, and every write answers the stored
+  hash. An append past `PAGE_LARGE` (200,000 characters) says so.
+- **Graph files** carry each revision's `change`; an import replays
+  only the revisions that wrote text.
+
+Routes `POST /page/{slug}/move` and `/rename` are a contributor's, as a
+page write is; the wall test walks them, and a named token moving or
+renaming a page it may not see gets a 404. MCP tools `move_page`,
+`rename_page`, and `get_page(text=, offset=, limit=)`. A split done by
+the door (an index page and its children cut at headings, old citations
+still landing) is left in `docs/PLAN.md`.

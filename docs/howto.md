@@ -1340,6 +1340,50 @@ questions --ask SLUG#q1 --release`, replaces it. A `<!-- prax:keep
 `prax questions` lists blocks as `slug#id`. A page's `[title](#doc/N)`
 links are its `annotates` edges.
 
+### Moving and renaming a page
+
+A page belongs to at most one project and sits under at most one page.
+Both can change without its text changing (migration 67):
+
+    POST /page/{slug}/move   {part_of?, parent?, note?, author?, dry_run?}
+    POST /page/{slug}/rename {slug, note?, author?}
+
+In `move`, `part_of` names the project page by slug, and `""` takes the
+page out of every project. `parent` names the page it sits under, and
+`""` puts it at the top. A field left out stays as it is. The page's
+other live `part_of` edges to a project are ended (`valid_to`), so a walk
+`as_of` an earlier moment still finds the old membership. This includes
+an edge someone made by hand with `link`. A page that sat under its old
+project's page, or at the top, moves under the new project's page unless
+`parent` says otherwise. The parent must be the project's page or a page
+in the project; a cycle or a missing page is refused before anything is
+written (409 or 404). A move to where the page already is answers
+`changed: false`. `dry_run` answers the plan and writes nothing.
+
+`rename` gives the page a new slug. The old slug stays the page's name
+for ever (`page_aliases`): `get_page`, `append_page`, `update_section` and
+`write_page` under it reach the same page, `get_page` says `asked_as`,
+and no other page may take it, which the database also refuses. A
+project's page keeps its slug, because the slug is its project's name.
+
+Each is a revision with `change` `move` or `rename`, the note, the author
+and the text hash of the revision before. It writes no one's words, so
+an agent may move a person's page. Whose a page's text is stays the last
+`text` revision's author, and an agent's write over it is still refused.
+
+A long page is read in windows. `GET /page/{slug}?text=false` answers
+where the page sits (`projects`, `ancestors`, `children`, a project's
+`members`), its `aliases`, its revisions, `text_len` and `text_hash` (the
+sha256 of the whole stored text's UTF-8 bytes), without the text.
+`?offset=&limit=` reads characters `offset` to `offset+limit`, with
+`next_offset` until the end. `write_page` with `expected_text_hash` is
+refused with 409 when the page changed since that hash was read, and
+every write answers the stored text's hash and length. An append or a
+section write that leaves a page past `PAGE_LARGE` (200,000 characters)
+answers `large`: split it into an index page and child pages, and put
+each child under the index with `move`. The MCP tools are `move_page`,
+`rename_page` and `get_page(text=, offset=, limit=)`.
+
 ## 3h. Local models (optional)
 
 A local model runs in **llama-server**, llama.cpp's HTTP server, on the
@@ -2976,7 +3020,7 @@ Claude Code. A tool called while the door is down answers `{"error":
 `cited_but_missing`, `traverse`, `connect`, `changes`, `why`, `link`,
 `ask`, `maths`, `set_domains`, `set_title`, `promote`,
 `request_reading`, `get_page`, `write_page`, `append_page`,
-`update_section`, `ingest`, `capture_url`, `capture_urls`,
+`update_section`, `move_page`, `rename_page`, `ingest`, `capture_url`, `capture_urls`,
 `sync_project` (a working copy's tracked notes), `where` (where a
 file lies on the shares a crawl recorded, and its other copies; for the
 administrator's token), `ingest_file` (a file on
