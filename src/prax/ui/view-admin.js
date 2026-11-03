@@ -47,7 +47,7 @@ async function viewMedia(p) {
   const c = res.counts;
   document.getElementById("media-count").textContent = ` — ${(c.suspected + c.open + c.personal).toLocaleString()} in all: ${c.suspected.toLocaleString()} set aside, ${c.open.toLocaleString()} released, ${c.personal.toLocaleString()} personal`;
   document.getElementById("media-crumbs").innerHTML = mediaCrumbs(by, res.under, (u) => href(u));
-  const leaf = (g) => by === "event" || (by === "month" && res.under) || g.key === res.under;
+  const leaf = (g) => g.leaf;
   box.innerHTML = res.groups.length
     ? res.groups.map((g) => mediaGroupRow(g, by, leaf(g) ? null : href(g.key))).join("")
     : `<p class="muted">Nothing here: no photo or recording is referenced yet (prax crawl --reference, docs/media-by-reference.md).</p>`;

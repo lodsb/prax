@@ -101,7 +101,7 @@ def test_a_share_opens_where_its_folders_part(
     # a folder's own files are a group of their own, "(here)"
     here = _groups(client, under="nas:Photos/Trips/2020")
     assert [(g["key"], g["label"]) for g in here.values()] == [
-        ("nas:Photos/Trips/2020", "(here)")
+        ("=nas:Photos/Trips/2020", "(here)")
     ]
 
 
@@ -188,3 +188,48 @@ def test_the_media_routes_are_the_administrators(
 
     allowed = [p for _, p in auth.READER_ROUTES + auth.CONTRIBUTOR_ROUTES]
     assert not any("media" in getattr(p, "pattern", p) for p in allowed)
+
+
+def test_a_folders_own_files_decided_without_its_folders(
+    client: TestClient, data_dir: Path, tmp_path: Path
+) -> None:
+    ids = _library(client, data_dir, tmp_path)
+    share = tmp_path / "share"
+    top = _entry(share, "Photos/Trips/2019/top.jpg", 9)
+    got = client.post("/ingest/reference", json={"root": "nas", "entries": [top]})
+    assert got.status_code == 200, got.text
+    groups = client.get("/media", params={"under": "nas:Photos/Trips/2019"}).json()
+    here = [g for g in groups["groups"] if g["label"] == "(here)"]
+    assert [(g["count"], g["leaf"]) for g in here] == [(1, True)]
+    # the "(here)" row's answer is for the one file it counts, not for Lake
+    decided = client.post(
+        "/media/decide", json={"by": "folder", "key": here[0]["key"], "state": "open"}
+    ).json()
+    assert decided["changed"] == 1
+    con = client.app.state.con
+    lake = con.execute(
+        "SELECT sensitivity FROM documents WHERE id = ?", (ids["a"],)
+    ).fetchone()[0]
+    assert lake == "suspected"
+
+
+def test_a_member_with_no_place_left_is_a_group_of_its_own(
+    client: TestClient, data_dir: Path, tmp_path: Path
+) -> None:
+    ids = _library(client, data_dir, tmp_path)
+    con = client.app.state.con
+    gone = con.execute(
+        "SELECT hash FROM documents WHERE id = ?", (ids["e"],)
+    ).fetchone()
+    con.execute(
+        "UPDATE places SET gone = '2026-11-03T00:00:00Z' WHERE sha256 = ?", gone
+    )
+    con.commit()
+    top = client.get("/media").json()
+    assert sum(g["count"] for g in top["groups"]) == 5
+    (nowhere,) = [g for g in top["groups"] if g["label"] == "(no place)"]
+    assert (nowhere["count"], nowhere["leaf"]) == (1, True)
+    decided = client.post(
+        "/media/decide", json={"by": "folder", "key": nowhere["key"], "state": "open"}
+    ).json()
+    assert decided["changed"] == 1

@@ -9552,3 +9552,21 @@ project named. Two nodes for one project page remain; `document_node`
 giving a project page its `project` type would end that, but a page's
 `[title](#doc/N)` link to a project page would then be an `annotates`
 the ontology refuses, so it waits for its own look.
+
+## 2026-11-03: the review of the media view, the splits and the moves
+
+Both reviews of e5e183f..4579be8: `docs/eval/review-2026-11-03.md`.
+Seven safety defects, each fixed with a test that fails before. Five
+were the wall in the page moves: a move named a hidden parent page in
+its plan and in the note every reader of the page sees, and showed and
+ended a membership in a hidden project; a project's members listed what
+a hidden document said; a write under an old slug named a hidden page's
+new one; a rename said which hidden slug exists. Two were the media
+view: a folder's "(here)" row decided its folders too (it counted one
+file and changed three), and a member whose file left every place was
+in no group. The quality review's five findings wait for the user (the
+plan, "The review of 2026-11-03"); the costliest is a page title looked
+up by a scan of every document, 50 ms a lookup on the live store.
+
+The first 50 of AO's 528 maths-as-text documents were asked of marker
+at 13:31 UTC, to time a batch before the rest is asked for.

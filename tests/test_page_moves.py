@@ -314,3 +314,95 @@ def test_the_door_and_the_tool_shapes(client: TestClient) -> None:
         json={"text": "new", "author": "agent", "expected_text_hash": "0" * 64},
     )
     assert stale.status_code == 409
+
+
+def _as_guest() -> object:
+    return store.VIEWER.set(store.Viewer("guest", role="contributor"))
+
+
+def test_a_move_names_no_page_its_mover_may_not_see(con: sqlite3.Connection) -> None:
+    diary = store.write_page(con, "secret-diary", "# Diary\n\nMine.")
+    store.write_page(con, "open-note", "# Note\n\nOpen.", parent="secret-diary")
+    store.set_sensitivity(con, int(diary["doc_id"]), "personal")
+    token = _as_guest()
+    try:
+        plan = store.move_page(con, "open-note", parent="", dry_run=True)
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert plan["parent"]["from"] != "secret-diary" and plan["changed"]
+    # the note is read by everyone who sees the page: a personal page is not
+    # named in it, whoever moved it
+    store.move_page(con, "open-note", parent="")
+    note = store.get_page(con, "open-note", text=False)["revisions"][-1]["note"]
+    assert "secret-diary" not in note
+
+
+def test_a_move_leaves_a_membership_its_mover_may_not_see(
+    con: sqlite3.Connection,
+) -> None:
+    old, _ = _projects(con)
+    note = store.write_page(con, "note", "# Note\n\nText.", part_of="project-old")
+    store.set_sensitivity(con, old, "personal")
+    token = _as_guest()
+    try:
+        moved = store.move_page(con, "note", part_of="project-new")
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert moved["part_of"]["from"] == [] and moved["ended_edges"] == []
+    assert (
+        "project-old"
+        not in store.get_page(con, "note", text=False)["revisions"][-1]["note"]
+    )
+    assert _part_of(con, int(note["doc_id"])) == [
+        ("Project old", True),
+        ("Project new", True),
+    ]
+
+
+def test_a_projects_members_from_a_hidden_document_are_not_listed(
+    con: sqlite3.Connection,
+) -> None:
+    _projects(con)
+    diary = store.write_page(con, "secret-diary", "# Diary\n\nMine.")
+    store.link(
+        con,
+        store.Edge("Aunt plan", "page", "part_of", "Project new", "project"),
+        confidence="EXTRACTED",
+        source_doc=int(diary["doc_id"]),
+        evidence="the diary says so",
+        producer="agent",
+        run="by-hand",
+    )
+    store.set_sensitivity(con, int(diary["doc_id"]), "personal")
+    seen = store.get_page(con, "project-new", text=False)["members"]["items"]
+    assert "Aunt plan" in [m["title"] for m in seen]
+    token = _as_guest()
+    try:
+        seen = store.get_page(con, "project-new", text=False)["members"]["items"]
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert "Aunt plan" not in [m["title"] for m in seen]
+
+
+def test_an_old_slug_of_a_hidden_page_gives_away_nothing(
+    con: sqlite3.Connection,
+) -> None:
+    page = store.write_page(con, "plain-name", "# Plain\n\nText.")
+    store.rename_page(con, "plain-name", "aunt-diagnosis")
+    store.set_sensitivity(con, int(page["doc_id"]), "personal")
+    mine = store.write_page(con, "mine", "# Mine\n\nText.")
+    token = _as_guest()
+    try:
+        with pytest.raises(KeyError) as absent:
+            store.write_page(con, "plain-name", "# Over\n\nIt.")
+        assert "aunt-diagnosis" not in str(absent.value)
+        refusals = []
+        for taken in ("aunt-diagnosis", "plain-name"):
+            with pytest.raises(ValueError) as refused:
+                store.rename_page(con, "mine", taken)
+            refusals.append(str(refused.value).replace(taken, "…"))
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    # a hidden page's slug and its old one are refused alike, saying no more
+    assert refusals[0] == refusals[1] and "exists" not in refusals[0]
+    assert int(mine["doc_id"]) != int(page["doc_id"])

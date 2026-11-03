@@ -26,9 +26,9 @@ and its item 5 is items 1 and 2 below.
   up`. The card is back since 2026-11-02 (the bigger power supply):
   `llama-server`, `marker` and `ocr-server` are in `run:` again, and the
   backlog of unextracted documents was cleared that day.
-- **Reviews.** The quality review of 2026-10-28 and the safety review
-  of 2026-10-29 are closed. The next one covers e5e183f..4579be8 (the
-  media view, the five splits, the page moves), safety first.
+- **Reviews.** The review of 2026-11-03 over e5e183f..4579be8
+  (`docs/eval/review-2026-11-03.md`): its seven safety defects are
+  fixed; its five quality findings wait for the user's word, below.
 
 ### Next, in order
 
@@ -42,7 +42,8 @@ and its item 5 is items 1 and 2 below.
    and its formulas. AJ's trial on marker and its routing rules. AI's
    measurement from `run/swaps.jsonl`, once the card has been busy for
    some days. AK, the dense 27B. AQ stage 4, a transcription step.
-3. **The review** of e5e183f..4579be8, safety then quality.
+3. (safety done 2026-11-03) **The review** of e5e183f..4579be8: the
+   quality findings below, on the user's word; 3 and 4 before the split.
 4. **Without the card, in any order.** CI's runner: `ubuntu-latest`
    moves to Ubuntu 26, so pin `ubuntu-24.04` or test on 26 first. A page
    split by the door (R3a, "The UI and the agent"). The engineering
@@ -187,6 +188,22 @@ ones at once, and to plan the rest here.
       (`scripts/eval_quality.py`; `SAME_PAPER` left a constant, in its
       measured gap), 19 (`host.commit_reserve_mb`), 22 (heal's thin-texts
       leaves the checks' scans to them), 23 (`changes` counts a side once).
+
+### The review of 2026-11-03
+
+`docs/eval/review-2026-11-03.md`. The seven safety defects are fixed.
+The quality findings, numbered there, wait for the user's word:
+
+- [ ] 1. An index on `documents(title)` (a migration) and one title
+      lookup in `pages.py`: `get_page` of a project page 105 ms to some
+      5.
+- [ ] 2. The media view reads its members once a request, memoized by
+      the store's state.
+- [ ] 3. `write_page` and `move_page` as cores that do not commit,
+      before the page split by the door.
+- [ ] 4. `pages` a package of parts, with 3.
+- [ ] 5. One writer of `meta.sensitivity`, a group's decision through
+      `set_sensitivity`; `docs/meta.md` updated.
 
 ### The quality review of 2026-10-28
 

@@ -218,7 +218,7 @@ def _project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Row]:
     edges of 2026-11-03 were the first."""
     name, node_type = _page_node(con, doc_id)
     return con.execute(
-        "SELECT x.id, p.doc_id, p.slug, d.title FROM edges x"
+        "SELECT x.id, x.source_doc, p.doc_id, p.slug, d.title FROM edges x"
         " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
         " JOIN documents d ON d.title = t.name"
         " JOIN pages p ON p.doc_id = d.id AND p.kind = 'project'"
@@ -228,11 +228,24 @@ def _project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def _seen_project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Row]:
+    """``_project_edges`` the viewer may see: to a project page it sees, from
+    a document it sees. A move by a restricted viewer leaves the others as
+    they are (the review of 2026-11-03)."""
+    hidden = hidden_documents(con)
+    return [
+        r
+        for r in _project_edges(con, doc_id)
+        if int(r["doc_id"]) not in hidden
+        and (r["source_doc"] is None or int(r["source_doc"]) not in hidden)
+    ]
+
+
 def _projects_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     """The projects a page is part of, the viewer's to see."""
     seen: dict[int, dict[str, Any]] = {}
-    for r in _project_edges(con, doc_id):
-        if int(r["doc_id"]) not in seen and not document_hidden(con, int(r["doc_id"])):
+    for r in _seen_project_edges(con, doc_id):
+        if int(r["doc_id"]) not in seen:
             seen[int(r["doc_id"])] = {
                 "doc_id": int(r["doc_id"]),
                 "slug": r["slug"],
@@ -248,13 +261,21 @@ def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
     """What is part of a project: the documents and pages with a live
     ``part_of`` edge to it, the viewer's to see, ``PROJECT_MEMBERS`` at
     most, ``count`` all of them."""
-    rows = con.execute(
-        "SELECT DISTINCT s.name, s.type FROM edges x"
-        " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
-        " WHERE x.rel = 'part_of' AND x.valid_to IS NULL"
-        " AND t.name = ? AND t.type IN ('project', 'page') ORDER BY s.name",
-        (title,),
-    ).fetchall()
+    hidden = hidden_documents(con)
+    rows = list(
+        {
+            (str(r["name"]), str(r["type"])): r
+            for r in con.execute(
+                "SELECT DISTINCT s.name, s.type, x.source_doc FROM edges x"
+                " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
+                " WHERE x.rel = 'part_of' AND x.valid_to IS NULL"
+                " AND t.name = ? AND t.type IN ('project', 'page') ORDER BY s.name",
+                (title,),
+            )
+            # a fact a hidden document states is hidden with it, as in a walk
+            if r["source_doc"] is None or int(r["source_doc"]) not in hidden
+        }.values()
+    )
     names = [str(r["name"]) for r in rows]
     first: dict[str, int] = {}
     for start in range(0, len(names), 500):
@@ -266,7 +287,6 @@ def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
             part,
         ):
             first[str(got)] = int(doc)
-    hidden = hidden_documents(con)
     items = [
         {"title": str(r["name"]), "type": r["type"], "doc_id": first.get(r["name"])}
         for r in rows
@@ -480,7 +500,8 @@ def write_page(
         raise ValueError(f"kind must be one of {PAGE_KINDS}")
     if author not in PAGE_AUTHORS:
         raise ValueError(f"author must be one of {PAGE_AUTHORS}")
-    slug = _slug_of(con, slugify(slug))
+    asked = slugify(slug)
+    slug = _slug_of(con, asked)
     existing = con.execute(
         "SELECT p.doc_id, p.kind, d.title, d.text_hash FROM pages p"
         " JOIN documents d ON d.id = p.doc_id"
@@ -488,8 +509,9 @@ def write_page(
         (slug,),
     ).fetchone()
     if existing is not None and document_hidden(con, int(existing["doc_id"])):
-        # a restricted viewer writes to nothing it may not see: as if absent
-        raise KeyError(f"no page {slug!r}")
+        # a restricted viewer writes to nothing it may not see: as if absent,
+        # under the name it was asked by (not the one an old slug leads to)
+        raise KeyError(f"no page {asked!r}")
     if expected_text_hash is not None and expected_text_hash != (
         existing["text_hash"] if existing is not None else ""
     ):
@@ -1130,8 +1152,9 @@ def move_page(
     current_slug = str(
         con.execute("SELECT slug FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()[0]
     )
-    edges = _project_edges(con, doc_id)
-    before = list(dict.fromkeys(str(r["slug"]) for r in edges))
+    edges = _seen_project_edges(con, doc_id)
+    before_ids = list(dict.fromkeys(int(r["doc_id"]) for r in edges))
+    before = [str(_slug_at(con, i)) for i in before_ids]
     above = _parent_of(con, doc_id)
     project: sqlite3.Row | None = None
     if part_of:
@@ -1173,7 +1196,7 @@ def move_page(
         "doc_id": doc_id,
         "slug": current_slug,
         "part_of": {"from": before, "to": after},
-        "parent": {"from": _slug_at(con, above), "to": _slug_at(con, under)},
+        "parent": {"from": _slug_shown(con, above), "to": _slug_shown(con, under)},
     }
     if after == before and under == above:
         return {**plan, "changed": False, "why": "the page is there already"}
@@ -1202,7 +1225,20 @@ def move_page(
         )
     if under != above:
         set_page_parent(con, doc_id, under, by=author)
-    said = note or _move_note(plan)
+    # the note is read by everyone who sees the page, whoever moved it
+    after_ids = before_ids if part_of is None else ([target] if target else [])
+    said = note or _move_note(
+        {
+            "part_of": {
+                "from": [_slug_for_all(con, i) for i in before_ids],
+                "to": [_slug_for_all(con, i) for i in after_ids],
+            },
+            "parent": {
+                "from": _slug_for_all(con, above),
+                "to": _slug_for_all(con, under),
+            },
+        }
+    )
     _bookkeeping_revision(con, doc_id, revision, author, said, "move")
     con.commit()
     return {**plan, "changed": True, "revision": revision, "ended_edges": ended}
@@ -1218,6 +1254,27 @@ def _slug_at(con: sqlite3.Connection, doc_id: int | None) -> str | None:
         return None
     row = con.execute("SELECT slug FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()
     return str(row[0]) if row else None
+
+
+NOT_SHOWN: Final = "(a page not shown)"
+
+
+def _slug_shown(con: sqlite3.Connection, doc_id: int | None) -> str | None:
+    """A page's slug for the viewer: a page it may not see is not named."""
+    if doc_id is not None and document_hidden(con, doc_id):
+        return NOT_SHOWN
+    return _slug_at(con, doc_id)
+
+
+def _slug_for_all(con: sqlite3.Connection, doc_id: int | None) -> str | None:
+    """A page's slug for what every reader of another page is shown (a
+    move's note): a personal page is not named, whoever writes it."""
+    if doc_id is None:
+        return None
+    row = con.execute(
+        f"SELECT {personal_sql('d')} FROM documents d WHERE d.id = ?", (doc_id,)
+    ).fetchone()
+    return NOT_SHOWN if row is not None and row[0] else _slug_at(con, doc_id)
 
 
 def _refuse_elsewhere(
@@ -1312,11 +1369,20 @@ def rename_page(
         return {"doc_id": doc_id, "slug": old, "changed": False}
     if row["kind"] == "project":
         raise ValueError(f"{old!r} is a project's page: its slug is the project's name")
-    if con.execute("SELECT 1 FROM pages WHERE slug = ?", (new,)).fetchone():
-        raise ValueError(f"page {new!r} exists")
+    holder = con.execute("SELECT doc_id FROM pages WHERE slug = ?", (new,)).fetchone()
     other = con.execute(
         "SELECT doc_id FROM page_aliases WHERE slug = ?", (new,)
     ).fetchone()
+    for taken in (holder, other):
+        # a page the viewer may not see: which of the two, it is not told
+        if (
+            taken is not None
+            and int(taken[0]) != doc_id
+            and document_hidden(con, int(taken[0]))
+        ):
+            raise ValueError(f"{new!r} cannot be used: choose another slug")
+    if holder is not None:
+        raise ValueError(f"page {new!r} exists")
     if other is not None and int(other[0]) != doc_id:
         raise ValueError(f"{new!r} is an old name of another page")
     con.execute("DELETE FROM page_aliases WHERE slug = ?", (new,))

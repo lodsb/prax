@@ -32,6 +32,8 @@ MEDIA_STATES = ("suspected", "open", "personal")
 MEDIA_PAGE = 40  # pictures of a group a page
 MEDIA_PAGE_MAX = 100
 UNDATED = "undated"  # the month key of a member without a taken date
+HERE = "="  # before a folder: its own files, not its folders' ("(here)")
+NOWHERE = "-"  # the key of the members no live place holds any more
 
 _MEMBERS = """
     SELECT d.id, d.mime, d.sensitivity, json_extract(d.meta, '$.taken.date') AS taken,
@@ -106,10 +108,12 @@ def _key(
         return None
     folder = _folder(row["place"])
     if not under:
+        if not folder:  # its file gone from every place the crawl saw
+            return NOWHERE, "(no place)"
         root = folder.partition(":")[0]
         return f"{root}:", root
     if folder == under:
-        return under, "(here)"
+        return HERE + under, "(here)"
     prefix = under if under.endswith(":") else under + "/"
     if not folder.startswith(prefix):
         return None
@@ -124,7 +128,7 @@ def _descend(folders: list[str], under: str) -> str:
     while True:
         if not under:
             roots = {f.partition(":")[0] + ":" for f in folders if f}
-            if len(roots) != 1:
+            if len(roots) != 1 or "" in folders:
                 return under
             under = roots.pop()
             continue
@@ -143,8 +147,10 @@ def media_groups(
     """The groups one level below ``under``: a folder's folders (``root:``
     and a path; ``""`` for the roots), a year's months (``""`` for the
     years), or every event. Each with how many members it holds by state
-    and by kind; a folder's own files are the group ``(here)``. In key
-    order, an event's by name."""
+    and by kind; a folder's own files are the group ``(here)``, keyed
+    ``HERE`` and the folder, and at the top the members whose file no live
+    place holds any more are ``(no place)``, keyed ``NOWHERE``. ``leaf``
+    says a group has no groups under it. In key order, an event's by name."""
     if by not in MEDIA_BY:
         raise ValueError(f"by is one of {MEDIA_BY}")
     rows = _members(con)
@@ -159,7 +165,17 @@ def media_groups(
         key, label = got
         g = groups.setdefault(
             key,
-            {"key": key, "label": label, "count": 0, **dict.fromkeys(MEDIA_STATES, 0)},
+            {
+                "key": key,
+                "label": label,
+                # a group with no groups under it: its own files, no place
+                "leaf": by == "event"
+                or (by == "month" and bool(under))
+                or key == NOWHERE
+                or key.startswith(HERE),
+                "count": 0,
+                **dict.fromkeys(MEDIA_STATES, 0),
+            },
         )
         g["count"] += 1
         g[_state(row["sensitivity"])] += 1
@@ -182,6 +198,10 @@ def _in_group(
         month = _month(row["taken"])
         return month == key or (key != UNDATED and month.startswith(key + "-"))
     folder = _folder(row["place"])
+    if key == NOWHERE:
+        return not folder
+    if key.startswith(HERE):
+        return folder == key[len(HERE) :]
     if key.endswith(":"):
         return folder.startswith(key)
     return folder == key or folder.startswith(key + "/")
