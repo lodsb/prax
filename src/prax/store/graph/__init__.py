@@ -94,6 +94,8 @@ from .edges import (  # noqa: F401
     CONFIDENCE_LEVELS,
     Edge,
     _entity_id,
+    _invalidate_edge,
+    _link,
     _said_openly,
     _subset_version_case,
     backfill_provenance,

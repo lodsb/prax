@@ -22,10 +22,12 @@ from __future__ import annotations
 import json
 import posixpath
 import sqlite3
+import threading
 from collections import defaultdict
 from typing import Any
 
-from ..base import _reading, _serialized, now, run_name
+from ..base import _reading, _serialized, run_name, store_state
+from .domains import SENSITIVITY, _set_sensitivity
 
 MEDIA_BY = ("folder", "month", "event")
 MEDIA_STATES = ("suspected", "open", "personal")
@@ -45,8 +47,27 @@ _MEMBERS = """
 """
 
 
+_MEMBERS_KEPT = 4  # (connection, state) -> members, the newest kept
+_members_memo: dict[tuple[Any, ...], list[sqlite3.Row]] = {}
+_members_lock = threading.Lock()
+
+
 def _members(con: sqlite3.Connection) -> list[sqlite3.Row]:
-    return con.execute(_MEMBERS).fetchall()
+    """Every member, read once for a state of the store: a request read all
+    14,334 of the live share's (0.1 s), and ``/media`` read them twice (the
+    review of 2026-11-03). A write or another connection's commit changes
+    the state (``store_state``), so a memo never outlives one."""
+    key = store_state(con)
+    with _members_lock:
+        held = _members_memo.get(key)
+    if held is not None:
+        return held
+    got = con.execute(_MEMBERS).fetchall()
+    with _members_lock:
+        if len(_members_memo) >= _MEMBERS_KEPT:
+            _members_memo.pop(next(iter(_members_memo)))
+        _members_memo[key] = got
+    return got
 
 
 def _folder(place: str | None) -> str:
@@ -63,7 +84,7 @@ def _month(taken: str | None) -> str:
 
 
 def _state(sensitivity: str | None) -> str:
-    return sensitivity if sensitivity in ("suspected", "personal") else "open"
+    return sensitivity if sensitivity in SENSITIVITY else "open"
 
 
 def _kind(mime: str | None) -> str:
@@ -279,29 +300,16 @@ def decide_media(
         raise ValueError("state is open or personal")
     rows = media_members(con, by, key)
     run = run_name(f"media-{state}", unique=True)
-    at = now()
     changed = 0
     for r in rows:
-        meta_row = con.execute(
-            "SELECT sensitivity, meta FROM documents WHERE id = ?", (r["id"],)
-        ).fetchone()
-        meta = json.loads(meta_row["meta"] or "{}")
-        before = meta.get("sensitivity")
-        if (
-            meta_row["sensitivity"] != "suspected"
-            or (before or {}).get("by") == "human"
-        ):
+        decided = con.execute(
+            "SELECT json_extract(meta, '$.sensitivity.by') FROM documents WHERE id = ?",
+            (r["id"],),
+        ).fetchone()[0]
+        if r["sensitivity"] != "suspected" or decided == "human":
             continue
-        meta["sensitivity"] = {
-            "state": None if state == "open" else state,
-            "by": who,
-            "at": at,
-            "run": run,
-            "before": {"column": meta_row["sensitivity"], "meta": before},
-        }
-        con.execute(
-            "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
-            (None if state == "open" else state, json.dumps(meta), r["id"]),
+        _set_sensitivity(
+            con, int(r["id"]), None if state == "open" else state, by=who, run=run
         )
         changed += 1
     con.commit()

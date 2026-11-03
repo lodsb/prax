@@ -12,6 +12,7 @@ from prax.graph import ontology
 
 from ..base import (
     MetaLike,
+    _committing,
     _reading,
     _serialized,
     decode_domains,
@@ -713,14 +714,22 @@ def unstamp_extraction(con: sqlite3.Connection, doc_id: int, stamp: str) -> bool
 SENSITIVITY = ("suspected", "personal")
 
 
-@_serialized
-def set_sensitivity(
-    con: sqlite3.Connection, doc_id: int, state: str | None, *, by: str = "human"
+def _set_sensitivity(
+    con: sqlite3.Connection,
+    doc_id: int,
+    state: str | None,
+    *,
+    by: str = "human",
+    run: str | None = None,
 ) -> str | None:
     """Mark a document personal, suspected, or open again (None): the
     ``sensitivity`` column a restricted viewer is kept from (stage U), and
     the decision kept in ``meta.sensitivity`` with who made it and when.
-    Returns the state it had."""
+    The one writer of a person's decision. A decision for many at once
+    (``decide_media``) names its ``run``, and each document keeps what it
+    had (``before``: the column and the meta) for that run's undo; a later
+    decision for the one document replaces both. Returns the state it
+    had."""
     if state is not None and state not in SENSITIVITY:
         raise ValueError(f"sensitivity is one of {SENSITIVITY}, or none")
     row = con.execute(
@@ -729,14 +738,23 @@ def set_sensitivity(
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
-    meta["sensitivity"] = {"state": state, "by": by, "at": now()}
+    decided: dict[str, Any] = {"state": state, "by": by, "at": now()}
+    if run is not None:
+        decided["run"] = run
+        decided["before"] = {
+            "column": row["sensitivity"],
+            "meta": meta.get("sensitivity"),
+        }
+    meta["sensitivity"] = decided
     con.execute(
         "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
         (state, json.dumps(meta), doc_id),
     )
-    con.commit()
     got: str | None = row["sensitivity"]
     return got
+
+
+set_sensitivity = _serialized(_committing(_set_sensitivity))
 
 
 @_reading

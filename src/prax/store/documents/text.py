@@ -17,6 +17,7 @@ from ..base import (
     _TOKEN,
     ASIDE_KINDS,
     _archive_bytes,
+    _committing,
     _guards,
     _read_archive,
     _reading,
@@ -36,8 +37,7 @@ from .places import (
 )
 
 
-@_serialized
-def register(
+def _register(
     con: sqlite3.Connection,
     data: bytes,
     *,
@@ -61,7 +61,6 @@ def register(
     if row:
         if not row["held"]:
             con.execute("UPDATE documents SET held = 1 WHERE id = ?", (row["id"],))
-            con.commit()
         return {"doc_id": row["id"], "hash": digest, "created": False}
     check_meta(meta or {})
     cur = con.execute(
@@ -69,8 +68,10 @@ def register(
         " VALUES (?,?,?,?,?,?)",
         (digest, mime, title, source_url, original_path, json.dumps(meta or {})),
     )
-    con.commit()
     return {"doc_id": cur.lastrowid, "hash": digest, "created": True}
+
+
+register = _serialized(_committing(_register))
 
 
 @_serialized
@@ -150,8 +151,7 @@ def register_references(
     return out
 
 
-@_serialized
-def index_text(
+def _index_text(
     con: sqlite3.Connection,
     doc_id: int,
     text: str,
@@ -192,10 +192,12 @@ def index_text(
             (lang, doc_id),
         )
     _refresh_document_field(con, doc_id)
-    con.commit()
     # a bank statement from the NAS is closed off as it lands (stage V)
-    suspect(con, doc_id, text)
+    _suspect(con, doc_id, text)
     return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": n_chunks}
+
+
+index_text = _serialized(_committing(_index_text))
 
 
 def _cleaned(text: str) -> str:
@@ -604,8 +606,7 @@ def mark_suspected(
     return True
 
 
-@_serialized
-def suspect(
+def _suspect(
     con: sqlite3.Connection,
     doc_id: int,
     text: str | None = None,
@@ -675,5 +676,7 @@ def suspect(
         "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
         (state, json.dumps(meta), doc_id),
     )
-    con.commit()
     return cues
+
+
+suspect = _serialized(_committing(_suspect))

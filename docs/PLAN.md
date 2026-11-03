@@ -19,7 +19,7 @@ and its item 5 is items 1 and 2 below.
 - **The library.** 33,104 documents, 14,498 of them referenced
   (`documents.held` 0: photos and recordings that stay on the NAS,
   16,292 `places` rows). 336,770 live facts over 267,842 entities, and
-  8,919 faces. The database is at migration 67.
+  8,919 faces. The database is at migration 68.
 - **The code.** The full suite of 2026-11-03 passed: 1,723 tests, 4
   skipped, and the 88 UI tests. CI is green on 4579be8.
 - **What runs.** The door and the worker run on the desktop under `prax
@@ -27,8 +27,9 @@ and its item 5 is items 1 and 2 below.
   `llama-server`, `marker` and `ocr-server` are in `run:` again, and the
   backlog of unextracted documents was cleared that day.
 - **Reviews.** The review of 2026-11-03 over e5e183f..4579be8
-  (`docs/eval/review-2026-11-03.md`): its seven safety defects are
-  fixed; its five quality findings wait for the user's word, below.
+  (`docs/eval/review-2026-11-03.md`) is closed: seven safety defects
+  and five quality findings, all fixed. The next covers the range from
+  the commit after it.
 
 ### Next, in order
 
@@ -42,8 +43,7 @@ and its item 5 is items 1 and 2 below.
    and its formulas. AJ's trial on marker and its routing rules. AI's
    measurement from `run/swaps.jsonl`, once the card has been busy for
    some days. AK, the dense 27B. AQ stage 4, a transcription step.
-3. (safety done 2026-11-03) **The review** of e5e183f..4579be8: the
-   quality findings below, on the user's word; 3 and 4 before the split.
+3. (done 2026-11-03) **The review** of e5e183f..4579be8, both halves.
 4. **Without the card, in any order.** CI's runner: `ubuntu-latest`
    moves to Ubuntu 26, so pin `ubuntu-24.04` or test on 26 first. A page
    split by the door (R3a, "The UI and the agent"). The engineering
@@ -57,7 +57,7 @@ and its item 5 is items 1 and 2 below.
   2026-11-02 added 691 triples to the review queue;
 - AE, the distilled surfer;
 - AH, the Rust spike, which waits until the schema stops moving
-  (migration 67 landed on 2026-11-03);
+  (migration 68 landed on 2026-11-03);
 - the move to the board (not now, 2026-10-12);
 - AA's labeller, retrained as genres are labelled.
 
@@ -191,18 +191,19 @@ ones at once, and to plan the rest here.
 
 ### The review of 2026-11-03
 
-`docs/eval/review-2026-11-03.md`. The seven safety defects are fixed.
-The quality findings, numbered there, wait for the user's word:
+`docs/eval/review-2026-11-03.md`. The seven safety defects are fixed,
+and the five quality findings, numbered there, on the user's word of the
+same day (`docs/log.md`):
 
-- [ ] 1. An index on `documents(title)` (a migration) and one title
+- [x] 1. An index on `documents(title)` (a migration) and one title
       lookup in `pages.py`: `get_page` of a project page 105 ms to some
       5.
-- [ ] 2. The media view reads its members once a request, memoized by
+- [x] 2. The media view reads its members once a request, memoized by
       the store's state.
-- [ ] 3. `write_page` and `move_page` as cores that do not commit,
+- [x] 3. `write_page` and `move_page` as cores that do not commit,
       before the page split by the door.
-- [ ] 4. `pages` a package of parts, with 3.
-- [ ] 5. One writer of `meta.sensitivity`, a group's decision through
+- [x] 4. `pages` a package of parts, with 3.
+- [x] 5. One writer of `meta.sensitivity`, a group's decision through
       `set_sensitivity`; `docs/meta.md` updated.
 
 ### The quality review of 2026-10-28

@@ -73,7 +73,7 @@ writer, and add its row here.
 | `markup` | `dict[str, Any]` | the schema.org pass: hash, facts, type, genre |
 | `references` | `dict[str, Any]` | the references pass: entries, links |
 | `private` | `dict[str, Any]` | the rules' cues for "personal?" (stage V) |
-| `sensitivity` | `dict[str, Any]` | a person's or a rule's decision: state, by |
+| `sensitivity` | `dict[str, Any]` | a person's or a rule's decision: state, by, at; a group's decision adds run and before, the column and meta its undo puts back (`store.set_sensitivity`) |
 | `photo` | `dict[str, Any]` | v, by, at, camera, lens, gps, size, thumb, preview |
 | `taken` | `dict[str, Any]` | when it was taken: date, precision, by |
 | `place` | `dict[str, Any]` | v, by, at, name, region, country, cc, km, id; or none |

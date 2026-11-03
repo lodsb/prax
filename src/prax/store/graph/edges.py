@@ -15,6 +15,7 @@ from prax.text import dates, mimes, quotes
 
 from ..base import (
     _NOW,
+    _committing,
     _like_prefix,
     _read_archive,
     _reading,
@@ -203,8 +204,7 @@ def _entity_id(con: sqlite3.Connection, name: str, etype: str) -> int:
     return int(made)
 
 
-@_serialized
-def link(
+def _link(
     con: sqlite3.Connection,
     edge: Edge,
     *,
@@ -273,8 +273,10 @@ def link(
             *(place if place is not None else (None, None, None)),
         ),
     )
-    con.commit()
     return int(cur.lastrowid or 0)
+
+
+link = _serialized(_committing(_link))
 
 
 @_reading
@@ -593,8 +595,7 @@ def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
     return row["canonical_id"] or entity_id
 
 
-@_serialized
-def invalidate_edge(
+def _invalidate_edge(
     con: sqlite3.Connection,
     edge_id: int,
     *,
@@ -614,7 +615,6 @@ def invalidate_edge(
     )
     if cur.rowcount == 0:
         raise KeyError(f"no such currently valid edge: {edge_id}")
-    con.commit()
     if successor is None:
         return None
     return link(
@@ -626,6 +626,9 @@ def invalidate_edge(
         producer=producer,
         run=run,
     )
+
+
+invalidate_edge = _serialized(_committing(_invalidate_edge))
 
 
 @_serialized

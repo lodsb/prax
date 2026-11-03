@@ -170,7 +170,7 @@ class DocumentMeta(TypedDict, total=False):
     markup: dict[str, Any]  # the schema.org pass: hash, facts, type, genre
     references: dict[str, Any]  # the references pass: entries, links
     private: dict[str, Any]  # the rules' cues for "personal?" (stage V)
-    sensitivity: dict[str, Any]  # a person's or a rule's decision: state, by
+    sensitivity: dict[str, Any]  # a decision: state, by, at; a group's adds run, before
     # a picture's own facts: the photos step (store.apply_photo)
     photo: dict[str, Any]  # v, by, at, camera, lens, gps, size, thumb, preview
     taken: dict[str, Any]  # when it was taken: date, precision, by
@@ -476,6 +476,24 @@ def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
     """One writer at a time in this process: every store function that
     writes takes ``_LOCK`` for its duration."""
     return _guarded(fn, lock=True)
+
+
+def _committing(fn: Callable[P, R]) -> Callable[P, R]:
+    """A core that does not commit, with the commit after it: the public
+    face of a write that a larger write also composes, so the larger one
+    commits once and a failure halfway takes all of it back (a page split
+    written as several pages and moves). The name is the core's without
+    its underscore, as the lock's log names it."""
+
+    @functools.wraps(fn)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        got = fn(*args, **kwargs)
+        next(a for a in args if isinstance(a, sqlite3.Connection)).commit()
+        return got
+
+    wrapper.__name__ = fn.__name__.lstrip("_")
+    wrapper.__qualname__ = wrapper.__name__
+    return wrapper
 
 
 def _reading(fn: Callable[P, R]) -> Callable[P, R]:

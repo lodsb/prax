@@ -15,6 +15,8 @@ from ..retrieval import CONTEXT_LIMIT, _similar_documents
 
 
 def _doc_ids_by_title(con: sqlite3.Connection, titles: list[str]) -> dict[str, int]:
+    """Each title to the first document of that title (its lowest id), a
+    batch at a time; ``idx_documents_title`` (migration 68) serves it."""
     out: dict[str, int] = {}
     for i in range(0, len(titles), 400):
         part = titles[i : i + 400]

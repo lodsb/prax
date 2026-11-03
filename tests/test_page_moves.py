@@ -285,7 +285,7 @@ def test_a_write_against_a_hash_it_did_not_read_is_refused(
 def test_a_page_past_the_size_says_so(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pages, "PAGE_LARGE", 50)
+    monkeypatch.setattr(pages.writes, "PAGE_LARGE", 50)
     store.write_page(con, "log", "# Log\n\nShort.", author="agent")
     assert "large" not in store.append_page(con, "log", "A bit.")
     grown = store.append_page(con, "log", "A section long enough to pass the line.")
@@ -406,3 +406,20 @@ def test_an_old_slug_of_a_hidden_page_gives_away_nothing(
     # a hidden page's slug and its old one are refused alike, saying no more
     assert refusals[0] == refusals[1] and "exists" not in refusals[0]
     assert int(mine["doc_id"]) != int(page["doc_id"])
+
+
+def test_the_cores_write_nothing_until_their_caller_commits(
+    con: sqlite3.Connection,
+) -> None:
+    """A page split composes the cores: a failure after the first child
+    takes the child back with it (the review of 2026-11-03, quality 3)."""
+    store.write_page(con, "index", "# Index\n\nThe whole.")
+    pages._write_page(con, "child-a", "# A\n\nThe first.", parent="index")
+    pages._move_page(con, "child-a", parent="")
+    pages._rename_slug(con, "child-a", "child-one")
+    with pytest.raises(KeyError):
+        pages._move_page(con, "child-one", parent="nowhere")
+    con.rollback()
+    assert store.page_id(con, "child-a") is None
+    assert store.page_id(con, "child-one") is None
+    assert store.page_id(con, "index") is not None

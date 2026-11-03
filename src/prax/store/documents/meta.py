@@ -15,6 +15,7 @@ from ..base import (
     ASIDE_KINDS,
     DocumentMeta,
     MetaLike,
+    _committing,
     _guards,
     _reading,
     _serialized,
@@ -108,8 +109,7 @@ def _put_meta(con: sqlite3.Connection, doc_id: int, meta: MetaLike) -> None:
     )
 
 
-@_serialized
-def set_meta(
+def _set_meta(
     con: sqlite3.Connection,
     doc_id: int,
     meta: MetaLike,
@@ -132,7 +132,9 @@ def set_meta(
     if cur.rowcount == 0:
         raise KeyError(f"no such document: {doc_id}")
     _refresh_document_field(con, doc_id)
-    con.commit()
+
+
+set_meta = _serialized(_committing(_set_meta))
 
 
 # what says when a document was published, the most trusted first

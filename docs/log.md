@@ -9570,3 +9570,33 @@ up by a scan of every document, 50 ms a lookup on the live store.
 
 The first 50 of AO's 528 maths-as-text documents were asked of marker
 at 13:31 UTC, to time a batch before the rest is asked for.
+
+## 2026-11-03: the review's five quality findings
+
+On the user's word, all five (`docs/eval/review-2026-11-03.md`, quality):
+
+1. Migration 68 indexes `documents(title)`. A page's members and the
+   documents it annotates are found by title, and each lookup scanned
+   every document; `pages` now uses the graph's one lookup
+   (`_doc_ids_by_title`). `GET /page/project-nlbank?text=false`, warm on
+   the live door: 58 ms before, 18 ms after.
+2. The media view reads its members once a state of the store
+   (`media._members`, keyed by `store_state` as `hidden_documents` is).
+   `GET /media` warm: about 230 ms before, 71 ms after; a folder 29 ms.
+3. A page's writes are cores that do not commit (`_write_page`,
+   `_set_page_parent`, `_move_page`, `_rename_slug`), each public under
+   its old name with the commit after it (`base._committing`). What they
+   call that committed got the same shape: `register`, `index_text`,
+   `suspect`, `link`, `invalidate_edge`, `set_meta`, `set_sensitivity`.
+   A page split can now write its children, move them and fail without
+   leaving any of it (`tests/test_page_moves.py::test_the_cores_write_nothing_until_their_caller_commits`).
+   The one exception is a page given a new title: `rename_entity` commits
+   its merge in batches.
+4. `store.pages` is a package of parts, `ORDER` texts, tree, reads,
+   writes, moves, projects; the largest part is 653 lines of 1,827.
+5. `set_sensitivity` is the one writer of a person's decision; a group's
+   decision names its run and keeps `before` through it (`decide_media`),
+   `media._state` reads `SENSITIVITY`, and `docs/meta.md` says what the
+   key holds.
+
+The full suite: 1,730 passed, 4 skipped.
