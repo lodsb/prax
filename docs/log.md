@@ -9454,3 +9454,16 @@ renaming a page it may not see gets a 404. MCP tools `move_page`,
 `rename_page`, and `get_page(text=, offset=, limit=)`. A split done by
 the door (an index page and its children cut at headings, old citations
 still landing) is left in `docs/PLAN.md`.
+
+A dry run of the log's move on the live door was refused at first, and
+showed two things the tests had not. The log sat under the old
+project's page in the tree only, with no `part_of` edge, so the parent
+did not follow the project. And the agent's three `link` edges ended at
+a `page` node: `document_node` names any page so, where a project's own
+writes name its page a `project`, so the membership read did not see
+them. Membership is now read by the project page's title whatever the
+node's type, and a page under any other project's page follows the
+project named. Two nodes for one project page remain; `document_node`
+giving a project page its `project` type would end that, but a page's
+`[title](#doc/N)` link to a project page would then be an `annotates`
+the ontology refuses, so it waits for its own look.

@@ -1353,9 +1353,12 @@ page out of every project. `parent` names the page it sits under, and
 `""` puts it at the top. A field left out stays as it is. The page's
 other live `part_of` edges to a project are ended (`valid_to`), so a walk
 `as_of` an earlier moment still finds the old membership. This includes
-an edge someone made by hand with `link`. A page that sat under its old
-project's page, or at the top, moves under the new project's page unless
-`parent` says otherwise. The parent must be the project's page or a page
+an edge someone made by hand with `link`, which names the project's page
+as a `page` node rather than a `project` one; membership is read by the
+project page's title either way. A page that sat under another project's
+page, even only in the tree, moves under the named project's page unless
+`parent` says otherwise, and so does a page at the top that changes
+project. The parent must be the project's page or a page
 in the project; a cycle or a missing page is refused before anything is
 written (409 or 404). A move to where the page already is answers
 `changed: false`. `dry_run` answers the plan and writes nothing.

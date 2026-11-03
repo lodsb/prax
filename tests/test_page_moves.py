@@ -105,6 +105,34 @@ def test_a_move_ends_a_membership_linked_by_hand(con: sqlite3.Connection) -> Non
     assert left["parent"]["to"] is None  # it sat under its project; now the top
 
 
+def test_the_live_shape_a_tree_parent_and_a_link_to_the_project_page(
+    con: sqlite3.Connection,
+) -> None:
+    # the nlbank log on 2026-11-03: under the old project's page in the
+    # tree with no part_of edge, and linked by hand to the new project's
+    # page, which `link` on a document id names a `page`, not a `project`
+    _projects(con)
+    log = store.write_page(con, "log", "# Log\n\nText.", parent="project-old")
+    store.link(
+        con,
+        store.Edge("Log", "page", "part_of", "Project new", "page"),
+        confidence="EXTRACTED",
+        source_doc=int(log["doc_id"]),
+        evidence="by hand",
+        producer="agent",
+        run="by-hand",
+    )
+    page = store.get_page(con, "log", text=False)
+    assert [p["slug"] for p in page["projects"]] == ["project-new"]
+    assert "Log" in [
+        m["title"]
+        for m in store.get_page(con, "project-new", text=False)["members"]["items"]
+    ]
+    moved = store.move_page(con, "log", part_of="project-new")
+    assert not moved["ended_edges"]  # the hand-made edge is the membership
+    assert moved["parent"] == {"from": "project-old", "to": "project-new"}
+
+
 def test_a_person_s_page_is_moved_and_stays_theirs(con: sqlite3.Connection) -> None:
     _projects(con)
     store.write_page(

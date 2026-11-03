@@ -211,14 +211,18 @@ def _page_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
 def _project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Row]:
     """The live ``part_of`` edges from a page to a project page, whoever
     wrote them (``write_page``, a project's member, a ``link`` by hand),
-    each with the project page's id and slug."""
+    each with the project page's id and slug. The project end is matched
+    by its page's title and not its type: ``link`` to a project page's
+    document id names it as a ``page`` (``document_node``), where the
+    project's own writes name it a ``project``; the nlbank agent's three
+    edges of 2026-11-03 were the first."""
     name, node_type = _page_node(con, doc_id)
     return con.execute(
         "SELECT x.id, p.doc_id, p.slug, d.title FROM edges x"
         " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
         " JOIN documents d ON d.title = t.name"
         " JOIN pages p ON p.doc_id = d.id AND p.kind = 'project'"
-        " WHERE s.name = ? AND s.type = ? AND t.type = 'project'"
+        " WHERE s.name = ? AND s.type = ? AND t.type IN ('project', 'page')"
         " AND x.rel = 'part_of' AND x.valid_to IS NULL ORDER BY x.id",
         (name, node_type),
     ).fetchall()
@@ -248,7 +252,7 @@ def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
         "SELECT DISTINCT s.name, s.type FROM edges x"
         " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
         " WHERE x.rel = 'part_of' AND x.valid_to IS NULL"
-        " AND t.name = ? AND t.type = 'project' ORDER BY s.name",
+        " AND t.name = ? AND t.type IN ('project', 'page') ORDER BY s.name",
         (title,),
     ).fetchall()
     names = [str(r["name"]) for r in rows]
@@ -1104,9 +1108,11 @@ def move_page(
     None leaves either as it is. A page's projects become exactly the one
     named: its other live ``part_of`` edges to a project are ended
     (``valid_to``, so a walk at an earlier moment still finds them), and
-    whoever wrote them, ``link`` by hand included. When the project
-    changes and no parent is named, a page that sat under its old project's
-    page (or at the top) moves under the new one's.
+    whoever wrote them, ``link`` by hand included, and the project end is
+    known by its page's title whatever type its node has. When a project
+    is named and no parent, a page that sat under another project's page
+    (by an edge or only in the tree) moves under the named one's, and so
+    does a page at the top that changes project.
 
     The move is a revision of its own (``change`` ``move``) with the text
     hash of the one before, the note and the author, and is allowed on a
@@ -1144,8 +1150,16 @@ def move_page(
         under = page_id(con, parent) if parent else None
         if parent and (under is None or document_hidden(con, under)):
             raise KeyError(f"no page {parent!r}")
-    elif after != before and (above is None or above in _project_ids(con, before)):
-        # the page sat under its project: it goes with its project
+    elif part_of is not None and (
+        (above is None and after != before)
+        or (
+            above is not None
+            and _is_project_page(con, above)
+            and above != (int(project["doc_id"]) if project is not None else None)
+        )
+    ):
+        # the page sat under a project's page (by an edge, or only in the
+        # tree) or at the top: it goes under the project it is part of now
         under = int(project["doc_id"]) if project is not None else None
     else:
         under = above
@@ -1194,8 +1208,9 @@ def move_page(
     return {**plan, "changed": True, "revision": revision, "ended_edges": ended}
 
 
-def _project_ids(con: sqlite3.Connection, slugs: list[str]) -> set[int]:
-    return {i for i in (page_id(con, s) for s in slugs) if i is not None}
+def _is_project_page(con: sqlite3.Connection, doc_id: int) -> bool:
+    row = con.execute("SELECT kind FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()
+    return row is not None and row[0] == "project"
 
 
 def _slug_at(con: sqlite3.Connection, doc_id: int | None) -> str | None:

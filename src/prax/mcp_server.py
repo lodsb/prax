@@ -794,8 +794,8 @@ def move_page(
     without touching its text: ``part_of`` the project page's slug it then
     belongs to (``""`` none), ``parent`` the page it sits under (``""`` the
     top); leave either out to keep it. Its old project memberships end
-    (still seen in a walk at an earlier date); a page that sat under its
-    old project's page moves under the new one's. Allowed on a page a
+    (still seen in a walk at an earlier date); a page that sat under
+    another project's page moves under the named one's. Allowed on a page a
     person wrote. Recorded as a revision with your note, the text hash
     unchanged. ``dry_run`` says what would change and changes nothing."""
     body: dict[str, Any] = {"author": "agent", "note": note, "dry_run": dry_run}
