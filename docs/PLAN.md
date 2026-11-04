@@ -44,8 +44,8 @@ and its item 5 is items 1 and 2 below.
    measurement from `run/swaps.jsonl`, once the card has been busy for
    some days. AK, the dense 27B. AQ stage 4, a transcription step.
 3. (done 2026-11-03) **The review** of e5e183f..4579be8, both halves.
-4. **Without the card, in any order.** CI's runner: `ubuntu-latest`
-   moves to Ubuntu 26, so pin `ubuntu-24.04` or test on 26 first. A page
+4. **Without the card, in any order.** CI's runner (done 2026-11-04:
+   `ubuntu-24.04` pinned; a move to 26 is that line and a green run). A page
    split by the door (R3a, "The UI and the agent"). The engineering
    leftovers: typed shapes (a search hit first) and the remaining complex
    functions. The measured improvements that need no model ("Retrieval

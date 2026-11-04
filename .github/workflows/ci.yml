@@ -21,9 +21,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Ubuntu pinned: ubuntu-latest moves to 26 on GitHub's day, not
+        # ours; a move to 26 is a change of this line with a green run
         include:
-          - { os: ubuntu-latest, python: "3.12" }
-          - { os: ubuntu-latest, python: "3.13" }
+          - { os: ubuntu-24.04, python: "3.12" }
+          - { os: ubuntu-24.04, python: "3.13" }
           - { os: windows-latest, python: "3.13" }
     steps:
       - uses: actions/checkout@v7
@@ -61,7 +63,7 @@ jobs:
 
   smoke:
     name: quick start in a fresh venv
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
