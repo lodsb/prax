@@ -87,6 +87,8 @@ READER_ROUTES = _routes(
     ("GET", r"/doc/\d+/page/\d+"),
     ("POST", r"/references/missing"),
     ("GET", r"/page/[^/]+"),
+    # where a citation of a split page lands (the document view follows it)
+    ("GET", r"/doc/\d+/cited"),
     # a reader's ask answers with no paid model (api.ask)
     ("POST", r"/ask"),
     ("POST", r"/maths"),
@@ -109,6 +111,7 @@ CONTRIBUTOR_ROUTES = READER_ROUTES + _routes(
     ("PUT", r"/page/[^/]+/section"),
     ("POST", r"/page/[^/]+/move"),
     ("POST", r"/page/[^/]+/rename"),
+    ("POST", r"/page/[^/]+/split"),
     ("POST", r"/link"),
     ("PUT", r"/doc/\d+/domains"),
     ("POST", r"/doc/\d+/promote"),

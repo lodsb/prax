@@ -11,7 +11,7 @@ A package of parts, each importing only from the ones before it in
 
 from __future__ import annotations
 
-ORDER = ("texts", "tree", "reads", "writes", "moves", "projects")
+ORDER = ("texts", "tree", "reads", "writes", "moves", "splits", "projects")
 
 from .moves import (  # noqa: F401
     _MOVED,
@@ -38,6 +38,12 @@ from .reads import (  # noqa: F401
     open_answer_documents,
     page_revision_text,
     pages_with_chunks_of,
+)
+from .splits import (  # noqa: F401
+    SPLIT_DEPTH,
+    _split_page,
+    cited_place,
+    split_page,
 )
 from .texts import (  # noqa: F401
     _DOC_LINK,

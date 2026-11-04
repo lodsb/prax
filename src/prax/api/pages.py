@@ -51,6 +51,14 @@ class RenameReq(BaseModel):
     note: str | None = None
 
 
+class SplitReq(BaseModel):
+    level: int | None = None  # the heading level cut at; None the highest with two
+    author: str = "agent"
+    note: str | None = None
+    dry_run: bool = False
+    expected_text_hash: str | None = None
+
+
 class ParentReq(BaseModel):
     parent: int | None = None  # a page's document id; None puts it at the top
 
@@ -137,6 +145,40 @@ def rename_page(slug: str, req: RenameReq, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/page/{slug}/split")
+def split_page(slug: str, req: SplitReq, request: Request) -> dict[str, Any]:
+    """A long page cut at its headings into an index page and a child page
+    a section, not a word changed (``store.split_page``): 404 for a page
+    that is not there, 409 for one that cannot be cut so or changed since
+    it was read."""
+    try:
+        return store.split_page(
+            _con(request),
+            slug,
+            level=req.level,
+            author=req.author,
+            note=req.note,
+            dry_run=req.dry_run,
+            expected_text_hash=req.expected_text_hash,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/doc/{doc_id}/cited")
+def cited(
+    doc_id: int, request: Request, chunk: int | None = None, find: str | None = None
+) -> dict[str, Any]:
+    """Where a citation of a split page's words lands now
+    (``store.cited_place``): the child page and its chunk, 404 for none."""
+    got = store.cited_place(_con(request), doc_id, chunk=chunk, find=find)
+    if got is None:
+        raise HTTPException(404, "the citation lands in no page split from this one")
+    return got
 
 
 @router.put("/doc/{doc_id}/page-parent")

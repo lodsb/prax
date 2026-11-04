@@ -76,7 +76,7 @@ revisit threshold, under "Decision thresholds" below.
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
    context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures, imports), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces), `pages` (texts, tree, reads, writes,
-   moves, projects) and `repair` (common, graph, documents, ailments). A switch a test turns is an attribute of a package's
+   moves, splits, projects) and `repair` (common, graph, documents, ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
    set on the package would not reach the part that reads it.
 4. **Single writer.** *(enforced)* The service process, the door, is the only

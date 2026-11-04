@@ -46,7 +46,7 @@ and its item 5 is items 1 and 2 below.
 3. (done 2026-11-03) **The review** of e5e183f..4579be8, both halves.
 4. **Without the card, in any order.** CI's runner (done 2026-11-04:
    `ubuntu-24.04` pinned; a move to 26 is that line and a green run). A page
-   split by the door (R3a, "The UI and the agent"). The engineering
+   split by the door (done 2026-11-04, R3a). The engineering
    leftovers: typed shapes (a search hit first) and the remaining complex
    functions. The measured improvements that need no model ("Retrieval
    and ask", "The graph").
@@ -886,8 +886,10 @@ The user asked on 2026-10-28 for every one to be fixed.
       slug an alias for ever), `get_page` without the text or in windows
       with the text's hash, `write_page(expected_text_hash=)`, a warning
       past 200,000 characters.
-- [ ] **A page split by the door** (the same request's R3a, after the
-      moves): cut a long page at its headings into an index page and
+- [x] (2026-11-04, `store.split_page`, `POST /page/{slug}/split`, the
+      MCP tool `split_page`; the old citations by chunks moved with their
+      words and `GET /doc/{id}/cited`) **A page split by the door** (the
+      same request's R3a, after the moves): cut a long page at its headings into an index page and
       child pages, the children's text adding up to the original byte for
       byte (refused otherwise), each child in the page's project with its
       sensitivity and domains. The hard part is the old citations: a

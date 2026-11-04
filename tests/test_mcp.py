@@ -33,6 +33,7 @@ EXPECTED_TOOLS = {
     "append_page",
     "move_page",
     "rename_page",
+    "split_page",
     "ask",
     "promote",
     "set_domains",

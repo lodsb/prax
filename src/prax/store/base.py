@@ -215,7 +215,7 @@ class DocumentMeta(TypedDict, total=False):
     retired: dict[str, Any]  # at, reason, of, by, run
     status: dict[str, Any]  # a project note's own status line
     # a page (pages are documents too)
-    page: dict[str, Any]  # slug, kind, revision, author; parent, parent_by
+    page: dict[str, Any]  # slug, kind, revision, author; parent, parent_by; split
     asks: dict[str, Any]  # a page's ask blocks by id
     briefing: dict[str, Any]  # a briefing page's window and documents
     question: dict[str, Any]  # a question page's question

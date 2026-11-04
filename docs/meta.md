@@ -131,7 +131,7 @@ writer, and add its row here.
 
 | key | shape | what, and who writes it |
 |---|---|---|
-| `page` | `dict[str, Any]` | slug, kind, revision, author; `parent` (a page's document id) and `parent_by` (`store.set_page_parent`) |
+| `page` | `dict[str, Any]` | slug, kind, revision, author; `parent` (a page's document id) and `parent_by` (`store.set_page_parent`); `split`, a list of the splits the page was the index of, each `{revision, from (the text hash split), level, by, at, children}` (`store.split_page`) |
 | `asks` | `dict[str, Any]` | a page's ask blocks by id |
 | `briefing` | `dict[str, Any]` | a briefing page's window and documents |
 | `question` | `dict[str, Any]` | a question page's question |

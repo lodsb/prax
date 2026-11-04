@@ -821,6 +821,32 @@ def rename_page(slug: str, new_slug: str, note: str | None = None) -> dict[str, 
 
 
 @mcp.tool()
+def split_page(
+    slug: str,
+    level: int | None = None,
+    note: str | None = None,
+    dry_run: bool = False,
+    expected_text_hash: str | None = None,
+) -> dict[str, Any]:
+    """Cut a long page at its headings into an index page and a child page
+    a section, without changing a word: ``level`` 2 cuts at ``##`` (left
+    out: the highest level with two headings). The page keeps its slug and
+    becomes the index, its text before the first cut and a link to each
+    child; each child sits under it, in its projects, as closed as it was.
+    Old citations of the page's words still land, in the child holding
+    them. Allowed on a page a person wrote: the words stay theirs.
+    ``dry_run`` names the children and writes nothing."""
+    body: dict[str, Any] = {
+        "level": level,
+        "author": "agent",
+        "note": note,
+        "dry_run": dry_run,
+        "expected_text_hash": expected_text_hash,
+    }
+    return _answer(lambda: door().post_json(f"/page/{slug}/split", body))
+
+
+@mcp.tool()
 def append_page(
     slug: str, section: str, heading: str | None = None, note: str | None = None
 ) -> dict[str, Any]:

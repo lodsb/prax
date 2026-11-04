@@ -744,6 +744,14 @@ async function viewDoc(id, p) {
     } catch (_) { ASKING_OF[doc.id] = new Set(); }
   }
   const highlight = chunkTarget(chunks, p.chunk, p.find);
+  // a citation of a page split since: its words are in a child page now
+  if (!highlight && (p.chunk || p.find) && ((meta.page || {}).split || []).length) {
+    try {
+      const to = await api(`/doc/${id}/cited`, { chunk: p.chunk, find: p.find });
+      location.replace(`#doc/${to.doc_id}?${new URLSearchParams(p.find ? { chunk: to.chunk_id, find: p.find } : { chunk: to.chunk_id })}`);
+      return;
+    } catch (_) { /* no child holds it: the index page as it is */ }
+  }
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
   const pageMeta = meta.page || null;
   const nFigures = figureItems(chunks).length;

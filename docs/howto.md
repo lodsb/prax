@@ -1383,9 +1383,42 @@ sha256 of the whole stored text's UTF-8 bytes), without the text.
 refused with 409 when the page changed since that hash was read, and
 every write answers the stored text's hash and length. An append or a
 section write that leaves a page past `PAGE_LARGE` (200,000 characters)
-answers `large`: split it into an index page and child pages, and put
-each child under the index with `move`. The MCP tools are `move_page`,
-`rename_page` and `get_page(text=, offset=, limit=)`.
+answers `large`: split it (below). The MCP tools are `move_page`,
+`rename_page`, `split_page` and `get_page(text=, offset=, limit=)`.
+
+### Splitting a page
+
+    POST /page/{slug}/split {level?, note?, author?, dry_run?, expected_text_hash?}
+
+A split cuts a page at its headings of `level` (2 cuts at `##`; left
+out, the highest level the page has two headings of) and changes no
+word. The page keeps its id, slug and history and becomes the index:
+its text before the first cut, then a link to each child. Each section,
+from its heading to the next, becomes a child page under the index:
+slug `<slug>-<heading>`, title `<title>: <heading>` (with `-2` or `(2)`
+when taken), in the page's projects, with its sensitivity and the
+person's decision on it, its domains, and the state of the ask blocks
+it holds. The index's own text and the children's texts add up to the
+page's text byte for byte, or nothing is written.
+
+Each child takes over the page's chunks in its span, ids and vectors
+with them, so a citation `#doc/N?chunk=M&find=…` made before the split
+still names a chunk that is there, in the child. `GET
+/doc/{N}/cited?chunk=&find=` answers which child and chunk
+(`store.cited_place`): chunk M when a child of N holds it, else the
+chunk of a child holding the words of `find`, children of children
+included; 404 when none does. The document view follows it when the
+index no longer holds the words. The page's `[title](#doc/N)` links
+become the children's `annotates` edges, as any link does. An edge
+given as `annotates` with no link behind it ends on the index when a
+child links the same document.
+
+The index and the children are written as the author of the page's last
+text, so a person's page split by an agent is still a person's, and the
+note says who split it. Refused (409): a project's page, whose text is
+its project's note; fewer than two headings at the level; a cut inside
+an ask block or a `prax:keep` region; a page that changed since
+`expected_text_hash`. The index records each split in `meta.page.split`.
 
 ## 3h. Local models (optional)
 

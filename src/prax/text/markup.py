@@ -131,6 +131,23 @@ def heading(level: int, text: str) -> str:
     return f"{'#' * max(1, min(6, level))} {text}"
 
 
+def headings(text: str) -> list[tuple[int, int, str]]:
+    """The Markdown headings of ``text`` outside a fenced code block, in
+    order: ``(offset of the heading line, level, its words)``."""
+    out: list[tuple[int, int, str]] = []
+    offset = 0
+    fenced = False
+    for line in text.splitlines(keepends=True):
+        bare = line.rstrip("\r\n")
+        if bare.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        m = None if fenced else HEADING.match(bare)
+        if m:
+            out.append((offset, len(m.group("hashes")), m.group("text")))
+        offset += len(line)
+    return out
+
+
 def section_span(text: str, title: str) -> tuple[int, int, int] | None:
     """Where the section headed ``title`` lies in a Markdown ``text``:
     ``(body_start, body_end, level)``, the body running from the line

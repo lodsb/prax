@@ -9600,3 +9600,49 @@ On the user's word, all five (`docs/eval/review-2026-11-03.md`, quality):
    key holds.
 
 The full suite: 1,730 passed, 4 skipped.
+
+## 2026-11-04: a page split by the door
+
+The last of the nlbank agent's request (R3a). Until now an agent split a
+long page itself: windowed reads, a new page a section, `move_page`, and
+every old citation of the page's words left pointing at a page that no
+longer held them.
+
+- **`store.split_page`** (`store/pages/splits.py`, a part after `moves`)
+  cuts a page at its headings of one level (the highest with two
+  headings when none is named). The page keeps its id, slug and history
+  and becomes the index: its text before the first cut and a link to
+  each child. Each section is a child page under it, in its projects,
+  with its sensitivity, the person's decision on it, its domains and its
+  ask blocks' state. The index's text and the children's add up to the
+  page byte for byte, read back after the writes, or the whole split is
+  taken back. It composes the cores of the review of 2026-11-03, so it
+  is one transaction.
+- **The old citations.** The chunks of a page are disposable, but a
+  citation names one. Each child takes over the page's chunk rows in its
+  span (their `doc_id` changed) before its text is indexed, and
+  `_write_chunks` keeps a chunk whose text is unchanged, its id and its
+  vector with it. The keyword index follows a chunk by id and holds only
+  its text, so nothing else moves. `store.cited_place` answers where a
+  citation of the page lands: chunk M when a child holds it, else the
+  child chunk holding the citation's words, through children of
+  children (`meta.page.split` records each split). Only the page's own
+  children are followed, and none the viewer may not see. `GET
+  /doc/{id}/cited` serves it, a reader's route; the document view
+  follows it when the index no longer holds the words.
+- **Whose the words are.** The index and the children are written as the
+  author of the page's last text, so an agent may split a person's page
+  and cannot then write over the children; the note names the splitter.
+- **Edges.** The page's links become the children's `annotates` edges as
+  any link does, and the index's link edges end with the links. An edge
+  given as `annotates` with no link behind it ends on the index when a
+  child links the same document.
+- Refused: a project's page (its text is the project's note), fewer than
+  two headings at the level, a cut inside an ask block or a `prax:keep`
+  region, a page changed since `expected_text_hash`.
+
+`tests/test_page_split.py`, seven tests. Two mutations were caught: no
+chunk moved fails the citation test, and no given edge ended fails the
+links test. The wall test walks both routes, and a named token's split
+of a personal page is a 404. CI's Ubuntu runner was pinned to
+`ubuntu-24.04` the same morning (e6309c2).

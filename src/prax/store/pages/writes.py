@@ -540,8 +540,8 @@ def _sized(written: dict[str, Any]) -> dict[str, Any]:
         **written,
         "large": (
             f"the page holds {written['text_len']:,} characters, past"
-            f" {PAGE_LARGE:,}: an index page with a child page a part"
-            " (move_page puts a page under another) keeps each one readable"
+            f" {PAGE_LARGE:,}: split_page cuts it at its headings into an"
+            " index page and a child page a part, each one readable"
         ),
     }
 

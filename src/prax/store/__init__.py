@@ -678,6 +678,7 @@ from .pages import (  # noqa: F401
     _page_original,
     add_to_project,
     append_page,
+    cited_place,
     fill_blocks,
     get_page,
     linked_documents,
@@ -701,6 +702,7 @@ from .pages import (  # noqa: F401
     scope_documents,
     set_page_parent,
     slugify,
+    split_page,
     update_section,
     write_page,
 )
