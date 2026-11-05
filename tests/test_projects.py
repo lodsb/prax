@@ -331,3 +331,45 @@ def test_a_write_may_say_personal(client: TestClient) -> None:
     )
     added = next(p["doc_id"] for p in out2["plan"] if p["path"] == "b.md")
     assert store.get_document(con, added)["sensitivity"] == "personal"
+
+
+def test_a_link_to_a_note_two_syncs_old_lands_on_the_current_one(
+    client: TestClient,
+) -> None:
+    con = client.app.state.con
+    ids = []
+    for extra in ("", "\nAnd SPI.\n", "\nAnd SPI and UART.\n"):
+        out = _sync(client, [_file("notes.md", NOTES + extra)], dry_run=False)
+        ids.append(next(p["doc_id"] for p in out["plan"] if p["path"] == "notes.md"))
+    first, second, third = ids
+    # each sync retired the one before into the next: the chain ends at the third
+    assert store.get_meta(con, first)["retired"]["of"] == second
+    got = client.get(f"/get/{first}", params={"brief": True, "max_chars": 0}).json()
+    assert got["current"] == {
+        "doc_id": third,
+        "title": "Firmware notes (fw)",
+        "hops": 2,
+    }
+    assert "current" not in client.get(f"/get/{third}", params={"max_chars": 0}).json()
+
+    # the chain stops before what the viewer may not see
+    store.set_sensitivity(con, third, "personal")
+    token = store.VIEWER.set(store.Viewer("guest"))
+    try:
+        assert store.current_of(con, first) == {
+            "doc_id": second,
+            "title": "Firmware notes (fw)",
+            "hops": 1,
+        }
+    finally:
+        store.VIEWER.reset(token)
+
+
+def test_a_loop_of_replacements_ends(client: TestClient) -> None:
+    con = client.app.state.con
+    a = int(store.ingest_text(con, "One copy of a note. " * 5, title="A")["doc_id"])
+    b = int(store.ingest_text(con, "Another copy of it. " * 5, title="B")["doc_id"])
+    store.retire_document(con, a, reason="test", duplicate_of=b)
+    store.retire_document(con, b, reason="test", duplicate_of=a)
+    assert store.current_of(con, a) == {"doc_id": b, "title": "B", "hops": 1}
+    assert store.current_of(con, 999_999) is None

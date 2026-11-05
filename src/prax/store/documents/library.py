@@ -16,6 +16,7 @@ from ..base import (
     _read_archive,
     _reading,
     _serialized,
+    document_hidden,
     now,
     run_name,
 )
@@ -153,6 +154,44 @@ def _join_duplicate(
     )
     _put_meta(con, keeper, theirs)
     return {"moved_edges": moved_edges, "moved_items": moved_items}
+
+
+REPLACED_HOPS = 20  # replacements a retired document's link follows, at most
+
+
+@_reading
+def current_of(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
+    """Where a link to a retired document lands now: ``{doc_id, title,
+    hops}``, the end of the chain of documents that replaced it
+    (``meta.retired.of``: a newer sync of a project's file, the copy a
+    duplicate was retired into), or None for a document no one replaced.
+
+    A synced note that changes is a new document (its id is its bytes,
+    invariant 2), so a page that linked the old id would otherwise open a
+    copy two syncs old. The chain stops before a document the viewer may
+    not see, and at a loop."""
+    if document_hidden(con, doc_id):
+        return None
+    seen = {doc_id}
+    at: int | None = None
+    here = doc_id
+    for _ in range(REPLACED_HOPS):
+        row = con.execute(
+            "SELECT json_extract(meta, '$.retired.of') FROM documents WHERE id = ?",
+            (here,),
+        ).fetchone()
+        nxt = row[0] if row is not None else None
+        if nxt is None or int(nxt) in seen or document_hidden(con, int(nxt)):
+            break
+        here = int(nxt)
+        seen.add(here)
+        at = here
+    if at is None:
+        return None
+    row = con.execute("SELECT title FROM documents WHERE id = ?", (at,)).fetchone()
+    if row is None:
+        return None
+    return {"doc_id": at, "title": row[0], "hops": len(seen) - 1}
 
 
 @_serialized

@@ -9646,3 +9646,33 @@ chunk moved fails the citation test, and no given edge ended fails the
 links test. The wall test walks both routes, and a named token's split
 of a personal page is a 404. CI's Ubuntu runner was pinned to
 `ubuntu-24.04` the same morning (e6309c2).
+
+## 2026-11-05: a link to a replaced document finds the current one
+
+The nlbank agent reported two things. First, part 2 of its split
+research log (doc 33108) carried `meta.private` with the cue `weak:
+contract`. That is a record, not a mark: one weak cue is below
+`weak_needed` (2), and `sensitivity` stayed empty. Only part 2 had it
+because the rules read the first `private.head` characters (5,000), and
+part 2's first "contract" is at character 3,595; the other parts' first
+is at 17,533 to 38,461. Nothing changed for it.
+
+Second, a refreshed note gets a new document id, by invariant 2, and
+the sync retires the old one with `meta.retired.of`. The claims index,
+doc 33066, linked 33047 to 33050, each retired into 33086 and the ids
+after it, which were themselves retired into 33114 and on. One hop
+landed on a copy one sync old.
+
+`store.current_of` follows `meta.retired.of` to the end of the chain:
+at most `REPLACED_HOPS` (20), stopping at a loop and before a document
+the viewer may not see. `GET /get/{id}` carries it as `current`
+(`{doc_id, title, hops}`), brief or not, so the MCP `get` has it too.
+The document view forwards a link to the current document
+(`forwardTo` in lib.js, `from=` the old id, the link's `find` kept and
+its chunk id dropped, since a chunk id belongs to the old text), and
+says so with a link back to the old one under `stay=1`. A retired
+document's line names the current one when it is further than `of`.
+Pages keep their links as written. Tests: `tests/test_projects.py`
+(three syncs; a personal third stops the chain at the second; a loop
+ends) and one in `tests/ui/lib.test.js`. Dropping the wall check fails
+the sync test.

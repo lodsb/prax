@@ -220,7 +220,7 @@ function metaLine(meta, doc) {
   if (meta.lang) bits.push(`<span class="muted" title="what the language pass read (meta.lang)">${esc(languageName(meta.lang))}</span>`);
   bits.push(`<span class="muted">domains:</span> ${domainChips(meta.domains, (d) => `#browse?${new URLSearchParams({ domain: d })}`, false)}`);
   if (meta.promote) bits.push(`<span class="muted" title="${esc(meta.promote.reason || "")}">promoted by ${esc(meta.promote.by)}</span>`);
-  if (meta.retired) bits.push(`<span class="error">retired ${esc((meta.retired.at || "").slice(0, 10))}: ${esc(meta.retired.reason || "")}${meta.retired.of ? ` of <a href="#doc/${meta.retired.of}">doc ${meta.retired.of}</a>` : ""}</span>`);
+  if (meta.retired) bits.push(`<span class="error">retired ${esc((meta.retired.at || "").slice(0, 10))}: ${esc(meta.retired.reason || "")}${meta.retired.of ? ` of <a href="#doc/${meta.retired.of}">doc ${meta.retired.of}</a>` : ""}${doc.current && doc.current.doc_id !== meta.retired.of ? `, now <a href="#doc/${doc.current.doc_id}">doc ${doc.current.doc_id}</a>` : ""}</span>`);
   if (meta.recaptured && meta.recaptured.length) bits.push(`<span class="muted" title="sent again with the same text">captured ${meta.recaptured.length + 1}×</span>`);
   if (meta.title_history && meta.title_history.length) {
     const former = meta.title_history[meta.title_history.length - 1].title;
@@ -728,6 +728,11 @@ async function viewDoc(id, p) {
     return;
   }
   const meta = doc.meta || {};
+  const forward = forwardTo(doc, p);
+  if (forward) {
+    location.replace(forward);
+    return;
+  }
   if (meta.video) VIDEO_OF[doc.id] = meta.video;
   let askingPage = false;
   let staleSourced = [];
@@ -761,6 +766,7 @@ async function viewDoc(id, p) {
   <header class="doc-head">
     ${ancestors.length ? `<div class="crumbs" role="navigation" aria-label="where this page sits">${ancestors.map((a) => `<a href="#doc/${a.doc_id}">${esc(a.title || a.slug)}</a>`).join(" › ")} ›</div>` : ""}
     <h1>${pageMeta ? `<span class="kind-pill">${esc(pageMeta.kind)}</span> ` : ""}${esc(doc.title || "(untitled)")}</h1>
+    ${p.from && /^\d+$/.test(p.from) ? `<p class="muted">Forwarded from <a href="#doc/${p.from}?stay=1">doc ${p.from}</a>, a retired copy this one replaced.</p>` : ""}
     <div class="doc-meta">${metaLine(meta, doc)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}${meta.question ? ` · a standing question, asked ${esc((meta.question.asked_at || "").slice(0, 10))} by ${esc(meta.question.model || "?")}${(meta.question.history || []).length ? `, moved ${meta.question.history.length} time${meta.question.history.length === 1 ? "" : "s"}` : ""}` : ""}</div>
     ${staleSources(staleSourced)}
     ${tags(meta)}

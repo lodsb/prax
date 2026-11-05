@@ -70,6 +70,11 @@ def get(
     versions = store.versions_of(con, doc_id)
     if versions is not None:
         doc["versions"] = versions
+    # retired and replaced (a newer sync of the note, the copy a duplicate
+    # went into): where a link to it lands now
+    current = store.current_of(con, doc_id)
+    if current is not None:
+        doc["current"] = current
     # where its file lies, for a document prax does not hold: a referenced
     # recording or picture (AQ stage 3); a held one says nothing
     if not doc.get("held", 1):

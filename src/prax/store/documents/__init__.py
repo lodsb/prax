@@ -80,6 +80,7 @@ from .genres import (  # noqa: F401
 )
 from .library import (  # noqa: F401
     DUPLICATE_THRESHOLD,
+    REPLACED_HOPS,
     _join_duplicate,
     _origin,
     capture_rank,
@@ -87,6 +88,7 @@ from .library import (  # noqa: F401
     cleanup_preview,
     cleanup_runs,
     cleanup_set,
+    current_of,
     dedupe_captures,
     fingerprint_text,
     is_retired,

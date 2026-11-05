@@ -864,3 +864,12 @@ test("pictureSetOf reads the one set a #photos address names", () => {
   assert.equal(lib.pictureSetOf({ place: "x" }), null);
   assert.equal(lib.pictureSetOf({}), null);
 });
+
+test("forwardTo: a retired copy's link opens the document that replaced it", () => {
+  const doc = { id: 5, current: { doc_id: 9 } };
+  assert.equal(lib.forwardTo(doc, {}), "#doc/9?from=5");
+  assert.equal(lib.forwardTo(doc, { chunk: "40", find: "the ledger" }), "#doc/9?from=5&find=the+ledger");
+  assert.equal(lib.forwardTo(doc, { stay: "1" }), null);  // the old one, asked for
+  assert.equal(lib.forwardTo({ id: 5 }, {}), null);
+  assert.equal(lib.forwardTo({ id: 5, current: { doc_id: 5 } }, {}), null);
+});

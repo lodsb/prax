@@ -160,7 +160,9 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
     what the document is and where it belongs (source, domains, language,
     summary, ids, authors), not the history of how it was read. A figure
     line ``![caption](figure:<ref>)`` is looked at with ``figure``, a page
-    of the original with ``page_image``.
+    of the original with ``page_image``. A retired document someone
+    replaced (a newer sync of a project's note) carries ``current``, the
+    document that holds it now.
     """
     return _answer(
         lambda: door().get_json(
