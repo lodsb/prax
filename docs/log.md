@@ -9676,3 +9676,24 @@ Pages keep their links as written. Tests: `tests/test_projects.py`
 (three syncs; a personal third stops the chain at the second; a loop
 ends) and one in `tests/ui/lib.test.js`. Dropping the wall check fails
 the sync test.
+
+## 2026-11-05: the figures slice stops asking for what cannot be read
+
+The 28 figure readings that failed on 2026-11-04 all said "no figure
+could be read". In each of those documents, the figures still unread are
+ones `figures.find` cannot find in the original: web snapshots whose
+pictures were never saved, and two PDFs. Eight more failed on pictures
+Pillow could not decode. The nightly slice (`schedule: figures`,
+`api.passes.start_figures`) asked the oldest documents with an unread
+figure, so it asked for them every night: 943 failed readings in 170
+documents since 2026-09-27, doc 133 fifteen times, 28 of the 150 on
+2026-11-03.
+
+`store.failed_on_this_text(con, extractor)` names the documents whose
+last reading by that extractor failed after their current text landed
+(`finished_at >= parsed_at`), and the slice passes them by. A new text,
+or a reading a person asks for, tries again. Test: the slice test in
+`tests/test_schedule.py` goes on a night (one failed, one ran, the
+failed one not asked again, a new text clears it); dropping the skip
+fails it.
+

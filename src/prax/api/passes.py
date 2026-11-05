@@ -122,7 +122,10 @@ def start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
             job.update(note=f"{waiting} figure readings still waiting: nothing asked")
             return {"job": job.id, "requested": 0, "waiting": waiting}
         chosen = []
+        failed = store.failed_on_this_text(con, "figures")
         for doc_id in store.select_for_reading(con, unread_figures=True):
+            if doc_id in failed:
+                continue  # its pictures are not in the original: no night helps
             if store.figures_to_read(con, doc_id, model=spec.runtime_name) > 0:
                 chosen.append(doc_id)
                 if len(chosen) >= n:

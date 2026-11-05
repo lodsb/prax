@@ -201,6 +201,7 @@ from .readings import (  # noqa: F401
     count_reading_requests,
     document_has_figure,
     equation_density,
+    failed_on_this_text,
     figure_blob,
     figures_to_read,
     finding_fixes,

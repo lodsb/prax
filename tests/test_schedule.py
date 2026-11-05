@@ -239,6 +239,31 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     assert asked == set(pictured[:2])
     assert store.last_job(con, "figures") is not None
 
+    # the first could not be read (its picture is not in the original), the
+    # second ran (its chunk, in this test, still unread): the next night
+    # asks for the second and the third, not the first again
+    store.finish_reading(
+        con,
+        pictured[0],
+        outcome="error",
+        stamp="figures/v",
+        error="ExtractionError: no figure could be read",
+        extractor="figures",
+    )
+    store.finish_reading(
+        con, pictured[1], outcome="same", stamp="figures/v", extractor="figures"
+    )
+    assert start_figures(con, 2)["requested"] == 2
+    waiting = {r["doc_id"] for r in store.reading_requests(con, state="requested")}
+    assert waiting == {pictured[1], pictured[2]}
+    # a new text of it is tried again
+    assert store.failed_on_this_text(con, "figures") == {pictured[0]}
+    con.execute(
+        "UPDATE documents SET parsed_at = '2999-01-01T00:00:00Z' WHERE id = ?",
+        (pictured[0],),
+    )
+    assert store.failed_on_this_text(con, "figures") == frozenset()
+
 
 def test_the_figures_entry_is_one_the_clock_knows() -> None:
     got = schedule.entries({"figures": {"at": "21:00", "documents": 150}})

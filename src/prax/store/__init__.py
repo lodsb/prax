@@ -244,6 +244,7 @@ from .documents import (  # noqa: F401
     faces_due,
     faces_of,
     fact_modules,
+    failed_on_this_text,
     figure_and_formula_data,
     figure_blob,
     figures_to_read,

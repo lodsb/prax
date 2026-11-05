@@ -756,6 +756,27 @@ def figures_to_read(
     return n
 
 
+@_reading
+def failed_on_this_text(con: sqlite3.Connection, extractor: str) -> frozenset[int]:
+    """The documents whose last ``extractor`` reading failed on the text
+    they hold now (it finished after the text landed, ``parsed_at``): a
+    slice of a backlog passes them by, or it asks every night for what
+    cannot be read. The figures slice asked one web page fifteen times for
+    pictures its snapshot never held (943 failed readings in 170
+    documents by 2026-11-05). A new text, or a reading a person asks for,
+    tries again."""
+    rows = con.execute(
+        "SELECT r.doc_id FROM readings r JOIN documents d ON d.id = r.doc_id"
+        " WHERE r.extractor = ? AND r.state = 'error'"
+        " AND r.finished_at >= coalesce(d.parsed_at, '')"
+        " AND r.id = (SELECT max(id) FROM readings"
+        "  WHERE doc_id = r.doc_id AND extractor = r.extractor"
+        "  AND state IN ('done', 'error'))",
+        (extractor,),
+    ).fetchall()
+    return frozenset(int(r[0]) for r in rows)
+
+
 def readings_done_since(con: sqlite3.Connection, since: str) -> dict[str, int]:
     """How many readings finished since a moment, per extractor: the rate
     a waiting queue is moving at, which is what says whether it is stuck
