@@ -9730,3 +9730,25 @@ finding no reading fixes left alone. Each of three mutations fails it:
 no skip of the failed, no hold while waiting, the plain mode kept over
 the OCR one.
 
+## 2026-11-05: four complex functions split
+
+The top of the complexity list (ruff's C901, the ceiling 21): `_move_page`
+at 18 (`store.pages.moves`, from 2026-11-03), and at 17
+`parse.hand_out`, `up._command` and `resolution.apply`. Each was split
+without a change of behaviour, the parts at 12 or under:
+
+- `_move_page`: `_project_named` (the project a move names, refused when
+  missing, hidden or the page itself), `_destination` (the page it then
+  sits under) and `_rehome` (its `part_of` edges made the one).
+- `Parse.hand_out`: `_requested_items` (the requested readings a batch
+  carries) and `_request_item` (one of them, or none when there is
+  nothing to read). The documents offered are now taken from the items
+  returned, the same set as before.
+- `Supervisor._command`: `_stop_role`, `_start_roles`, `_restart_roles`.
+- `resolution.apply`: `_adjudicate`, the likely candidates put to the
+  adjudicator.
+
+The suites that reach them passed unchanged: pages, split, moves and
+the wall (48), the worker, parse and reading tests (137), the host
+tests (79), resolution and merges (57). The top is 16 now.
+

@@ -429,36 +429,16 @@ class Supervisor:
         cmd = what.get("cmd")
         name = what.get("name")
         if cmd == "stop" and name not in (None, "", "all"):
-            if name not in self.state:
-                self._say(f"no role named {name}")
-                return
-            for one in self._party(str(name)):
-                self._say(f"{one}: asked to stop until started again")
-                self.paused.add(one)
-                self.held.add(one)
-                self.idled.discard(one)  # stopped by a person, not for quiet
-                proc = self.procs.get(one)
-                if proc is not None and proc.poll() is None:
-                    self._end(one, proc)
+            self._stop_role(str(name))
         elif cmd == "stop":
             self._say("asked to stop")
             self.stopping.set()
         elif cmd == "start":
-            names = (
+            self._start_roles(
                 list(self.paused)
                 if name in (None, "", "all")
                 else self._party(str(name))
             )
-            for one in names:
-                if one not in self.state:
-                    self._say(f"no role named {one}")
-                elif one in self.paused:
-                    self._say(f"{one}: asked to start")
-                    self.idled.discard(one)
-                    self.paused.discard(one)
-                    self.held.discard(one)
-                else:
-                    self._say(f"{one}: not stopped")
         elif cmd == "swap":
             self._swap(
                 str(what.get("to") or ""),
@@ -474,22 +454,51 @@ class Supervisor:
             for group in groups:
                 self._unswap(group, "asked for")
         elif cmd == "restart":
-            names = (
+            self._restart_roles(
                 [r.name for r in self.roles]
-                if what.get("name") in (None, "", "all")
-                else [str(what["name"])]
+                if name in (None, "", "all")
+                else [str(name)]
             )
-            for name in names:
-                if name not in self.state:
-                    self._say(f"no role named {name}")
-                    continue
-                self.restart_now.add(name)
-                self.idled.discard(name)
-                self.paused.discard(name)  # a restart of a paused role starts it
-                self.held.discard(name)
-                proc = self.procs.get(name)
-                if proc is not None and proc.poll() is None:
-                    self._end(name, proc)
+
+    def _stop_role(self, name: str) -> None:
+        """A role, and the companions that move with it, stopped until a
+        person starts them again."""
+        if name not in self.state:
+            self._say(f"no role named {name}")
+            return
+        for one in self._party(name):
+            self._say(f"{one}: asked to stop until started again")
+            self.paused.add(one)
+            self.held.add(one)
+            self.idled.discard(one)  # stopped by a person, not for quiet
+            proc = self.procs.get(one)
+            if proc is not None and proc.poll() is None:
+                self._end(one, proc)
+
+    def _start_roles(self, names: list[str]) -> None:
+        for one in names:
+            if one not in self.state:
+                self._say(f"no role named {one}")
+            elif one in self.paused:
+                self._say(f"{one}: asked to start")
+                self.idled.discard(one)
+                self.paused.discard(one)
+                self.held.discard(one)
+            else:
+                self._say(f"{one}: not stopped")
+
+    def _restart_roles(self, names: list[str]) -> None:
+        for name in names:
+            if name not in self.state:
+                self._say(f"no role named {name}")
+                continue
+            self.restart_now.add(name)
+            self.idled.discard(name)
+            self.paused.discard(name)  # a restart of a paused role starts it
+            self.held.discard(name)
+            proc = self.procs.get(name)
+            if proc is not None and proc.poll() is None:
+                self._end(name, proc)
 
     # -- a model server that has loaded, and one that has been quiet
 

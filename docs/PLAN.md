@@ -33,12 +33,15 @@ and its item 5 is items 1 and 2 below.
 
 ### Next, in order
 
-1. **AO's fixes, now the card runs.** The counts of 2026-11-03 (`GET
-   /documents/quality`): 528 documents with maths as text (marker), 203
-   scans read from their OCR layer, 1,216 with bare captions (the
-   crops), 345 with leftovers. Asked for in batches with `POST
-   /readings/bulk {"finding": …, "limit": …}`, the first 50 of the
-   maths on 2026-11-03, timed before the rest is asked for.
+1. (asked for by the clock from 2026-11-05) **AO's fixes, now the card
+   runs.** The maths as text was read by marker on the night of
+   2026-11-03: 529 papers, and the formulas after them. The rest is
+   `schedule: fixes` (21:30, 200 a reading a night): 203 scans read from
+   their OCR layer (marker, every page itself) and 1,218 documents with
+   bare captions (the crops), counted on 2026-11-05. The 364 with
+   leftovers name no reading and wait on the Admin page's "text checks".
+   Next: the rate per paper of marker from the nights' readings, and
+   whether the ocr-layer reads replaced the texts they were asked for.
 2. **The card's other work, in this order.** The latex2html re-import
    and its formulas. AJ's trial on marker and its routing rules. AI's
    measurement from `run/swaps.jsonl`, once the card has been busy for
@@ -47,8 +50,10 @@ and its item 5 is items 1 and 2 below.
 4. **Without the card, in any order.** CI's runner (done 2026-11-04:
    `ubuntu-24.04` pinned; a move to 26 is that line and a green run). A page
    split by the door (done 2026-11-04, R3a). The engineering
-   leftovers: typed shapes (a search hit first) and the remaining complex
-   functions. The measured improvements that need no model ("Retrieval
+   leftovers: typed shapes (the search hit, a document, a job row and
+   the meta keys are typed; a nested meta object as one earns a shape)
+   and the remaining complex functions (the four at 17 and 18 split on
+   2026-11-05; the top is 16). The measured improvements that need no model ("Retrieval
    and ask", "The graph").
 
 **Waiting on the user:**
@@ -978,7 +983,10 @@ not done.
       same answers before and after on the live store: 400 passages'
       links, 14,130 names read as venues, the ontology's lint, 153
       calculator steps. The top is 17: `resolution.apply`, `up._command`,
-      `parse.hand_out`.)
+      `parse.hand_out`.) (2026-11-05: those three and `_move_page` at 18 split, each part
+      12 or under, the suites of each passing unchanged. The top is 16:
+      `host.plan.plan`, `latex2html.element`, `_rule_matches`,
+      `select_for_reading`, `connect_entities`, `cite_link`.)
 - [x] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests

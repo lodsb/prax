@@ -115,11 +115,79 @@ def _capture_item(h: HandOut, doc_id: int) -> dict[str, Any] | None:
     }
 
 
+def _requested_items(h: HandOut, room: int, taken: set[int]) -> list[dict[str, Any]]:
+    """The requested readings a batch carries, at most ``room``: a person
+    asked, whatever the scope; the whole queue, oldest first (the status
+    view's newest fifty hid the 228 marker requests behind the follow-ups
+    placed after them), one reading a document, none of the documents
+    already ``taken``. A reading that runs no model goes first, whenever
+    it was asked for: it costs seconds of CPU, and it makes the pictures
+    the expensive readings then read. Among equals, oldest first, so a
+    burst of new requests never hides the ones behind it."""
+    items: list[dict[str, Any]] = []
+    offered: set[int] = set()  # one reading a document a batch
+    requests = sorted(
+        store.reading_requests(h.con, limit=None, oldest_first=True),
+        key=lambda r: (r["extractor"] in READING_STEPS, r["id"]),
+    )
+    now = time.monotonic()
+    for req in requests:
+        doc_id = req["doc_id"]
+        if len(items) >= room or not h.free(doc_id) or doc_id in taken:
+            continue
+        if leases.reading_deferred(req["extractor"], doc_id, now):
+            continue  # its server is not there; the document's others go on
+        if doc_id in offered:
+            # its other readings wait their turn: two annotating readings
+            # of one document in a batch are computed from the same text,
+            # and the second would undo the first
+            continue
+        item = _request_item(h, req)
+        if item is not None:
+            items.append(item)
+            offered.add(doc_id)
+    return items
+
+
+def _request_item(h: HandOut, req: dict[str, Any]) -> dict[str, Any] | None:
+    """What a worker is handed for one requested reading, or None when
+    there is nothing to read (the request is then cancelled)."""
+    doc_id = req["doc_id"]
+    doc = store.get_document(h.con, doc_id, max_chars=0)
+    if doc is None:
+        return None
+    if nothing_to_read(h.con, doc_id, req):
+        # every figure this model reads has been read: the request would
+        # cost a fetch, a parse and a round trip to come back "same". Half
+        # the queue was this on 2026-09-23
+        store.cancel_reading(h.con, doc_id)
+        return None
+    item = {
+        "doc_id": doc_id,
+        "mime": doc["mime"],
+        "filename": _file_name(doc.get("original_path")),
+        "original": f"/doc/{doc_id}/original",
+        "old_len": doc["text_len"],
+        "extractor": req["extractor"],
+        "mode": req.get("mode"),
+        # a reading someone asked for takes what it finds; one the door or
+        # a pass asked for keeps a longer text against a shorter one (the
+        # review of 2026-10-18: marker over a scan)
+        "force": req.get("by") in FORCED_BY,
+    }
+    if doc["text_len"] and takes_previous(req["extractor"]):
+        # the extractor works on the current text: a second reading of an
+        # image joins the first (vision.merge_readings), the figures'
+        # readings and references go into the parsed text
+        held = store.get_document(h.con, doc_id)
+        item["previous"] = held["text"] if held else None
+    return item
+
+
 class Parse(Step):
     name = "parse"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        items: list[dict[str, Any]] = []
         # waiting captures keep up to half of a batch, counted by the ones
         # that go out (a capture tried and left alone keeps no room): a
         # capture is a person's page, parsed in seconds, and thousands of
@@ -134,62 +202,8 @@ class Parse(Step):
             if got is not None:
                 fresh.append(got)
         taken = {i["doc_id"] for i in fresh}
-        # requested readings first: a person asked, whatever the scope; the
-        # whole queue, oldest first — the status view's newest fifty hid
-        # the 228 marker requests behind the follow-ups placed after them
-        offered: set[int] = set()  # one reading a document a batch
-        # a reading that runs no model goes first, whenever it was asked
-        # for: it costs seconds of CPU, and it makes the pictures the
-        # expensive readings then read. Among equals, oldest first, so a
-        # burst of new requests never hides the ones behind it
-        requests = sorted(
-            store.reading_requests(h.con, limit=None, oldest_first=True),
-            key=lambda r: (r["extractor"] in READING_STEPS, r["id"]),
-        )
-        now = time.monotonic()
-        for req in requests:
-            doc_id = req["doc_id"]
-            if len(items) >= h.limit - len(fresh) or not h.free(doc_id):
-                continue
-            if doc_id in taken:
-                continue
-            if leases.reading_deferred(req["extractor"], doc_id, now):
-                continue  # its server is not there; the document's others go on
-            if doc_id in offered:
-                # its other readings wait their turn: two annotating
-                # readings of one document in a batch are computed from
-                # the same text, and the second would undo the first
-                continue
-            doc = store.get_document(h.con, doc_id, max_chars=0)
-            if doc is None:
-                continue
-            if nothing_to_read(h.con, doc_id, req):
-                # every figure this model reads has been read: the request
-                # would cost a fetch, a parse and a round trip to come back
-                # "same". Half the queue was this on 2026-09-23
-                store.cancel_reading(h.con, doc_id)
-                continue
-            item = {
-                "doc_id": doc_id,
-                "mime": doc["mime"],
-                "filename": _file_name(doc.get("original_path")),
-                "original": f"/doc/{doc_id}/original",
-                "old_len": doc["text_len"],
-                "extractor": req["extractor"],
-                "mode": req.get("mode"),
-                # a reading someone asked for takes what it finds; one the
-                # door or a pass asked for keeps a longer text against a
-                # shorter one (the review of 2026-10-18: marker over a scan)
-                "force": req.get("by") in FORCED_BY,
-            }
-            if doc["text_len"] and takes_previous(req["extractor"]):
-                # the extractor works on the current text: a second reading
-                # of an image joins the first (vision.merge_readings), the
-                # figures' readings and references go into the parsed text
-                held = store.get_document(h.con, doc_id)
-                item["previous"] = held["text"] if held else None
-            items.append(item)
-            offered.add(doc_id)
+        items = _requested_items(h, h.limit - len(fresh), taken)
+        offered = {i["doc_id"] for i in items}
         items += fresh
         # what room is left: the other captures, and in the backlog pass
         # the documents read by an extractor prax has revised since

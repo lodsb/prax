@@ -717,37 +717,49 @@ def apply(
             )
             report.merged_twins += 1
     if p.likely:
-        decisions = (adjudicator or NoAdjudicator()).decide(p.likely)
-        declined: list[tuple[int, int]] = []
-        for c, yes in zip(p.likely, decisions, strict=True):
-            if yes is None:
-                continue  # no answer: left for the next round
-            if yes:
-                risk = store.merge_risk(con, c.keep, c.drop)
-                if risk:
-                    # a model's yes on a merge that reaches far: a person's
-                    store.hold_candidate(con, c.keep, c.drop, f"held: {risk}")
-                    report.held += 1
-                    continue
-                try:
-                    store.merge_entities(
-                        con, c.drop, c.keep, producer=PRODUCER, run=run
-                    )
-                except ValueError:
-                    continue  # already merged the other way this round
-                report.merged_likely += 1
-            else:
-                report.declined += 1
-                declined.append((c.keep, c.drop))
-        if (
-            declined
-            and adjudicator is not None
-            and not isinstance(adjudicator, NoAdjudicator)
-        ):
-            # a real no is recorded, so the pair is not asked about again;
-            # the default adjudicator's no is only "nobody asked"
-            store.decide_candidates(con, declined, by=adjudicator.name)
+        _adjudicate(con, p.likely, adjudicator, run, report)
     return report
+
+
+def _adjudicate(
+    con: sqlite3.Connection,
+    likely: list[Candidate],
+    adjudicator: Adjudicator | None,
+    run: str,
+    report: Report,
+) -> None:
+    """The likely candidates put to the adjudicator: a yes merged unless
+    the merge reaches far (then held for a person), a real no recorded so
+    the pair is not asked about again, no answer left for the next round.
+    Counted in ``report``."""
+    decisions = (adjudicator or NoAdjudicator()).decide(likely)
+    declined: list[tuple[int, int]] = []
+    for c, yes in zip(likely, decisions, strict=True):
+        if yes is None:
+            continue  # no answer: left for the next round
+        if not yes:
+            report.declined += 1
+            declined.append((c.keep, c.drop))
+            continue
+        risk = store.merge_risk(con, c.keep, c.drop)
+        if risk:
+            # a model's yes on a merge that reaches far: a person's
+            store.hold_candidate(con, c.keep, c.drop, f"held: {risk}")
+            report.held += 1
+            continue
+        try:
+            store.merge_entities(con, c.drop, c.keep, producer=PRODUCER, run=run)
+        except ValueError:
+            continue  # already merged the other way this round
+        report.merged_likely += 1
+    if (
+        declined
+        and adjudicator is not None
+        and not isinstance(adjudicator, NoAdjudicator)
+    ):
+        # a real no is recorded, so the pair is not asked about again; the
+        # default adjudicator's no is only "nobody asked"
+        store.decide_candidates(con, declined, by=adjudicator.name)
 
 
 def decide(

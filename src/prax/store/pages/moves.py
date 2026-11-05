@@ -92,36 +92,17 @@ def _move_page(
     before_ids = list(dict.fromkeys(int(r["doc_id"]) for r in edges))
     before = [str(_slug_at(con, i)) for i in before_ids]
     above = _parent_of(con, doc_id)
-    project: sqlite3.Row | None = None
-    if part_of:
-        project = con.execute(
-            "SELECT p.doc_id, p.slug, d.title FROM pages p"
-            " JOIN documents d ON d.id = p.doc_id"
-            " WHERE p.slug = ? AND p.kind = 'project'",
-            (_slug_of(con, slugify(part_of)),),
-        ).fetchone()
-        if project is None or document_hidden(con, int(project["doc_id"])):
-            raise KeyError(f"no project page {part_of!r}")
-        if int(project["doc_id"]) == doc_id:
-            raise ValueError("a project is not part of itself")
+    project = _project_named(con, part_of, doc_id) if part_of else None
     after = before if part_of is None else ([str(project["slug"])] if project else [])
-    if parent is not None:
-        under = page_id(con, parent) if parent else None
-        if parent and (under is None or document_hidden(con, under)):
-            raise KeyError(f"no page {parent!r}")
-    elif part_of is not None and (
-        (above is None and after != before)
-        or (
-            above is not None
-            and _is_project_page(con, above)
-            and above != (int(project["doc_id"]) if project is not None else None)
-        )
-    ):
-        # the page sat under a project's page (by an edge, or only in the
-        # tree) or at the top: it goes under the project it is part of now
-        under = int(project["doc_id"]) if project is not None else None
-    else:
-        under = above
+    under = _destination(
+        con,
+        doc_id,
+        parent=parent,
+        moving=part_of is not None,
+        project=project,
+        above=above,
+        changed=after != before,
+    )
     if under is not None:
         if under == doc_id:
             raise ValueError("a page does not sit under itself")
@@ -139,26 +120,12 @@ def _move_page(
     if dry_run:
         return {**plan, "changed": True, "dry_run": True}
     revision = _revision_after(con, doc_id)
-    name, node_type = _page_node(con, doc_id)
-    ended: list[int] = []
-    kept = False  # one live edge to the project stays; any other ends
     target = int(project["doc_id"]) if project is not None else None
-    for r in edges if part_of is not None else []:
-        if int(r["doc_id"]) == target and not kept:
-            kept = True
-            continue
-        _invalidate_edge(con, int(r["id"]))
-        ended.append(int(r["id"]))
-    if project is not None and not kept:
-        _link(
-            con,
-            Edge(name, node_type, "part_of", str(project["title"]), "project"),
-            confidence="EXTRACTED",
-            source_doc=doc_id,
-            evidence=f"page {current_slug} {_MOVED}, revision {revision}",
-            producer="page",
-            run=f"{current_slug}@{revision}",
-        )
+    ended = (
+        _rehome(con, doc_id, edges, project, f"{current_slug}@{revision}")
+        if part_of is not None
+        else []
+    )
     if under != above:
         _set_page_parent(con, doc_id, under, by=author)
     # the note is read by everyone who sees the page, whoever moved it
@@ -180,6 +147,86 @@ def _move_page(
 
 
 move_page = _serialized(_committing(_move_page))
+
+
+def _project_named(con: sqlite3.Connection, part_of: str, doc_id: int) -> sqlite3.Row:
+    """The project page a move names, refused when it is not there, is
+    hidden from the mover, or is the page itself."""
+    project: sqlite3.Row | None = con.execute(
+        "SELECT p.doc_id, p.slug, d.title FROM pages p"
+        " JOIN documents d ON d.id = p.doc_id"
+        " WHERE p.slug = ? AND p.kind = 'project'",
+        (_slug_of(con, slugify(part_of)),),
+    ).fetchone()
+    if project is None or document_hidden(con, int(project["doc_id"])):
+        raise KeyError(f"no project page {part_of!r}")
+    if int(project["doc_id"]) == doc_id:
+        raise ValueError("a project is not part of itself")
+    return project
+
+
+def _destination(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    parent: str | None,
+    moving: bool,
+    project: sqlite3.Row | None,
+    above: int | None,
+    changed: bool,
+) -> int | None:
+    """The page a moved page sits under: the ``parent`` named (None for
+    the top); else, when its project changes (``moving``), the new
+    project's page for a page that sat at the top or under another
+    project's page; else where it sits (``above``)."""
+    if parent is not None:
+        under = page_id(con, parent) if parent else None
+        if parent and (under is None or document_hidden(con, under)):
+            raise KeyError(f"no page {parent!r}")
+        return under
+    target = int(project["doc_id"]) if project is not None else None
+    if moving and (
+        (above is None and changed)
+        or (above is not None and _is_project_page(con, above) and above != target)
+    ):
+        # the page sat under a project's page (by an edge, or only in the
+        # tree) or at the top: it goes under the project it is part of now
+        return target
+    return above
+
+
+def _rehome(
+    con: sqlite3.Connection,
+    doc_id: int,
+    edges: list[sqlite3.Row],
+    project: sqlite3.Row | None,
+    run: str,
+) -> list[int]:
+    """A moved page's ``part_of`` edges made the one to ``project``: one
+    live edge to it stays, any other ends, and one is linked when none was
+    there. Returns the ended edges' ids."""
+    name, node_type = _page_node(con, doc_id)
+    ended: list[int] = []
+    kept = False
+    target = int(project["doc_id"]) if project is not None else None
+    for r in edges:
+        if int(r["doc_id"]) == target and not kept:
+            kept = True
+            continue
+        _invalidate_edge(con, int(r["id"]))
+        ended.append(int(r["id"]))
+    if project is not None and not kept:
+        slug, revision = run.rsplit("@", 1)
+        _link(
+            con,
+            Edge(name, node_type, "part_of", str(project["title"]), "project"),
+            confidence="EXTRACTED",
+            source_doc=doc_id,
+            evidence=f"page {slug} {_MOVED}, revision {revision}",
+            producer="page",
+            run=run,
+        )
+    return ended
 
 
 def _move_note(plan: dict[str, Any]) -> str:
