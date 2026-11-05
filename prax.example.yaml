@@ -214,3 +214,9 @@ steps:
 #   questions: "06:30"                      # the standing questions asked again where
 #                                           #   the library learned something, then the
 #                                           #   day's briefing ({at: …, briefing: false} skips it)
+#   figures: {at: "21:00", documents: 150}  # the pictures the vision model has not read,
+#                                           #   a slice a night
+#   fixes: {at: "21:30", documents: 200}    # the readings the text checks name as
+#                                           #   fixes (marker for a scan read from its OCR
+#                                           #   layer, the crops for a caption with no
+#                                           #   picture), a slice a reading a night

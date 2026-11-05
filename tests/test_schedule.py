@@ -265,6 +265,106 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     assert store.failed_on_this_text(con, "figures") == frozenset()
 
 
+def _found(con: sqlite3.Connection, doc_id: int, *findings: dict[str, Any]) -> None:
+    """What the text checks found in a document's current text."""
+    meta = store.get_meta(con, doc_id)
+    row = con.execute("SELECT text_hash FROM documents WHERE id = ?", (doc_id,))
+    meta["quality"] = {"text_hash": row.fetchone()[0], "findings": list(findings)}
+    store.set_meta(con, doc_id, meta)
+
+
+def test_the_fixes_the_checks_name_are_asked_for_a_slice_a_night(
+    con: sqlite3.Connection,
+) -> None:
+    """A slice a night of each reading the findings name, nothing for a
+    reading while its last slice waits, never a fix that failed on the
+    text the document holds, and nothing for a finding no reading fixes."""
+    from prax.api.passes import start_fixes
+
+    scans = [_pdf_with(con, f"scan {i}", "") for i in range(3)]
+    for doc_id in scans:
+        _found(
+            con,
+            doc_id,
+            {
+                "check": "ocr-layer",
+                "count": 1,
+                "fix": {"extractor": "marker", "ocr": True},
+            },
+        )
+    crops = [_pdf_with(con, f"plots {i}", "") for i in range(2)]
+    for doc_id in crops:
+        _found(
+            con,
+            doc_id,
+            {"check": "bare-figures", "count": 3, "fix": {"extractor": "figure-crops"}},
+        )
+    # a finding no reading fixes stays for a person
+    _found(con, _pdf_with(con, "odd", ""), {"check": "leftovers", "count": 2})
+    # one document, two findings naming the same reading: asked once, and
+    # in the mode that reads every page itself
+    _found(
+        con,
+        scans[0],
+        {"check": "maths-as-text", "count": 4, "fix": {"extractor": "marker"}},
+        {"check": "ocr-layer", "count": 1, "fix": {"extractor": "marker", "ocr": True}},
+    )
+
+    got = start_fixes(con, 2)
+    assert got["requested"] == {"marker": 2, "figure-crops": 2}
+    asked = {
+        (r["doc_id"], r["extractor"]) for r in store.reading_requests(con, limit=None)
+    }
+    assert asked == {
+        (scans[0], "marker"),
+        (scans[1], "marker"),
+        (crops[0], "figure-crops"),
+        (crops[1], "figure-crops"),
+    }
+    mode = next(
+        r["mode"]
+        for r in store.reading_requests(con, limit=None)
+        if r["doc_id"] == scans[0]
+    )
+    assert str(mode).endswith("-ocr")
+    # the next night, with those still waiting: nothing more
+    again = start_fixes(con, 2)
+    assert again["requested"] == {} and again["waiting"] == {
+        "marker": 2,
+        "figure-crops": 2,
+    }
+
+    # one marker read failed on the text it holds, one ran: the next night
+    # asks for the third scan and not the failed one again (the one that
+    # ran keeps its finding here, as a test; a real read replaces the text)
+    store.finish_reading(
+        con, scans[0], outcome="error", stamp="marker/x", error="no", extractor="marker"
+    )
+    store.finish_reading(
+        con, scans[1], outcome="same", stamp="marker/x", extractor="marker"
+    )
+    for doc_id in crops:
+        store.finish_reading(
+            con,
+            doc_id,
+            outcome="same",
+            stamp="figure-crops/x",
+            extractor="figure-crops",
+        )
+    _found(con, crops[0])  # the crops filled it: no finding left
+    _found(con, crops[1])
+    third = start_fixes(con, 5)
+    assert third["requested"] == {"marker": 2}
+    waiting = {r["doc_id"] for r in store.reading_requests(con, state="requested")}
+    assert waiting == {scans[1], scans[2]}
+    assert store.last_job(con, "fixes") is not None
+
+
+def test_the_fixes_entry_is_one_the_clock_knows() -> None:
+    got = schedule.entries({"fixes": {"at": "21:30", "documents": 200}})
+    assert [(e.name, e.options) for e in got] == [("fixes", {"documents": 200})]
+
+
 def test_the_figures_entry_is_one_the_clock_knows() -> None:
     got = schedule.entries({"figures": {"at": "21:00", "documents": 150}})
     assert [(e.name, e.options) for e in got] == [("figures", {"documents": 150})]

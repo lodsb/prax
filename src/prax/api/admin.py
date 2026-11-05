@@ -169,6 +169,15 @@ def maintenance(request: Request) -> dict[str, Any]:
             "start": {"path": "/figures", "body": {}},
         },
         {
+            "name": "fixes",
+            "what": "a slice of the readings the text checks name as fixes:"
+            " marker for a scan read from its OCR layer, the crops for a"
+            " caption with no picture",
+            "at": at("fixes"),
+            "last": last("fixes"),
+            "start": {"path": "/fixes", "body": {}},
+        },
+        {
             "name": "questions",
             "what": "the standing questions asked again where the library"
             " learned something, then the day's briefing",
@@ -204,6 +213,16 @@ class FiguresReq(BaseModel):
 def figures_start(req: FiguresReq, request: Request) -> dict[str, Any]:
     """The figures slice now, as the clock asks for it at its hour."""
     return passes.start_figures(_con(request), req.documents)
+
+
+class FixesReq(BaseModel):
+    documents: int | None = None  # a reading's slice; FIXES_SLICE by default
+
+
+@router.post("/fixes")
+def fixes_start(req: FixesReq, request: Request) -> dict[str, Any]:
+    """The fixes slice now, as the clock asks for it at its hour."""
+    return passes.start_fixes(_con(request), req.documents)
 
 
 @router.get("/stats")

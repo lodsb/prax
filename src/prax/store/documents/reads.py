@@ -1376,6 +1376,25 @@ _CURRENT_QUALITY = (
 
 
 @_reading
+def findings_with_fixes(
+    con: sqlite3.Connection,
+) -> list[tuple[int, str, dict[str, Any]]]:
+    """Every finding of a document's current text that names a reading as
+    its fix: ``(doc_id, check, fix)``, the oldest document first. What the
+    nightly fixes slice works through (``schedule: fixes``). A fix that ran
+    and could not help is no longer named (``parsers.quality``)."""
+    return [
+        (int(r[0]), str(r[1]), json.loads(r[2]))
+        for r in con.execute(
+            "SELECT d.id, json_extract(f.value, '$.check'),"
+            " json_extract(f.value, '$.fix')"
+            + _CURRENT_QUALITY
+            + " AND json_type(f.value, '$.fix') = 'object' ORDER BY d.id"
+        )
+    ]
+
+
+@_reading
 def quality_page(
     con: sqlite3.Connection,
     *,

@@ -260,6 +260,7 @@ from .reads import (  # noqa: F401
     equations_near,
     figure_and_formula_data,
     find_chunk,
+    findings_with_fixes,
     formula_by_number,
     get_chunk,
     get_document,

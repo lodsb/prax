@@ -251,6 +251,7 @@ from .documents import (  # noqa: F401
     fill_text_lengths,
     find_chunk,
     finding_fixes,
+    findings_with_fixes,
     fingerprint_text,
     finish_reading,
     finished_readings,

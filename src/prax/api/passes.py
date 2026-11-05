@@ -1,6 +1,7 @@
 """The passes the door runs on itself as jobs, started by a request or by
 its clock (``prax.host.schedule``): maintenance, a resolution round, a
-backup, the night's slice of unread figures. Each is ``run_as_job``: a
+backup, the night's slices of unread figures and of the fixes the text
+checks name. Each is ``run_as_job``: a
 thread with its own connection, the job row carrying progress and error."""
 
 from __future__ import annotations
@@ -15,7 +16,15 @@ from prax import models, store
 
 # the passes the store does to itself, as the jobs they run under: the
 # banner's list, and the Jobs view's (GET /maintenance)
-MAINTENANCE = ("maintain", "heal", "resolve", "backup", "figures", "questions")
+MAINTENANCE = (
+    "maintain",
+    "heal",
+    "resolve",
+    "backup",
+    "figures",
+    "fixes",
+    "questions",
+)
 
 
 def run_as_job(
@@ -133,3 +142,71 @@ def start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
         got = store.request_readings(con, chosen, "figures", by="clock")
         job.update(note=f"asked for {got.get('requested', 0)} of {len(chosen)}")
         return {"job": job.id, **got}
+
+
+FIXES_SLICE = 200  # documents a reading a night: marker read 529 in one
+
+
+def start_fixes(con: Any, documents: int | None = None) -> dict[str, Any]:
+    """The readings the text checks name as fixes, a slice a night
+    (``schedule: fixes``; stage AO).
+
+    A new text gets its fix when it lands (``pipeline.follow_ups``); the
+    texts read before a check existed wait. On 2026-11-05: 1,218 documents
+    with captions and no picture (the crops), 203 scans read from their OCR
+    layer (marker). Asked by hand in batches until then. So the clock asks,
+    for each reading the findings name, the next ``documents`` oldest
+    first, in the mode this host gives it (``quality.reading``), and
+    nothing for a reading while any of it still waits. It passes by a
+    document already waiting for that reading, and one whose last reading
+    of it failed on the text it holds (``store.failed_on_this_text``). A
+    fix that ran and could not help is not named again by its finding
+    (``parsers.quality``), so the slice never asks for it twice. A finding
+    no reading fixes (leftovers, a short text) stays on the Admin page's
+    "text checks" list for a person.
+    """
+    from prax.parsers import quality
+
+    n = int(documents or FIXES_SLICE)  # schedule: fixes: {documents: N}
+    with store.Job(con, "fixes", note=f"a slice of {n} a reading") as job:
+        waiting = store.waiting_readings(con)
+        # a reading a document, in one mode: two findings naming marker
+        # are one read, and the one that must read every page itself wins
+        chosen: dict[str, dict[int, quality.Fix]] = {}
+        held: dict[str, int] = {}
+        failed: dict[str, frozenset[int]] = {}
+        for doc_id, _check, kept in store.findings_with_fixes(con):
+            fix = quality.Fix.of(kept)
+            if fix is None:
+                continue
+            extractor = fix.extractor
+            if waiting.get(extractor):
+                held[extractor] = int(waiting[extractor])
+                continue
+            if extractor not in failed:
+                failed[extractor] = store.failed_on_this_text(con, extractor)
+            if doc_id in failed[extractor]:
+                continue
+            these = chosen.setdefault(extractor, {})
+            if doc_id in these:
+                if fix.ocr and not these[doc_id].ocr:
+                    these[doc_id] = fix
+            elif len(these) < n:
+                these[doc_id] = fix
+        groups: dict[tuple[str, str | None], list[int]] = {}
+        for these in chosen.values():
+            for doc_id, fix in these.items():
+                groups.setdefault(quality.reading(fix), []).append(doc_id)
+        asked: dict[str, int] = {}
+        skipped = 0
+        for (extractor, mode), ids in groups.items():
+            got = store.request_readings(con, ids, extractor, mode=mode, by="clock")
+            asked[extractor] = asked.get(extractor, 0) + int(got["requested"])
+            skipped += int(got["skipped"])
+        said = ", ".join(f"{k} {v}" for k, v in sorted(asked.items())) or "nothing"
+        if held:
+            said += "; still waiting: " + ", ".join(
+                f"{k} {v}" for k, v in sorted(held.items())
+            )
+        job.update(note=f"asked for {said}")
+        return {"job": job.id, "requested": asked, "skipped": skipped, "waiting": held}

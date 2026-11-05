@@ -28,7 +28,7 @@ from typing import Any
 
 from prax import config
 
-NAMES = ("maintain", "backup", "questions", "figures", "resolve")
+NAMES = ("maintain", "backup", "questions", "figures", "fixes", "resolve")
 TICK = 30.0
 
 

@@ -9697,3 +9697,36 @@ or a reading a person asks for, tries again. Test: the slice test in
 failed one not asked again, a new text clears it); dropping the skip
 fails it.
 
+## 2026-11-05: the fixes the text checks name, a slice a night
+
+A new text gets its fix when it lands (`pipeline.follow_ups`). The
+texts read before a check existed waited for a person to ask in batches
+(`POST /readings/bulk {"finding": …}`), as the maths papers were on
+2026-11-03 and -04. On 2026-11-05 the checks named a fix for 1,218
+documents with captions and no picture (`figure-crops`), 203 scans read
+from their OCR layer (`marker`, every page itself) and one paper with
+maths as text (`marker`). Leftovers (364), short texts (6) and PDFs with
+no text layer (5) name no reading and stay on the Admin page's "text
+checks" list.
+
+`schedule: fixes` (`api.passes.start_fixes`, `POST /fixes`, the Jobs
+page) does it at its hour. For each reading the current findings name
+(`store.findings_with_fixes`), it asks the next `documents` (200 by
+default, `FIXES_SLICE`), oldest first, in the mode this host gives it
+(`quality.reading`). A reading with any request still waiting is left
+for the night after. A document is asked once a reading even when two
+findings name it, and a fix that reads every page itself wins over one
+that does not. It passes by a document whose last reading of that kind
+failed on its current text (`store.failed_on_this_text`, the same day's
+fix to the figures slice). A fix that ran and could not help is no
+longer named by its finding (`parsers.quality`), so it is not asked
+twice. This host runs it at 21:30, after the figures slice; at marker's
+pace of 2026-11-03 (529 papers a night) the scans take one night, and
+the crops run on the CPU with no model.
+
+Test: `tests/test_schedule.py`, two findings on one document, a slice
+per reading, nothing while it waits, a failed read not asked again, a
+finding no reading fixes left alone. Each of three mutations fails it:
+no skip of the failed, no hold while waiting, the plain mode kept over
+the OCR one.
+
