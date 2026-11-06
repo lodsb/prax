@@ -256,6 +256,36 @@ def set_text_source(con: sqlite3.Connection, doc_id: int, stamp: str) -> None:
     con.commit()
 
 
+# where chunks handed to another document wait for its text: far below the
+# -1, -2… that _write_chunks parks the rows it keeps at, since seq is unique
+# per document
+_ADOPTED = -1_000_000_000
+
+
+def _adopt_chunks(
+    con: sqlite3.Connection, from_doc: int, start: int, end: int, to_doc: int
+) -> int:
+    """Hand ``to_doc`` the chunks of ``from_doc`` that start in
+    ``[start, end)`` of its text, ids and vectors with them, before
+    ``to_doc``'s text is indexed: ``_write_chunks`` then keeps each one
+    whose text it finds again and rewrites its place (a page split by the
+    door, ``store.split_page``). Returns how many moved."""
+    moved = [
+        int(r[0])
+        for r in con.execute(
+            "SELECT id FROM chunks WHERE doc_id = ?"
+            " AND CAST(json_extract(locator, '$.char_start') AS INTEGER) >= ?"
+            " AND CAST(json_extract(locator, '$.char_start') AS INTEGER) < ?",
+            (from_doc, start, end),
+        )
+    ]
+    con.executemany(
+        "UPDATE chunks SET doc_id = ?, seq = ? WHERE id = ?",
+        [(to_doc, _ADOPTED - n, cid) for n, cid in enumerate(moved)],
+    )
+    return len(moved)
+
+
 def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
     """Replace a document's chunks with structure-aware ones (prax.text.chunking).
 

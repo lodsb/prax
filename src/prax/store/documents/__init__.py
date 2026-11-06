@@ -201,7 +201,6 @@ from .readings import (  # noqa: F401
     count_reading_requests,
     document_has_figure,
     equation_density,
-    failed_on_this_text,
     figure_blob,
     figures_to_read,
     finding_fixes,
@@ -217,6 +216,7 @@ from .readings import (  # noqa: F401
     request_readings,
     select_for_reading,
     thin_documents,
+    tried_on_this_text,
     uncounted_pages,
     unreadable_documents,
     waiting_readings,
@@ -260,7 +260,6 @@ from .reads import (  # noqa: F401
     equations_near,
     figure_and_formula_data,
     find_chunk,
-    findings_with_fixes,
     formula_by_number,
     get_chunk,
     get_document,
@@ -287,6 +286,7 @@ from .reads import (  # noqa: F401
     untexted_captures,
 )
 from .text import (  # noqa: F401
+    _adopt_chunks,
     _apply_reference_links,
     _cleaned,
     _index_text,

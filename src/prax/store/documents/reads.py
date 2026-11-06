@@ -29,6 +29,7 @@ from ..base import (
     domain_clause,
     hidden_documents,
 )
+from .readings import _CURRENT_QUALITY
 
 
 @_reading
@@ -1364,34 +1365,6 @@ def cited_but_missing(
     if uncounted:
         out["citers_uncounted"] = uncounted
     return out
-
-
-# what the checks of a text found (stage AO): only of the text a document
-# holds now, a finding of an earlier one says nothing of it
-_CURRENT_QUALITY = (
-    " FROM documents d, json_each(d.meta, '$.quality.findings') f"
-    " WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
-    " AND json_extract(d.meta, '$.retired') IS NULL"
-)
-
-
-@_reading
-def findings_with_fixes(
-    con: sqlite3.Connection,
-) -> list[tuple[int, str, dict[str, Any]]]:
-    """Every finding of a document's current text that names a reading as
-    its fix: ``(doc_id, check, fix)``, the oldest document first. What the
-    nightly fixes slice works through (``schedule: fixes``). A fix that ran
-    and could not help is no longer named (``parsers.quality``)."""
-    return [
-        (int(r[0]), str(r[1]), json.loads(r[2]))
-        for r in con.execute(
-            "SELECT d.id, json_extract(f.value, '$.check'),"
-            " json_extract(f.value, '$.fix')"
-            + _CURRENT_QUALITY
-            + " AND json_type(f.value, '$.fix') = 'object' ORDER BY d.id"
-        )
-    ]
 
 
 @_reading

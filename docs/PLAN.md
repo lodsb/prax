@@ -26,10 +26,10 @@ and its item 5 is items 1 and 2 below.
   up`. The card is back since 2026-11-02 (the bigger power supply):
   `llama-server`, `marker` and `ocr-server` are in `run:` again, and the
   backlog of unextracted documents was cleared that day.
-- **Reviews.** The review of 2026-11-03 over e5e183f..4579be8
-  (`docs/eval/review-2026-11-03.md`) is closed: seven safety defects
-  and five quality findings, all fixed. The next covers the range from
-  the commit after it.
+- **Reviews.** The review of 2026-11-06 over 0a6d923..dd8e2dc
+  (`docs/eval/review-2026-11-06.md`) is closed: three safety defects
+  and four quality findings fixed, one wall channel accepted as for
+  slugs. The next covers the range from the commit after it.
 
 ### Next, in order
 
@@ -37,12 +37,15 @@ and its item 5 is items 1 and 2 below.
    runs.** The maths as text was read by marker on the night of
    2026-11-03: 529 papers, and the formulas after them. The rest is
    `schedule: fixes` (21:30, 200 a reading a night): 203 scans read from
-   their OCR layer (marker, every page itself) and 1,218 documents with
+   their OCR layer (marker, every page itself) and 10 documents with
    bare captions (the crops), counted on 2026-11-05. The 364 with
    leftovers name no reading and wait on the Admin page's "text checks".
-   Next: the rate per paper of marker from the nights' readings, and
-   whether the ocr-layer reads replaced the texts they were asked for.
+   The first night: marker read a scan every 2.6 minutes, and the first
+   25 all replaced their text. Next: the whole night's count, and what
+   the reads that changed nothing were.
 2. **The card's other work, in this order.** The latex2html re-import
+   (done 2026-11-06: 2,641 pages at revision 2, 305 formula readings
+   asked; 55 short pages at revision 1 for the user to retire or keep)
    and its formulas. AJ's trial on marker and its routing rules. AI's
    measurement from `run/swaps.jsonl`, once the card has been busy for
    some days. AK, the dense 27B. AQ stage 4, a transcription step.

@@ -3,10 +3,11 @@ part, and where an old citation of the page's words lands after it."""
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from typing import Any
 
-from prax.text import blocks, markup
+from prax.text import blocks, markup, slugs
 
 from ..base import (
     _committing,
@@ -17,6 +18,7 @@ from ..base import (
     now,
 )
 from ..documents import (
+    _adopt_chunks,
     _set_meta,
     _set_sensitivity,
     get_meta,
@@ -45,8 +47,6 @@ from .writes import (
 # a split's children a citation is followed through, at most: a child may
 # be split again, and its children are looked in too
 SPLIT_DEPTH = 4
-
-_PARKED = -1_000_000_000
 
 
 def _split_page(
@@ -116,11 +116,13 @@ def _split_page(
         for i, (start, heading) in enumerate(cuts)
     ]
     _refuse_split_blocks(text, [c[0] for c in cuts])
-    slugs: set[str] = set()
+    taken: set[str] = set()
     titles: set[str] = set()
     children: list[dict[str, Any]] = []
     for heading, part in parts:
-        child_slug = _free_slug(con, f"{slug}-{slugify(heading) or 'part'}", slugs)
+        child_slug = _free_slug(
+            con, slugs.tagged(f"{slug}-{slugify(heading) or 'part'}", heading), taken
+        )
         children.append(
             {
                 "slug": child_slug,
@@ -172,8 +174,8 @@ def _split_page(
         note=f"{said}: {len(children)} pages",
         force=True,
     )
-    _refuse_lost_words(con, text, head, [int(c["doc_id"]) for c in children])
-    _end_given_edges(con, doc_id, [int(c["doc_id"]) for c in children])
+    _refuse_lost_words(con, text, head, children)
+    _end_given_edges(con, doc_id, [c["text"] for c in children])
     after = get_meta(con, doc_id)
     page = dict(after.get("page") or {})
     page["split"] = [
@@ -244,7 +246,9 @@ def _refuse_split_blocks(text: str, cuts: list[int]) -> None:
 
 
 def _free_slug(con: sqlite3.Connection, want: str, taken: set[str]) -> str:
-    """``want``, or ``want-2``…: a slug no page has, had or is taking."""
+    """``want``, or ``want-2``…: a slug no page has, had or is taking, and
+    within ``slugs.LIMIT``, cut before its number, so the page is written
+    under the very slug the plan names (``slugify`` keeps it as it is)."""
     n, slug = 1, want
     while (
         slug in taken
@@ -255,7 +259,8 @@ def _free_slug(con: sqlite3.Connection, want: str, taken: set[str]) -> str:
         ).fetchone()
     ):
         n += 1
-        slug = f"{want}-{n}"
+        number = f"-{n}"
+        slug = want[: slugs.LIMIT - len(number)].rstrip("-") + number
     taken.add(slug)
     return slug
 
@@ -309,21 +314,7 @@ def _write_child(
     child_id, _ = _new_page(
         con, child["slug"], child["text"], title=child["title"], kind=kind
     )
-    moved = [
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM chunks WHERE doc_id = ?"
-            " AND CAST(json_extract(locator, '$.char_start') AS INTEGER) >= ?"
-            " AND CAST(json_extract(locator, '$.char_start') AS INTEGER) < ?",
-            (original, start, end),
-        )
-    ]
-    # seq is unique per document: the moved rows park far below zero, out
-    # of the way of the -1, -2… that _write_chunks parks the rows it keeps at
-    con.executemany(
-        "UPDATE chunks SET doc_id = ?, seq = ? WHERE id = ?",
-        [(child_id, _PARKED - n, cid) for n, cid in enumerate(moved)],
-    )
+    _adopt_chunks(con, original, start, end, child_id)
     _write_page(
         con,
         child["slug"],
@@ -362,30 +353,36 @@ def _write_child(
 
 
 def _refuse_lost_words(
-    con: sqlite3.Connection, text: str, head: str, children: list[int]
+    con: sqlite3.Connection, text: str, head: str, children: list[dict[str, Any]]
 ) -> None:
     """ValueError, taking the whole split back, when the stored texts of the
-    children after the index's own words are not the page's text."""
-    got = [head]
-    for child in children:
-        stored = con.execute(
-            "SELECT text_hash FROM documents WHERE id = ?", (child,)
+    children after the index's own words are not the page's text: the cut
+    texts add up to it, and each child holds its own, by the hash of what
+    it stores (a text is its content address, so nothing is read back
+    under the lock: 150 children read again were a quarter of a split)."""
+    stored = [
+        con.execute(
+            "SELECT text_hash FROM documents WHERE id = ?", (int(c["doc_id"]),)
         ).fetchone()[0]
-        got.append(_read_archive(stored).decode("utf-8") if stored else "")
-    if "".join(got) != text:
+        for c in children
+    ]
+    whole = head + "".join(c["text"] for c in children) == text
+    held = all(
+        h == hashlib.sha256(c["text"].encode("utf-8")).hexdigest()
+        for h, c in zip(stored, children, strict=True)
+    )
+    if not (whole and held):
         raise ValueError("the split pages do not add up to the page: nothing written")
 
 
-def _end_given_edges(con: sqlite3.Connection, doc_id: int, children: list[int]) -> None:
+def _end_given_edges(con: sqlite3.Connection, doc_id: int, texts: list[str]) -> None:
     """An ``annotates`` or ``synthesizes`` edge the page was given with no
-    link behind it ends on the index when a child links its document: the
-    child's link is the edge now. One a child does not link stays."""
+    link behind it ends on the index when a child links its document (the
+    children's ``texts``): the child's link is the edge now. One a child
+    does not link stays."""
     linked: set[str] = set()
-    for child in children:
-        stored = con.execute(
-            "SELECT text_hash FROM documents WHERE id = ?", (child,)
-        ).fetchone()[0]
-        for target in linked_documents(_read_archive(stored).decode("utf-8")):
+    for child_text in texts:
+        for target in linked_documents(child_text):
             try:
                 linked.add(document_node(con, target)[0])
             except KeyError:

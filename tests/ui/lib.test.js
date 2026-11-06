@@ -872,4 +872,7 @@ test("forwardTo: a retired copy's link opens the document that replaced it", () 
   assert.equal(lib.forwardTo(doc, { stay: "1" }), null);  // the old one, asked for
   assert.equal(lib.forwardTo({ id: 5 }, {}), null);
   assert.equal(lib.forwardTo({ id: 5, current: { doc_id: 5 } }, {}), null);
+  // reached by forwarding: never again, so two documents naming each other
+  // cannot send the page back and forth
+  assert.equal(lib.forwardTo({ id: 9, current: { doc_id: 5 } }, { from: "5" }), null);
 });

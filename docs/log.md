@@ -9752,3 +9752,35 @@ The suites that reach them passed unchanged: pages, split, moves and
 the wall (48), the worker, parse and reading tests (137), the host
 tests (79), resolution and merges (57). The top is 16 now.
 
+
+## 2026-11-06: the first night of the fixes, the latex2html re-import, the review
+
+The fixes slice's first run (21:30 on 2026-11-05) asked for 200 marker
+reads and 8 crops. Marker had the card from 23:28 UTC and read a scan
+every 2.6 minutes (median of the gaps between finished reads); the
+first 25 all replaced their text (`upgraded`), and 175 were still
+waiting at 01:52. The crops are not the 1,218 counted the day before:
+that count took every `bare-figures` finding, and a finding whose crops
+already ran and filled nothing names no fix. 10 documents had a crop
+fix left.
+
+The latex2html re-import: `prax import latex2html --refresh` over the
+35 books and publications of Julius O. Smith, read from the crawl cache
+(62 MB, nothing fetched), sent 2,638 pages and their 35 contents pages.
+2,641 pages hold the text of revision 2 (no comment kept as text, sub-
+and superscripts as LaTeX); the leftovers findings of their texts went
+from 227 to 13, and the door asked for 305 formula readings by itself.
+55 pages keep revision 1: 54 have under 200 characters of prose of
+their own without the comments, which the importer does not send
+(`MIN_PAGE_CHARS`), and one is no longer in its book. Retiring them is
+the user's word, as for the 21 of 2026-10-08. `~jos/pdf/` answers 403
+now; its pages came as PDFs.
+
+The review of 0a6d923..dd8e2dc (`docs/eval/review-2026-11-06.md`):
+three safety defects fixed (the slice would have asked every night for
+a reading that changed nothing, a forwarding loop, a long child slug
+refused), one accepted (a split's title says a hidden document's title
+exists, as slugs do), and four quality findings fixed (the fix chosen
+in one place, one query of current findings, the chunk handover beside
+the chunk writer, a split's texts checked by hash: 150 sections 2.05 s
+to 1.18 s).

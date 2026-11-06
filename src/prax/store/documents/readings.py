@@ -445,27 +445,50 @@ NOT_MATHS_GENRES = ("manual", "datasheet")
 NOT_MATHS_P = 0.5  # the labeller's probability for it; a person's counts always
 
 
+# what the checks of a text found (stage AO): only of the text a document
+# holds now, a finding of an earlier one says nothing of it, nor of a
+# retired document
+_CURRENT_QUALITY = (
+    " FROM documents d, json_each(d.meta, '$.quality.findings') f"
+    " WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
+    " AND json_extract(d.meta, '$.retired') IS NULL"
+)
+
+
 @_reading
 def finding_fixes(
-    con: sqlite3.Connection, ids: list[int], check: str
-) -> dict[int, dict[str, Any]]:
-    """The fix ``check`` names in each of these documents' current text
-    (``meta.quality``: an extractor with its mode where the finding knows
-    it), for the ones whose finding names one."""
-    out: dict[int, dict[str, Any]] = {}
-    for i in range(0, len(ids), 500):
-        part = [int(x) for x in ids[i : i + 500]]
-        marks = ",".join("?" * len(part))
-        for doc_id, fix in con.execute(
-            "SELECT d.id, json_extract(f.value, '$.fix') FROM documents d,"
-            " json_each(d.meta, '$.quality.findings') f"
-            f" WHERE d.id IN ({marks})"
-            " AND json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
-            " AND json_extract(f.value, '$.check') = ?"
-            " AND json_type(f.value, '$.fix') = 'object'",
-            (*part, check),
-        ):
-            out[int(doc_id)] = json.loads(fix)
+    con: sqlite3.Connection,
+    ids: list[int] | None = None,
+    check: str | None = None,
+) -> list[tuple[int, str, dict[str, Any]]]:
+    """The findings of documents' current texts that name a reading as
+    their fix (``meta.quality``: an extractor with its mode where the
+    finding knows it): ``(doc_id, check, fix)``, the oldest document first.
+    Of these ``ids`` and of this ``check``, or of all: the nightly fixes
+    slice works through all of them (``schedule: fixes``), the Admin
+    page's button through the documents of one check."""
+    sql = (
+        "SELECT d.id, json_extract(f.value, '$.check'),"
+        " json_extract(f.value, '$.fix')"
+        + _CURRENT_QUALITY
+        + " AND json_type(f.value, '$.fix') = 'object'"
+    )
+    args: list[Any] = []
+    if check is not None:
+        sql += " AND json_extract(f.value, '$.check') = ?"
+        args.append(check)
+    parts: list[list[int] | None] = [None]
+    if ids is not None:
+        parts = [[int(x) for x in ids[i : i + 500]] for i in range(0, len(ids), 500)]
+    out: list[tuple[int, str, dict[str, Any]]] = []
+    for part in parts:
+        where = ""
+        if part is not None:
+            where = f" AND d.id IN ({','.join('?' * len(part))})"
+        out.extend(
+            (int(r[0]), str(r[1]), json.loads(r[2]))
+            for r in con.execute(sql + where + " ORDER BY d.id", (*args, *(part or [])))
+        )
     return out
 
 
@@ -756,23 +779,32 @@ def figures_to_read(
     return n
 
 
+# what a reading that ran and changed nothing came back with
+# (``queue.apply_parse``): the text it read was no better, or the same
+UNCHANGED = ("kept", "empty", "same")
+
+
 @_reading
-def failed_on_this_text(con: sqlite3.Connection, extractor: str) -> frozenset[int]:
-    """The documents whose last ``extractor`` reading failed on the text
-    they hold now (it finished after the text landed, ``parsed_at``): a
-    slice of a backlog passes them by, or it asks every night for what
-    cannot be read. The figures slice asked one web page fifteen times for
-    pictures its snapshot never held (943 failed readings in 170
-    documents by 2026-11-05). A new text, or a reading a person asks for,
-    tries again."""
+def tried_on_this_text(con: sqlite3.Connection, extractor: str) -> frozenset[int]:
+    """The documents whose last ``extractor`` reading ran on the text they
+    hold now (it finished after the text landed, ``parsed_at``) and failed
+    or changed nothing (``UNCHANGED``): a slice of a backlog passes them by,
+    or it asks every night for what no reading helps. The figures slice
+    asked one web page fifteen times for pictures its snapshot never held
+    (943 failed readings in 170 documents by 2026-11-05), and a scan whose
+    marker read came out shorter than its OCR layer kept its finding and
+    would have been read again every night. A new text, or a reading a
+    person asks for, tries again."""
+    marks = ",".join("?" * len(UNCHANGED))
     rows = con.execute(
         "SELECT r.doc_id FROM readings r JOIN documents d ON d.id = r.doc_id"
-        " WHERE r.extractor = ? AND r.state = 'error'"
+        " WHERE r.extractor = ?"
+        f" AND (r.state = 'error' OR r.outcome IN ({marks}))"
         " AND r.finished_at >= coalesce(d.parsed_at, '')"
         " AND r.id = (SELECT max(id) FROM readings"
         "  WHERE doc_id = r.doc_id AND extractor = r.extractor"
         "  AND state IN ('done', 'error'))",
-        (extractor,),
+        (extractor, *UNCHANGED),
     ).fetchall()
     return frozenset(int(r[0]) for r in rows)
 

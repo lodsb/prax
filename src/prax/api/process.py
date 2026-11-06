@@ -15,6 +15,7 @@ from prax.graph import ontology
 from prax.parsers import quality
 
 from ._base import _con
+from .passes import request_fixes, request_groups
 
 router = APIRouter()
 
@@ -430,29 +431,32 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     # the reading each document is asked for: the one named, or its fix
-    groups: dict[tuple[str, str | None], list[int]] = {}
     unnamed = 0
-    if req.extractor is not None:
-        groups[(req.extractor, req.mode)] = ids
-    else:
-        named = store.finding_fixes(con, ids, str(req.finding))
-        for doc_id in ids:
-            fix = quality.Fix.of(named.get(doc_id))
-            if fix is None:
-                unnamed += 1
-                continue
-            groups.setdefault(quality.reading(fix), []).append(doc_id)
-    counts = {"selected": len(ids), "requested": 0, "skipped": unnamed}
     try:
-        for (extractor, mode), part in groups.items():
-            got = store.request_readings(
-                con, part, extractor, mode=mode, by=req.by, dry_run=req.dry_run
+        if req.extractor is not None:
+            got = request_groups(
+                con, {(req.extractor, req.mode): ids}, by=req.by, dry_run=req.dry_run
             )
-            counts["requested"] += got["requested"]
-            counts["skipped"] += got["skipped"]
+        else:
+            named = {
+                d: fix for d, _, fix in store.finding_fixes(con, ids, str(req.finding))
+            }
+            pairs = []
+            for doc_id in ids:
+                fix = quality.Fix.of(named.get(doc_id))
+                if fix is None:
+                    unnamed += 1
+                else:
+                    pairs.append((doc_id, fix))
+            got = request_fixes(con, pairs, by=req.by, dry_run=req.dry_run)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**counts, "dry_run": req.dry_run}
+    return {
+        "selected": len(ids),
+        "requested": sum(got["requested"].values()),
+        "skipped": unnamed + int(got["skipped"]),
+        "dry_run": req.dry_run,
+    }
 
 
 @router.delete("/doc/{doc_id}/reading")

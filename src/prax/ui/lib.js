@@ -61,12 +61,15 @@ function chunkTarget(chunks, chunkId, find) {
 // A link to a retired document someone replaced (a newer sync of a note,
 // the copy a duplicate went into) opens the current one: the hash to go to,
 // or null. `stay` keeps the old one; a chunk id is the old document's and
-// is dropped, the link's words are kept to find the place again.
+// is dropped, the link's words are kept to find the place again. Once only:
+// the door names the end of the chain, so a page reached by forwarding
+// (`from`) never forwards again.
 function forwardTo(doc, params) {
+  const p = params || {};
   const to = doc && doc.current && Number(doc.current.doc_id);
-  if (!to || to === Number(doc.id) || (params || {}).stay) return null;
+  if (!to || to === Number(doc.id) || p.stay || p.from) return null;
   const q = { from: String(doc.id) };
-  if ((params || {}).find) q.find = params.find;
+  if (p.find) q.find = p.find;
   return `#doc/${to}?${new URLSearchParams(q)}`;
 }
 

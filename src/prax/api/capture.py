@@ -158,6 +158,8 @@ def retire(doc_id: int, req: RetireReq, request: Request) -> dict[str, Any]:
         )
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.delete("/doc/{doc_id}/retire")

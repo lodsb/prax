@@ -369,7 +369,19 @@ def test_a_loop_of_replacements_ends(client: TestClient) -> None:
     con = client.app.state.con
     a = int(store.ingest_text(con, "One copy of a note. " * 5, title="A")["doc_id"])
     b = int(store.ingest_text(con, "Another copy of it. " * 5, title="B")["doc_id"])
+    c = int(store.ingest_text(con, "A third copy of it. " * 5, title="C")["doc_id"])
     store.retire_document(con, a, reason="test", duplicate_of=b)
-    store.retire_document(con, b, reason="test", duplicate_of=a)
-    assert store.current_of(con, a) == {"doc_id": b, "title": "B", "hops": 1}
+    store.retire_document(con, b, reason="test", duplicate_of=c)
+    # retiring the end of the chain into its start is refused, by hand too
+    with pytest.raises(ValueError):
+        store.retire_document(con, c, reason="test", duplicate_of=a)
+    r = client.post(f"/doc/{c}/retire", json={"reason": "t", "duplicate_of": a})
+    assert r.status_code == 400
+    assert store.current_of(con, a) == {"doc_id": c, "title": "C", "hops": 2}
+    # a loop written before the refusal: no current copy, from anywhere on it
+    meta = store.get_meta(con, c)
+    meta["retired"] = {"at": store.now(), "reason": "old", "of": a, "by": "human"}
+    store.set_meta(con, c, meta)
+    assert store.current_of(con, a) is None
+    assert store.current_of(con, b) is None
     assert store.current_of(con, 999_999) is None

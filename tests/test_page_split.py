@@ -116,6 +116,26 @@ def test_a_split_child_is_split_again_and_still_found(
     assert store.get_page(con, "log-tuesday-morning")["doc_id"] == found["doc_id"]
 
 
+def test_a_long_slug_is_cut_and_the_page_written_under_it(
+    con: sqlite3.Connection,
+) -> None:
+    # a synced note's slug and a heading together pass the slug's limit:
+    # the plan names slugs the split then writes, each within it
+    slug = "notes-on-the-measurement-of-wavelet-transforms-at-the-bench"
+    text = (
+        "# Notes\n\nWhat they are.\n\n"
+        "## The first long heading about the bench work\n\nThe first part.\n\n"
+        "## The first long heading about the bench work, again\n\nThe second.\n"
+    )
+    store.write_page(con, slug, text)
+    plan = store.split_page(con, slug, dry_run=True)
+    named = [c["slug"] for c in plan["children"]]
+    assert all(len(s) <= 80 for s in named)
+    assert len(set(named)) == 2
+    store.split_page(con, slug)
+    assert [store.get_page(con, s)["slug"] for s in named] == named
+
+
 def test_the_links_go_with_the_words(con: sqlite3.Connection) -> None:
     paper = int(
         store.ingest_text(con, "A paper on wavelets. " * 10, title="Wavelets")["doc_id"]

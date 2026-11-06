@@ -53,10 +53,16 @@ def retire_document(
     producer, open review items, tags, domains, the summary, the
     extraction stamp — and only what both hold is ended here. Nothing is
     deleted; the union is what a person would have wanted from one
-    document."""
+    document. Refused (ValueError): a ``duplicate_of`` that was itself
+    retired into this document, near or far, which would leave a link to
+    either with no current copy (``current_of``)."""
     meta = get_meta(con, doc_id)
     if duplicate_of is not None and get_meta(con, duplicate_of) is None:
         raise KeyError(f"no such document: {duplicate_of}")
+    if duplicate_of is not None and doc_id in _replacements(con, duplicate_of):
+        raise ValueError(
+            f"document {duplicate_of} was retired into {doc_id}: unretire it first"
+        )
     moved: dict[str, int] = {"moved_edges": 0, "moved_items": 0}
     if duplicate_of is not None and duplicate_of != doc_id:
         moved = _join_duplicate(con, doc_id, duplicate_of)
@@ -169,29 +175,48 @@ def current_of(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
     A synced note that changes is a new document (its id is its bytes,
     invariant 2), so a page that linked the old id would otherwise open a
     copy two syncs old. The chain stops before a document the viewer may
-    not see, and at a loop."""
+    not see. A chain that comes back on itself has no current copy (None):
+    ``retire_document`` refuses to make one, and a loop written before it
+    did would send a reader round it for ever."""
     if document_hidden(con, doc_id):
         return None
-    seen = {doc_id}
+    chain = _replacements(con, doc_id)
+    if chain and chain[-1] is None:
+        return None
     at: int | None = None
+    for nxt in chain:
+        if nxt is None or document_hidden(con, nxt):
+            break
+        at = nxt
+    if at is None:
+        return None
+    row = con.execute("SELECT title FROM documents WHERE id = ?", (at,)).fetchone()
+    if row is None:
+        return None
+    return {"doc_id": at, "title": row[0], "hops": chain.index(at) + 1}
+
+
+def _replacements(con: sqlite3.Connection, doc_id: int) -> list[int | None]:
+    """The documents that replaced ``doc_id`` in turn (``meta.retired.of``),
+    at most ``REPLACED_HOPS``; a last None when the chain comes back on a
+    document already in it."""
+    seen = {doc_id}
+    out: list[int | None] = []
     here = doc_id
     for _ in range(REPLACED_HOPS):
         row = con.execute(
             "SELECT json_extract(meta, '$.retired.of') FROM documents WHERE id = ?",
             (here,),
         ).fetchone()
-        nxt = row[0] if row is not None else None
-        if nxt is None or int(nxt) in seen or document_hidden(con, int(nxt)):
+        if row is None or row[0] is None:
             break
-        here = int(nxt)
+        here = int(row[0])
+        if here in seen:
+            out.append(None)
+            break
         seen.add(here)
-        at = here
-    if at is None:
-        return None
-    row = con.execute("SELECT title FROM documents WHERE id = ?", (at,)).fetchone()
-    if row is None:
-        return None
-    return {"doc_id": at, "title": row[0], "hops": len(seen) - 1}
+        out.append(here)
+    return out
 
 
 @_serialized

@@ -240,8 +240,8 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     assert store.last_job(con, "figures") is not None
 
     # the first could not be read (its picture is not in the original), the
-    # second ran (its chunk, in this test, still unread): the next night
-    # asks for the second and the third, not the first again
+    # second ran and changed nothing: the next night asks for the third
+    # alone, neither of the others again
     store.finish_reading(
         con,
         pictured[0],
@@ -253,16 +253,16 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     store.finish_reading(
         con, pictured[1], outcome="same", stamp="figures/v", extractor="figures"
     )
-    assert start_figures(con, 2)["requested"] == 2
+    assert start_figures(con, 2)["requested"] == 1
     waiting = {r["doc_id"] for r in store.reading_requests(con, state="requested")}
-    assert waiting == {pictured[1], pictured[2]}
+    assert waiting == {pictured[2]}
     # a new text of it is tried again
-    assert store.failed_on_this_text(con, "figures") == {pictured[0]}
+    assert store.tried_on_this_text(con, "figures") == {pictured[0], pictured[1]}
     con.execute(
         "UPDATE documents SET parsed_at = '2999-01-01T00:00:00Z' WHERE id = ?",
         (pictured[0],),
     )
-    assert store.failed_on_this_text(con, "figures") == frozenset()
+    assert store.tried_on_this_text(con, "figures") == {pictured[1]}
 
 
 def _found(con: sqlite3.Connection, doc_id: int, *findings: dict[str, Any]) -> None:
@@ -334,14 +334,14 @@ def test_the_fixes_the_checks_name_are_asked_for_a_slice_a_night(
         "figure-crops": 2,
     }
 
-    # one marker read failed on the text it holds, one ran: the next night
-    # asks for the third scan and not the failed one again (the one that
-    # ran keeps its finding here, as a test; a real read replaces the text)
+    # one marker read failed on the text it holds, one came out no better
+    # than the OCR layer and kept it, so its finding still names marker:
+    # the next night asks for the third scan alone
     store.finish_reading(
         con, scans[0], outcome="error", stamp="marker/x", error="no", extractor="marker"
     )
     store.finish_reading(
-        con, scans[1], outcome="same", stamp="marker/x", extractor="marker"
+        con, scans[1], outcome="kept", stamp="marker/x", extractor="marker"
     )
     for doc_id in crops:
         store.finish_reading(
@@ -354,9 +354,9 @@ def test_the_fixes_the_checks_name_are_asked_for_a_slice_a_night(
     _found(con, crops[0])  # the crops filled it: no finding left
     _found(con, crops[1])
     third = start_fixes(con, 5)
-    assert third["requested"] == {"marker": 2}
+    assert third["requested"] == {"marker": 1}
     waiting = {r["doc_id"] for r in store.reading_requests(con, state="requested")}
-    assert waiting == {scans[1], scans[2]}
+    assert waiting == {scans[2]}
     assert store.last_job(con, "fixes") is not None
 
 

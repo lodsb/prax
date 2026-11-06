@@ -405,14 +405,16 @@ def scan_share(profile: Mapping[str, Any]) -> float:
     return max(float(profile.get("scanned") or 0), float(profile.get("ocr_layer") or 0))
 
 
+def stronger(had: Fix | None, fix: Fix) -> Fix:
+    """Of two fixes naming one reading, the one to ask for: marker reads
+    every page itself when either of them needs it to."""
+    return fix if had is None or (fix.ocr and not had.ocr) else had
+
+
 def fixes(findings: list[Finding]) -> dict[str, Fix]:
-    """The readings the findings name, by extractor; marker reads every
-    page itself when one of them needs it to."""
+    """The readings the findings name, by extractor (``stronger``)."""
     out: dict[str, Fix] = {}
     for f in findings:
-        if f.fix is None:
-            continue
-        had = out.get(f.fix.extractor)
-        if had is None or (f.fix.ocr and not had.ocr):
-            out[f.fix.extractor] = f.fix
+        if f.fix is not None:
+            out[f.fix.extractor] = stronger(out.get(f.fix.extractor), f.fix)
     return out

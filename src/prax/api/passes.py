@@ -131,9 +131,9 @@ def start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
             job.update(note=f"{waiting} figure readings still waiting: nothing asked")
             return {"job": job.id, "requested": 0, "waiting": waiting}
         chosen = []
-        failed = store.failed_on_this_text(con, "figures")
+        tried = store.tried_on_this_text(con, "figures")
         for doc_id in store.select_for_reading(con, unread_figures=True):
-            if doc_id in failed:
+            if doc_id in tried:
                 continue  # its pictures are not in the original: no night helps
             if store.figures_to_read(con, doc_id, model=spec.runtime_name) > 0:
                 chosen.append(doc_id)
@@ -147,21 +147,62 @@ def start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
 FIXES_SLICE = 200  # documents a reading a night: marker read 529 in one
 
 
+def request_fixes(
+    con: Any,
+    fixes: Any,
+    *,
+    by: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Each document asked for the reading its fix names, in the mode this
+    host gives it (``quality.reading``): ``fixes`` is ``(doc_id, Fix)``
+    pairs, one a document. The clock's slice and the Admin page's button
+    (``POST /readings/bulk`` with ``finding``) both ask through here.
+    Returns ``requested`` by extractor and how many were ``skipped``."""
+    from prax.parsers import quality
+
+    groups: dict[tuple[str, str | None], list[int]] = {}
+    for doc_id, fix in fixes:
+        groups.setdefault(quality.reading(fix), []).append(doc_id)
+    return request_groups(con, groups, by=by, dry_run=dry_run)
+
+
+def request_groups(
+    con: Any,
+    groups: dict[tuple[str, str | None], list[int]],
+    *,
+    by: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """One request of many documents per reading and mode: ``requested``
+    by extractor and how many were ``skipped`` (waiting already)."""
+    asked: dict[str, int] = {}
+    skipped = 0
+    for (extractor, mode), ids in groups.items():
+        got = store.request_readings(
+            con, ids, extractor, mode=mode, by=by, dry_run=dry_run
+        )
+        asked[extractor] = asked.get(extractor, 0) + int(got["requested"])
+        skipped += int(got["skipped"])
+    return {"requested": asked, "skipped": skipped}
+
+
 def start_fixes(con: Any, documents: int | None = None) -> dict[str, Any]:
     """The readings the text checks name as fixes, a slice a night
     (``schedule: fixes``; stage AO).
 
     A new text gets its fix when it lands (``pipeline.follow_ups``); the
-    texts read before a check existed wait. On 2026-11-05: 1,218 documents
-    with captions and no picture (the crops), 203 scans read from their OCR
-    layer (marker). Asked by hand in batches until then. So the clock asks,
-    for each reading the findings name, the next ``documents`` oldest
-    first, in the mode this host gives it (``quality.reading``), and
-    nothing for a reading while any of it still waits. It passes by a
+    texts read before a check existed wait. On 2026-11-05: 203 scans read
+    from their OCR layer (marker) and 10 documents with captions and no
+    picture (the crops). Asked by hand in batches until then. So the clock
+    asks, for each reading the findings name, the next ``documents``
+    oldest first, in the mode this host gives it (``quality.reading``),
+    and nothing for a reading while any of it still waits. It passes by a
     document already waiting for that reading, and one whose last reading
-    of it failed on the text it holds (``store.failed_on_this_text``). A
-    fix that ran and could not help is not named again by its finding
-    (``parsers.quality``), so the slice never asks for it twice. A finding
+    of it failed or changed nothing on the text it holds
+    (``store.tried_on_this_text``): a scan's finding still names marker
+    after a marker read that came out shorter than its OCR layer, and a
+    reading asked for again on the same text comes out the same. A finding
     no reading fixes (leftovers, a short text) stays on the Admin page's
     "text checks" list for a person.
     """
@@ -174,8 +215,8 @@ def start_fixes(con: Any, documents: int | None = None) -> dict[str, Any]:
         # are one read, and the one that must read every page itself wins
         chosen: dict[str, dict[int, quality.Fix]] = {}
         held: dict[str, int] = {}
-        failed: dict[str, frozenset[int]] = {}
-        for doc_id, _check, kept in store.findings_with_fixes(con):
+        tried: dict[str, frozenset[int]] = {}
+        for doc_id, _check, kept in store.finding_fixes(con):
             fix = quality.Fix.of(kept)
             if fix is None:
                 continue
@@ -183,26 +224,19 @@ def start_fixes(con: Any, documents: int | None = None) -> dict[str, Any]:
             if waiting.get(extractor):
                 held[extractor] = int(waiting[extractor])
                 continue
-            if extractor not in failed:
-                failed[extractor] = store.failed_on_this_text(con, extractor)
-            if doc_id in failed[extractor]:
+            if extractor not in tried:
+                tried[extractor] = store.tried_on_this_text(con, extractor)
+            if doc_id in tried[extractor]:
                 continue
             these = chosen.setdefault(extractor, {})
-            if doc_id in these:
-                if fix.ocr and not these[doc_id].ocr:
-                    these[doc_id] = fix
-            elif len(these) < n:
-                these[doc_id] = fix
-        groups: dict[tuple[str, str | None], list[int]] = {}
-        for these in chosen.values():
-            for doc_id, fix in these.items():
-                groups.setdefault(quality.reading(fix), []).append(doc_id)
-        asked: dict[str, int] = {}
-        skipped = 0
-        for (extractor, mode), ids in groups.items():
-            got = store.request_readings(con, ids, extractor, mode=mode, by="clock")
-            asked[extractor] = asked.get(extractor, 0) + int(got["requested"])
-            skipped += int(got["skipped"])
+            if doc_id in these or len(these) < n:
+                these[doc_id] = quality.stronger(these.get(doc_id), fix)
+        got = request_fixes(
+            con,
+            [(d, fix) for these in chosen.values() for d, fix in these.items()],
+            by="clock",
+        )
+        asked, skipped = got["requested"], got["skipped"]
         said = ", ".join(f"{k} {v}" for k, v in sorted(asked.items())) or "nothing"
         if held:
             said += "; still waiting: " + ", ".join(
