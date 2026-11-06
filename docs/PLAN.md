@@ -45,7 +45,7 @@ and its item 5 is items 1 and 2 below.
    the reads that changed nothing were.
 2. **The card's other work, in this order.** The latex2html re-import
    (done 2026-11-06: 2,641 pages at revision 2, 305 formula readings
-   asked; 55 short pages at revision 1 for the user to retire or keep)
+   asked; 55 short pages kept at revision 1, the user's word)
    and its formulas. AJ's trial on marker and its routing rules. AI's
    measurement from `run/swaps.jsonl`, once the card has been busy for
    some days. AK, the dense 27B. AQ stage 4, a transcription step.

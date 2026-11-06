@@ -9772,8 +9772,9 @@ and superscripts as LaTeX); the leftovers findings of their texts went
 from 227 to 13, and the door asked for 305 formula readings by itself.
 55 pages keep revision 1: 54 have under 200 characters of prose of
 their own without the comments, which the importer does not send
-(`MIN_PAGE_CHARS`), and one is no longer in its book. Retiring them is
-the user's word, as for the 21 of 2026-10-08. `~jos/pdf/` answers 403
+(`MIN_PAGE_CHARS`), and one is no longer in its book. They stay, the
+user's word: most are a figure with a sentence of prose, its caption and
+reading not counted as prose, and 54 are the only copy of their text. `~jos/pdf/` answers 403
 now; its pages came as PDFs.
 
 The review of 0a6d923..dd8e2dc (`docs/eval/review-2026-11-06.md`):
