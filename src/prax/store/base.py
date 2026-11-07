@@ -310,6 +310,25 @@ def now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def first_fresh_id(con: sqlite3.Connection, kind: str, *, above: int = 0) -> int:
+    """The first id no row of ``kind`` was ever given, for the rows that are
+    replaced whole (communities, face groups, event candidates): a page or
+    an agent names one by its id, and a row that dissolved must not lend
+    its id to another (``id_marks``, migration 59). ``above`` is the
+    highest id the table holds now; ``mark_ids`` records what was given."""
+    mark = con.execute("SELECT last FROM id_marks WHERE name = ?", (kind,)).fetchone()
+    return max(int(mark[0]) if mark else 0, above) + 1
+
+
+def mark_ids(con: sqlite3.Connection, kind: str, last: int) -> None:
+    """Record that ids of ``kind`` up to ``last`` were given (``first_fresh_id``)."""
+    con.execute(
+        "INSERT INTO id_marks (name, last) VALUES (?, ?)"
+        " ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)",
+        (kind, last),
+    )
+
+
 def run_name(kind: str, *after: object, unique: bool = False, sep: str = "-") -> str:
     """A run's name: its kind, the second it began (``now`` without its
     separators) and what follows (``cleanup-20261028T005739Z-clips``).

@@ -45,7 +45,7 @@ from typing import Any
 from prax import config
 from prax.text import dates, mimes
 
-from ..base import _reading, _serialized, now, run_name
+from ..base import _reading, _serialized, first_fresh_id, mark_ids, now, run_name
 from .edges import Edge, document_node, link, retire_run
 from .labels import PERSON, display_language
 
@@ -259,11 +259,8 @@ def replace_event_candidates(
         " WHERE c.state = 'open' GROUP BY c.id"
     ):
         held[frozenset(json.loads(r[1]))] = int(r[0])
-    mark = con.execute(
-        "SELECT last FROM id_marks WHERE name = 'event_candidates'"
-    ).fetchone()
     top = con.execute("SELECT coalesce(max(id), 0) FROM event_candidates").fetchone()
-    fresh = max(int(mark[0]) if mark else 0, int(top[0])) + 1
+    fresh = first_fresh_id(con, "event_candidates", above=int(top[0]))
     kept: set[int] = set()
     at = now()
     found = skipped = 0
@@ -318,11 +315,7 @@ def replace_event_candidates(
         )
         fresh += 1
         found += 1
-    con.execute(
-        "INSERT INTO id_marks (name, last) VALUES ('event_candidates', ?)"
-        " ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)",
-        (fresh - 1,),
-    )
+    mark_ids(con, "event_candidates", fresh - 1)
     con.commit()
     return {"candidates": found, "decided_before": skipped}
 

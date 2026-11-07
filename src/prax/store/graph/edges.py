@@ -30,6 +30,14 @@ from ..base import (
 
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
+# The edges that say on their own whether an entity is spoken of where a
+# viewer may look: not a rule's (``producer`` ``rule:…``). A derived fact
+# stands on premises that name both its ends, each with its own document,
+# while it carries none when they are open by sensitivity; a token limited
+# to some modules was then told of an entity only documents outside them
+# speak of (the structure review of 2026-11-07).
+_ASSERTED = "COALESCE(producer, '') NOT LIKE 'rule:%'"
+
 
 @_reading
 def find_entities(
@@ -122,7 +130,7 @@ def _open_label(
         for end in ("src", "dst"):
             for (src_doc,) in con.execute(
                 f"SELECT DISTINCT source_doc FROM edges WHERE {end} = ?"
-                " AND valid_to IS NULL",
+                f" AND valid_to IS NULL AND {_ASSERTED}",
                 (owner,),
             ):
                 if src_doc is None or src_doc not in hidden:
@@ -146,7 +154,7 @@ def _said_openly(
     for end in ("src", "dst"):
         for (doc,) in con.execute(
             f"SELECT DISTINCT source_doc FROM edges WHERE {end} IN ({marks})"
-            " AND valid_to IS NULL",
+            f" AND valid_to IS NULL AND {_ASSERTED}",
             group,
         ):
             if doc is None or doc not in hidden:
@@ -608,13 +616,21 @@ def _invalidate_edge(
 ) -> int | None:
     """End an edge's validity now (``valid_to``), optionally inserting the
     edge that supersedes it. The old edge stays as history (invariant 8).
-    Returns the successor's id."""
+    With ``run``, the run that ended it is recorded (``edge_endings``) as
+    ``end_edges`` records it, so ``restore_run`` undoes a page's revision
+    or a project's sync whole. Returns the successor's id."""
     cur = con.execute(
         f"UPDATE edges SET valid_to = {_NOW} WHERE id = ? AND valid_to IS NULL",
         (edge_id,),
     )
     if cur.rowcount == 0:
         raise KeyError(f"no such currently valid edge: {edge_id}")
+    if run is not None:
+        con.execute(
+            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
+            f" VALUES (?, ?, {_NOW})",
+            (edge_id, run),
+        )
     if successor is None:
         return None
     return link(

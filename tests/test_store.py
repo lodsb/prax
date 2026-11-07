@@ -765,3 +765,29 @@ def test_a_documents_fingerprint_moves_with_it_and_no_other(
     store.retitle(con, a, "A, retitled", source="human")
     assert store.document_fingerprint(con, a) != after_fact
     assert store.document_fingerprint(con, 999_999) is None
+
+
+def test_a_new_text_clears_what_the_steps_tried_on_the_old_one(
+    con: sqlite3.Connection,
+) -> None:
+    # a step that got nothing from a text passes the document by; a new
+    # text (marker over a bad OCR layer) gives it another try
+    doc = store.ingest_text(con, "an unreadable scan " * 20, title="Scan")["doc_id"]
+    store.genres_tried(con, doc, "r1", "no labels")
+    store.published_tried(con, doc, "r1")
+    store.index_text(con, doc, "an unreadable scan " * 20)
+    assert set(store.get_meta(con, doc)) >= {"genres_tried", "published_tried"}
+    store.index_text(con, doc, "A paper on wavelets, read properly. " * 20)
+    meta = store.get_meta(con, doc)
+    assert not set(meta) & set(store.TRIED_ON_TEXT)
+
+
+def test_an_exited_process_is_not_alive() -> None:
+    # its handle still held (on Windows, by the Popen object): a dead
+    # worker's job row was kept running by that
+    import subprocess
+    import sys
+
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait()
+    assert not store._pid_alive(child.pid)

@@ -9,7 +9,14 @@ import sqlite3
 from collections import Counter, defaultdict
 from typing import Any
 
-from ..base import _reading, _serialized, hidden_documents, now
+from ..base import (
+    _reading,
+    _serialized,
+    first_fresh_id,
+    hidden_documents,
+    mark_ids,
+    now,
+)
 
 CARRY = 0.5  # a new community takes the id and summary of an old one this close
 FRESH = 0.8  # below this, what the summary was written about has moved
@@ -87,7 +94,7 @@ def replace_communities(
             old[r["community_id"]]["members"].add(r["entity_id"])
             where[(r["entity_id"], r["level"])] = r["community_id"]
     taken: set[int] = set()
-    next_id = max(old, default=0) + 1
+    next_id = first_fresh_id(con, "communities", above=max(old, default=0))
     stamp = now()
     report: dict[str, Any] = {"levels": {}, "carried": 0, "stale": 0, "new": 0}
 
@@ -145,6 +152,7 @@ def replace_communities(
             members_rows.extend(
                 (e, level, cid, float(weight.get(e, 0.0))) for e in members
             )
+    mark_ids(con, "communities", next_id - 1)
     con.execute("DELETE FROM entity_communities")
     con.execute("DELETE FROM communities")
     con.executemany(

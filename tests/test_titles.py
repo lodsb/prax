@@ -194,6 +194,49 @@ def test_retitle_merges_into_existing_entity(con: sqlite3.Connection) -> None:
     assert old["canonical_id"] == real["id"]
 
 
+def test_a_retitled_node_keeps_its_old_name_and_can_be_undone(
+    con: sqlite3.Connection,
+) -> None:
+    # the node is renamed through the labels: the old name is kept as what
+    # it was called, the names pass leaves the new one, and a merge into an
+    # existing node is one unmerge_run takes back
+    a = store.ingest_text(con, "one " * 30, title="draft.pdf")["doc_id"]
+    store.link(
+        con, store.Edge("draft.pdf", "paper", "about", "X", "concept"), source_doc=a
+    )
+    r = store.retitle(con, a, "Wavelets at the Bench", source="s")
+    assert r["entity"] == "renamed" and r["run"]
+    eid = con.execute(
+        "SELECT id FROM entities WHERE name = 'Wavelets at the Bench'"
+    ).fetchone()[0]
+    was = con.execute(
+        "SELECT was FROM entity_labels WHERE entity_id = ? AND label = 'draft.pdf'",
+        (eid,),
+    ).fetchone()
+    assert was is not None and was[0] == 1
+    store.rename_display_language(con)
+    assert con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()[
+        0
+    ] == ("Wavelets at the Bench")
+
+    b = store.ingest_text(con, "two " * 30, title="b.pdf")["doc_id"]
+    store.link(con, store.Edge("b.pdf", "paper", "about", "Y", "concept"), source_doc=b)
+    store.link(con, store.Edge("Filters", "paper", "about", "Z", "concept"))
+    m = store.retitle(con, b, "Filters", source="s")
+    assert m["entity"] == "merged"
+    old = con.execute(
+        "SELECT canonical_id, merged_run FROM entities WHERE name = 'b.pdf'"
+    ).fetchone()
+    assert old[0] is not None and old[1] == m["run"]
+    store.unmerge_run(con, m["run"])
+    assert (
+        con.execute(
+            "SELECT canonical_id FROM entities WHERE name = 'b.pdf'"
+        ).fetchone()[0]
+        is None
+    )
+
+
 def test_retitle_leaves_shared_entity_alone(con: sqlite3.Connection) -> None:
     a = store.ingest_text(con, "one " * 30, title="Unknown - No Title.pdf")["doc_id"]
     store.ingest_text(con, "two " * 30, title="Unknown - No Title.pdf")

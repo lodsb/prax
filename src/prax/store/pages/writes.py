@@ -443,7 +443,7 @@ def _link_edges(
     ).fetchall()
     for row in gone:
         if row["name"] not in wanted_titles:
-            _invalidate_edge(con, row["id"])
+            _invalidate_edge(con, row["id"], run=f"{slug}@{revision}")
 
 
 def fill_blocks(

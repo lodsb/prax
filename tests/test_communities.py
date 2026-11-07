@@ -380,3 +380,26 @@ def test_the_overview_keeps_to_a_world_date(con: sqlite3.Connection) -> None:
     assert at(None) == {"valve", "transistor", "idea", "amplification"}
     with pytest.raises(ValueError):
         store.hub_graph(con, world_at="soon")
+
+
+def test_a_dissolved_region_does_not_lend_its_id(con: sqlite3.Connection) -> None:
+    # an agent keeps a region's id from a search (invariant 6); when that
+    # region dissolves, a new one must not answer to it
+    ids = []
+    for name in ("a", "b", "c", "d", "e", "f"):
+        store.link(con, store.Edge(name, "method", "uses", name + "2", "method"))
+        ids.append(
+            con.execute("SELECT id FROM entities WHERE name = ?", (name,)).fetchone()[0]
+        )
+    one, two, three = (frozenset(ids[i : i + 2]) for i in (0, 2, 4))
+    store.replace_communities(con, [one, two], [(0, one), (1, two)], {}, run="r1")
+    before = {int(r[0]) for r in con.execute("SELECT id FROM communities")}
+    store.replace_communities(con, [one, three], [(0, one), (1, three)], {}, run="r2")
+    after = {int(r[0]) for r in con.execute("SELECT id FROM communities")}
+    # the first region and its part keep theirs; the third region is new
+    assert len(after & before) == 2 and len(after - before) == 2
+    store.replace_communities(con, [one], [(0, one)], {}, run="r3")
+    store.replace_communities(con, [one, two], [(0, one), (1, two)], {}, run="r4")
+    last = {int(r[0]) for r in con.execute("SELECT id FROM communities")}
+    assert not (last - before - after) & (before | after)
+    assert len(last - before - after) == 2

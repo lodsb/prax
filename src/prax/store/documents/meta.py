@@ -365,27 +365,20 @@ def summary_tried(
     set_meta(con, doc_id, meta)
 
 
-@_serialized
-def retitle(
+def _retitle_document(
     con: sqlite3.Connection,
     doc_id: int,
     title: str,
     *,
     source: str,
-    run: str | None = None,
-    confidence: str | None = None,
-) -> dict[str, Any]:
-    """Change a document's title, keeping the old one.
-
-    ``meta.title_history`` accumulates the replaced titles with their source;
-    ``meta.title_source`` names who wrote the current one (an importer keeps
-    its hands off a title it did not write). The ``paper`` entity carrying
-    the old title follows: renamed when it is this document's alone, merged
-    into the entity of the new title when one exists, left alone when other
-    documents share the old title. The document field is refreshed, so the
-    new title is searchable and the document vector is embedded again.
-    """
-    title = " ".join(title.split())
+    run: str | None,
+    confidence: str | None,
+) -> str | None:
+    """The document's half of ``store.retitle``: the title replaced, the old
+    one kept in ``meta.title_history`` with its source, ``meta.title_source``
+    naming who wrote the new one (an importer keeps its hands off a title
+    it did not write). Returns the old title, or None when it was the same.
+    Does not commit: the graph's half follows in the same write."""
     if not title:
         raise ValueError("a title cannot be empty")
     row = con.execute(
@@ -394,9 +387,9 @@ def retitle(
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
     old = row["title"] or ""
-    meta = json.loads(row["meta"] or "{}")
     if old == title:
-        return {"doc_id": doc_id, "title": title, "changed": False, "entity": None}
+        return None
+    meta = json.loads(row["meta"] or "{}")
     history = list(meta.get("title_history") or [])
     history.append(
         {
@@ -413,43 +406,7 @@ def retitle(
         "UPDATE documents SET title = ?, meta = ? WHERE id = ?",
         (title, json.dumps(meta), doc_id),
     )
-    entity_action = None
-    shared = con.execute(
-        "SELECT count(*) FROM documents WHERE title = ? AND id != ?", (old, doc_id)
-    ).fetchone()[0]
-    if old and not shared:
-        e = con.execute(
-            "SELECT id FROM entities WHERE name = ? AND type = 'paper'", (old,)
-        ).fetchone()
-        if e is not None:
-            target = con.execute(
-                "SELECT id, canonical_id FROM entities"
-                " WHERE name = ? AND type = 'paper'",
-                (title,),
-            ).fetchone()
-            if target is None:
-                con.execute(
-                    "UPDATE entities SET name = ? WHERE id = ?", (title, e["id"])
-                )
-                entity_action = "renamed"
-            elif target["id"] != e["id"]:
-                survivor = target["canonical_id"] or target["id"]
-                if survivor != e["id"]:
-                    con.execute(
-                        "UPDATE entities SET canonical_id = ?"
-                        " WHERE id = ? OR canonical_id = ?",
-                        (survivor, e["id"], e["id"]),
-                    )
-                    entity_action = "merged"
-    _refresh_document_field(con, doc_id)
-    con.commit()
-    return {
-        "doc_id": doc_id,
-        "old": old,
-        "title": title,
-        "changed": True,
-        "entity": entity_action,
-    }
+    return str(old)
 
 
 # What a document *is*, in a few lines, indexed apart from its chunks

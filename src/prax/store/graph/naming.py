@@ -37,7 +37,7 @@ from typing import Any
 from ..base import _reading, _serialized, document_hidden, now, run_name
 from ..documents import mark_suspected
 from .edges import Edge, document_node, end_edge, link
-from .labels import PERSON, add_label, display_language, merge_entities
+from .labels import PERSON, _relabel, add_label, merge_entities
 from .people import DEPICTS, person_types
 
 FACE_VERDICTS = ("person", "not_face", "nobody")
@@ -473,16 +473,7 @@ def rename_person(
         con.execute(
             "UPDATE entities SET name = ? WHERE id = ?", (f"{title} (#{aid})", aid)
         )
-    marked = con.execute(
-        "UPDATE entity_labels SET was = 1, run = ?"
-        " WHERE entity_id = ? AND label = ? COLLATE NOCASE",
-        (run, eid, old),
-    ).rowcount
-    if not marked:
-        add_label(con, eid, old, kind="alt", producer=by, run=run, was=True)
-    add_label(
-        con, eid, title, lang=display_language(), kind="pref", producer=by, run=run
-    )
+    _relabel(con, eid, old, title, producer=by, run=run)
     shown = con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
     con.commit()
     return {"entity_id": eid, "name": str(shown[0]), "was": old, "run": run}

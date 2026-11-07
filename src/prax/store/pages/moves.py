@@ -213,7 +213,7 @@ def _rehome(
         if int(r["doc_id"]) == target and not kept:
             kept = True
             continue
-        _invalidate_edge(con, int(r["id"]))
+        _invalidate_edge(con, int(r["id"]), run=run)
         ended.append(int(r["id"]))
     if project is not None and not kept:
         slug, revision = run.rsplit("@", 1)

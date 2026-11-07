@@ -9785,3 +9785,41 @@ exists, as slugs do), and four quality findings fixed (the fix chosen
 in one place, one query of current findings, the chunk handover beside
 the chunk writer, a split's texts checked by hash: 150 sections 2.05 s
 to 1.18 s).
+
+## 2026-11-07: the structure review, and the ten bugs it found
+
+The owner asked why `src/prax` is 81,000 lines and whether reuse and
+modularity were done. Measured first: 72% of it is code, 13% docstrings;
+blocks of eight lines or more that occur twice cover 294 lines; the
+store's six `__init__` files are 1,934 lines of re-export lists. Then a
+review of the whole tree (`docs/eval/structure-review-2026-11-07.md`),
+five reviewers by part and a skeptic each: 56 findings confirmed, 4
+refuted. The size is mostly what prax does. What is wrong is a concept
+with several owners, each its own shape, and the bugs came from there.
+
+Fixed the same day, each with a test that fails before:
+
+- `restore_set` reopened ended edges in place, so `held_at` said they
+  were never ended. A clean-up ends them under its run and the restore
+  states them again through `restore_run`; the clean-up is now
+  `store.repair.cleanup`, after the graph in the order. The UI says
+  "facts restated".
+- `rename_entity` wrote no label, so the `names` pass put the old name
+  back the next night: retitles, page renames and the heal pass's name
+  repairs were all undone that way. It keeps the old name as `was` and
+  the new one preferred, under a run. `retitle` is two halves now, the
+  node's in `graph.labels`, and finds the node by `document_node`.
+- A new text clears the steps' `_tried` marks (`TRIED_ON_TEXT`).
+- `carry_readings` carries formula readings as well as figures'.
+- Every paid chat records its use and `Pass.post` carries it home
+  (`spent`); the formulas, polish, genres and titles steps by Claude were
+  not counted before.
+- The door's own readings ask `ModelSpec.paid`, not the model's shape.
+- The communities pass no longer gives a dissolved region's id away
+  (`base.first_fresh_id`, `mark_ids`, shared with faces and events).
+- The store's check of a process reads its exit code (the host's).
+- Page revisions, moves, splits and project syncs record the edges they
+  end under their run.
+- A rule-derived fact no longer tells a module-limited token that an
+  entity exists which only documents outside its modules speak of.
+

@@ -9,7 +9,8 @@ from typing import Any
 from prax.text import language
 
 from ..base import _NOW, _reading, _serialized, run_name
-from .edges import _entity_id
+from ..documents import _refresh_document_field, _retitle_document
+from .edges import _entity_id, document_node
 
 PERSON = "human"  # who a decision on the review page is signed by
 SPLIT = "split-names"  # the type a pair of two unrelated types is filed under
@@ -609,13 +610,56 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
     return len(ids) + len(renamed)
 
 
+def _relabel(
+    con: sqlite3.Connection,
+    entity_id: int,
+    old: str,
+    name: str,
+    *,
+    producer: str | None,
+    run: str,
+) -> None:
+    """The labels of a rename: the old name kept as what the entity was
+    called (``was``, which ``unmerge_run`` puts back) and the new one
+    preferred in the language the library shows, which the cached name
+    then follows. Without the labels the ``names`` pass rebuilds the old
+    name from them, and the rename is gone the next night."""
+    marked = con.execute(
+        "UPDATE entity_labels SET was = 1, run = ?"
+        " WHERE entity_id = ? AND label = ? COLLATE NOCASE",
+        (run, entity_id, old),
+    ).rowcount
+    if not marked:
+        add_label(con, entity_id, old, kind="alt", producer=producer, run=run, was=True)
+    add_label(
+        con,
+        entity_id,
+        name,
+        lang=display_language(),
+        kind="pref",
+        producer=producer,
+        run=run,
+    )
+    _refresh_name(con, entity_id)
+
+
 @_serialized
-def rename_entity(con: sqlite3.Connection, entity_id: int, name: str) -> str:
+def rename_entity(
+    con: sqlite3.Connection,
+    entity_id: int,
+    name: str,
+    *,
+    producer: str | None = None,
+    run: str | None = None,
+) -> str:
     """Give an entity a better name — what the heal pass does with a title
-    a citation importer left markup in. When another entity of the same
-    type already carries that name, this one is merged into it instead
-    (two rows with one name is what the unique index forbids and what the
-    graph means anyway). Returns ``renamed``, ``merged`` or ``unchanged``."""
+    a citation importer left markup in, and what a retitled document or a
+    renamed page does to its node. When another entity of the same type
+    already carries that name, this one is merged into it instead (two
+    rows with one name is what the unique index forbids and what the
+    graph means anyway). Either way under ``run`` (one is made when none
+    is given), which ``unmerge_run`` takes back. Returns ``renamed``,
+    ``merged`` or ``unchanged``."""
     row = con.execute(
         "SELECT name, type FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
@@ -624,15 +668,76 @@ def rename_entity(con: sqlite3.Connection, entity_id: int, name: str) -> str:
     name = name.strip()
     if not name or name == row["name"]:
         return "unchanged"
+    run = run or run_name("rename", unique=True)
     other = con.execute(
         "SELECT id FROM entities WHERE name = ? AND type = ?", (name, row["type"])
     ).fetchone()
     if other is not None and other["id"] != entity_id:
-        merge_entities(con, entity_id, other["id"])
+        merge_entities(con, entity_id, other["id"], producer=producer, run=run)
         return "merged"
-    con.execute("UPDATE entities SET name = ? WHERE id = ?", (name, entity_id))
+    _relabel(con, entity_id, str(row["name"]), name, producer=producer, run=run)
     con.commit()
     return "renamed"
+
+
+@_serialized
+def retitle(
+    con: sqlite3.Connection,
+    doc_id: int,
+    title: str,
+    *,
+    source: str,
+    run: str | None = None,
+    confidence: str | None = None,
+) -> dict[str, Any]:
+    """Change a document's title, keeping the old one (``meta.title_history``).
+
+    The document's node follows (``document_node``, of whatever type it
+    is): renamed when it is this document's alone, merged into the node of
+    the new title when one exists, left alone when other documents share
+    the old title. Through ``rename_entity``, so the old name stays a label
+    and ``unmerge_run`` takes the rename back with the returned ``run``.
+    The document field is refreshed, so the new title is searchable and
+    the document vector is embedded again."""
+    title = " ".join(title.split())
+    try:
+        node: tuple[str, str] | None = document_node(con, doc_id)
+    except KeyError:  # no title yet, or not found: _retitle_document says which
+        node = None
+    old = _retitle_document(
+        con, doc_id, title, source=source, run=run, confidence=confidence
+    )
+    if old is None:
+        return {"doc_id": doc_id, "title": title, "changed": False, "entity": None}
+    entity_action = node_run = None
+    shared = con.execute(
+        "SELECT count(*) FROM documents WHERE title = ? AND id != ?", (old, doc_id)
+    ).fetchone()[0]
+    e = None
+    if node is not None and not shared:
+        e = con.execute(
+            "SELECT id FROM entities WHERE name = ? AND type = ?", node
+        ).fetchone()
+    if e is not None:
+        node_run = run or run_name("retitle", unique=True)
+        how = rename_entity(
+            con,
+            int(e["id"]),
+            document_node(con, doc_id)[0],
+            producer=source,
+            run=node_run,
+        )
+        entity_action = None if how == "unchanged" else how
+    _refresh_document_field(con, doc_id)
+    con.commit()
+    return {
+        "doc_id": doc_id,
+        "old": old,
+        "title": title,
+        "changed": True,
+        "entity": entity_action,
+        "run": node_run,
+    }
 
 
 def entity_names(con: sqlite3.Connection, etype: str) -> list[tuple[int, str]]:

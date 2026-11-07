@@ -226,3 +226,27 @@ def test_the_door_and_the_tool_shapes(client: TestClient) -> None:
         client.get(f"/doc/{doc_id}/cited", params={"find": "nothing"}).status_code
         == 404
     )
+
+
+def test_a_link_a_revision_drops_is_ended_under_its_run(
+    con: sqlite3.Connection,
+) -> None:
+    # recorded as a repair's endings are, so restore_run undoes a revision
+    paper = int(
+        store.ingest_text(con, "A paper on wavelets. " * 10, title="Wavelets")["doc_id"]
+    )
+    doc_id = int(
+        store.write_page(con, "log", f"# Log\n\nSee [it](#doc/{paper}).")["doc_id"]
+    )
+    assert _live(con, doc_id, "annotates") == ["Wavelets"]
+    second = store.write_page(con, "log", "# Log\n\nNo link now.")
+    assert _live(con, doc_id, "annotates") == []
+    run = f"log@{second['revision']}"
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edge_endings WHERE run = ?", (run,)
+        ).fetchone()[0]
+        == 1
+    )
+    store.restore_run(con, run)
+    assert _live(con, doc_id, "annotates") == ["Wavelets"]

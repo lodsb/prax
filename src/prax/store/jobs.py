@@ -112,24 +112,14 @@ def job_finish(
 
 
 def _pid_alive(pid: int) -> bool:
-    import os
-    import sys
+    """Whether the process is running: the host's one check
+    (``prax.host.process._alive``), which on Windows reads the exit code.
+    Until 2026-11-07 the store had its own, which called an exited process
+    alive while anything held its handle, and kept a dead worker's job
+    row running."""
+    from prax.host import process
 
-    if sys.platform == "win32":
-        import ctypes
-
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
-        if not handle:
-            return False
-        ctypes.windll.kernel32.CloseHandle(handle)
-        return True
-    try:
-        os.kill(int(pid), 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    return process._alive(pid)
 
 
 @_serialized

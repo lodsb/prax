@@ -241,3 +241,65 @@ def test_a_free_reading_writes_no_row(data_dir: Path) -> None:
     )
     assert store.spending(con)["calls"] == 0
     con.close()
+
+
+def test_a_paid_chat_in_any_step_reaches_the_ledger_once(data_dir: Path) -> None:
+    """ClaudeRuntime.chat records what it used whichever step called it,
+    and the worker's post carries it home: a formulas or a genres reading by
+    Claude was not counted before 2026-11-07."""
+    from types import SimpleNamespace
+    from typing import Any
+
+    from prax.ml import usage
+    from prax.steps.base import Pass
+
+    _paid_host(data_dir)
+    con = store.connect()
+    store.init_db(con)
+
+    class Client:
+        class messages:  # the SDK's shape
+            @staticmethod
+            def create(**_: Any) -> Any:
+                return SimpleNamespace(
+                    content=[SimpleNamespace(type="text", text="Ohm's law.")],
+                    usage=SimpleNamespace(input_tokens=1000, output_tokens=100),
+                )
+
+    usage.clear()
+    rt = models.ClaudeRuntime("claude-sonnet-5", client=Client())
+    text, tokens = rt.chat("system", "an equation")
+    assert text == "Ohm's law." and tokens["input_tokens"] == 1000
+
+    class Door:
+        def post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+            return work.take_in(con, path.rsplit("/", 1)[-1], body)
+
+    p = Pass.__new__(Pass)
+    p.door = Door()
+    p.post("genres", {"results": [], "run": "genres-1"})
+    p.post("genres", {"results": [], "run": "genres-2"})  # taken once
+    spent = store.spending(con)
+    assert spent["calls"] == 1
+    assert spent["by_model"][0]["model"] == "claude-sonnet-5"
+    con.close()
+
+
+def test_the_door_asks_for_no_reading_from_a_priced_model(data_dir: Path) -> None:
+    """The readings the door asks for on its own (a picture's, the
+    figures', the formulas') are only from a free model, by ModelSpec.paid:
+    a priced OpenAI-shaped API is not free because of its shape."""
+    from prax.capture import pipeline
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / config.CONFIG_NAME).write_text(
+        "models:\n"
+        "  api: {kind: openai, base_url: 'https://api.example.com/v1',"
+        " model: gpt-x, price: [2, 8]}\n"
+        "  local: {kind: openai, base_url: 'http://127.0.0.1:8080/v1', model: q}\n"
+        "steps:\n  vision: {model: api}\n  formulas: {model: local}\n",
+        encoding="utf-8",
+    )
+    models.reset()
+    assert not pipeline.vision_is_free()
+    assert pipeline.formulas_are_free()

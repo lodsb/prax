@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from prax.text import markup
+from prax.text import chunking, markup
 
 MIN_HTML_BYTES = 4_000  # smaller inline images are icons
 BIG_HTML_BYTES = 40_000  # a photo, caption or not
@@ -1008,12 +1008,27 @@ def _figure_ref_of(line: str) -> str | None:
     return found[-1].group("ref")
 
 
+def _anchor_of(line: str) -> str | None:
+    """What a line holds that a model reads under it: a figure, by its
+    hash, or a display equation, by its LaTeX with the spacing collapsed
+    (two reads of one paper write the same equation spaced differently)."""
+    ref = _figure_ref_of(line)
+    if ref is not None:
+        return ref
+    stripped = line.strip()
+    if chunking._is_formula(stripped):
+        return "formula:" + "".join(stripped[2:-2].split())
+    return None
+
+
 def carry_readings(previous: str | list[str], text: str) -> str:
-    """``text`` with the figure readings ``previous`` held carried over: a
+    """``text`` with the readings ``previous`` held carried over: a
     replacing read (marker, OCR, the parser again) writes a text of its
     own, and the readings were lines of the old one, under each figure's
-    line. A figure still in the new text, by its hash, gets the readings
-    it had, after any the new text already gives it, a model's line once.
+    or equation's line (``_anchor_of``). One still in the new text gets the
+    readings it had, after any the new text already gives it, a model's
+    line once. Until 2026-11-07 only figures' were carried, so a marker
+    read dropped every formula reading of the paper.
     ``previous`` may be several texts, newest first (the current one and
     the earlier ones, ``store.earlier_texts``): a model's newest reading of
     a figure is the one carried. On 2026-10-06 a marker evening dropped
@@ -1021,18 +1036,20 @@ def carry_readings(previous: str | list[str], text: str) -> str:
     texts = [previous] if isinstance(previous, str) else previous
     held: dict[str, list[str]] = {}
     for one in texts:
-        if "(figure:" not in one:
+        if "(figure:" not in one and "$$" not in one:
             continue
         old = one.split("\n")
         for i, line in enumerate(old):
-            ref = _figure_ref_of(line)
+            ref = _anchor_of(line)
             if ref is None:
                 continue
             have = {
-                m.group("model") for t in held.get(ref, []) if (m := READ_BY.match(t))
+                m.group("model")
+                for t in held.get(ref, [])
+                if (m := markup.READ_BY.match(t))
             }
             at = i + 1
-            while at < len(old) and (m := READ_BY.match(old[at])):
+            while at < len(old) and (m := markup.READ_BY.match(old[at])):
                 if m.group("model") not in have:
                     held.setdefault(ref, []).append(old[at])
                     have.add(m.group("model"))
@@ -1044,18 +1061,18 @@ def carry_readings(previous: str | list[str], text: str) -> str:
     i = 0
     while i < len(lines):
         out.append(lines[i])
-        ref = _figure_ref_of(lines[i])
+        ref = _anchor_of(lines[i])
         i += 1
         if ref is None or ref not in held:
             continue
         there: list[str] = []
-        while i < len(lines) and READ_BY.match(lines[i]):
+        while i < len(lines) and markup.READ_BY.match(lines[i]):
             there.append(lines[i])
             i += 1
-        models = {m.group("model") for t in there if (m := READ_BY.match(t))}
+        models = {m.group("model") for t in there if (m := markup.READ_BY.match(t))}
         out += there
         for reading in held.pop(ref):
-            m = READ_BY.match(reading)
+            m = markup.READ_BY.match(reading)
             if m and m.group("model") not in models:
                 out.append(reading)
                 models.add(m.group("model"))

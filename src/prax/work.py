@@ -57,6 +57,7 @@ from prax.steps.leases import (  # noqa: F401 - the table's names, as callers kn
     renew,
 )
 from prax.steps.leases import lease as _lease
+from prax.steps.leases import note_spend as _note_spend
 from prax.steps.leases import release as release_lease
 
 # the readings a chat server does: each waits for the role that serves its
@@ -668,5 +669,7 @@ def take_in(
     for r in results:
         with contextlib.suppress(TypeError, ValueError):
             _wanted.pop((step, int(r.get("doc_id", r.get("id")))), None)
+    for model, tokens in (payload.get("spent") or {}).items():
+        _note_spend(con, step, tokens, run=payload.get("run"), model=model)
     t = TakeIn(con, step, payload, results, worker, out)
     return steps.get(step).take_in(t)

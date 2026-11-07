@@ -488,6 +488,18 @@ class OpenAIRuntime:
         )
         text = (data["choices"][0]["message"].get("content") or "").strip()
         u = data.get("usage") or {}
+        if self.api_key_env:
+            # a server that takes a key is a service that bills (a local
+            # llama-server takes none): its use goes home like Claude's
+            from prax.ml import usage
+
+            usage.record(
+                self.model,
+                {
+                    "input_tokens": u.get("prompt_tokens"),
+                    "output_tokens": u.get("completion_tokens"),
+                },
+            )
         return text, {
             "input_tokens": int(u.get("prompt_tokens", 0) or 0),
             "output_tokens": int(u.get("completion_tokens", 0) or 0),
@@ -776,6 +788,12 @@ class ClaudeRuntime:
         response = self.client.messages.create(**params)
         text = "".join(b.text for b in response.content if b.type == "text")
         u = response.usage
+        # paid: what it used goes home with the worker's next post
+        # (``Pass.post``), whichever step called and whatever it does with
+        # the tokens returned here
+        from prax.ml import usage
+
+        usage.record(self.model, u)
         return text, {
             "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
             "output_tokens": int(getattr(u, "output_tokens", 0) or 0),

@@ -175,7 +175,7 @@ async function viewCleanup(p) {
     b.disabled = true;
     try {
       const r = await post("/cleanup-restore", { run: b.dataset.restore });
-      b.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `restored ${r.restored}, ${r.edges_reopened} facts reopened` }));
+      b.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `restored ${r.restored}, ${r.edges_restated} facts restated` }));
     } catch (err) { b.disabled = false; b.insertAdjacentHTML("afterend", ` <span class="error">${esc(err.message)}</span>`); }
   }));
   if (!p.rule) return;

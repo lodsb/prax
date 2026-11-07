@@ -28,7 +28,7 @@ A package of parts, each importing only from the ones before it in
 
 from __future__ import annotations
 
-ORDER = ("common", "graph", "documents", "ailments")
+ORDER = ("common", "graph", "documents", "cleanup", "ailments")
 
 from .ailments import (  # noqa: F401
     AILMENTS,
@@ -36,6 +36,14 @@ from .ailments import (  # noqa: F401
     _chosen,
     heal,
     health,
+)
+from .cleanup import (  # noqa: F401
+    _origin,
+    cleanup_preview,
+    cleanup_runs,
+    cleanup_set,
+    restore_set,
+    retire_set,
 )
 from .common import (  # noqa: F401
     CAP,

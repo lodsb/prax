@@ -29,10 +29,25 @@ and its item 5 is items 1 and 2 below.
 - **Reviews.** The review of 2026-11-06 over 0a6d923..dd8e2dc
   (`docs/eval/review-2026-11-06.md`) is closed: three safety defects
   and four quality findings fixed, one wall channel accepted as for
-  slugs. The next covers the range from the commit after it.
+  slugs. The next covers the range from the commit after it. The
+  structure review of 2026-11-07 over all of `src`
+  (`docs/eval/structure-review-2026-11-07.md`): 56 findings, the ten
+  bugs among them fixed that day; the rest is item 0 below.
 
 ### Next, in order
 
+0. (the user's word, 2026-11-07) **The structure review's cleanups,
+   before more is built on the store.** First the mechanical ones: one
+   exception handler for the store's KeyError and ValueError (about 140
+   hand-written mappings in `api/`), one helper for lists of ids in SQL
+   (about 115 `IN` lists and 30 loops of 500), one live-document filter
+   (75 copies of the SQL), the store's re-export lists (1,934 lines, 79
+   private names nothing outside reaches), the dead code. Then one owner
+   for each concept, a stage each: a document's meta (read and written by
+   hand at about 70 places, some across two transactions); the entity a
+   name means, its canonical id and alias group, a document's node; ending
+   and undoing edges (seven functions, four undos); the tried marks of the
+   steps in one shape, with a migration. Then findings 8 to 56 by cost.
 1. (asked for by the clock from 2026-11-05) **AO's fixes, now the card
    runs.** The maths as text was read by marker on the night of
    2026-11-03: 529 papers, and the formulas after them. The rest is

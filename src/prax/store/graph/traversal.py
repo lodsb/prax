@@ -16,6 +16,7 @@ from prax.text import dates
 from ..base import VIEWER, _reading, domain_clause, hidden_documents, now
 from .communities import community_of
 from .edges import (
+    _ASSERTED,
     _MOMENT_ISO,
     _end_of,
     changed_between,
@@ -709,7 +710,7 @@ def _visible_ids(
     marks = ",".join("?" * len(ids))
     rows = con.execute(
         f"SELECT src, dst, source_doc FROM edges WHERE valid_to IS NULL"
-        f" AND (src IN ({marks}) OR dst IN ({marks}))",
+        f" AND {_ASSERTED} AND (src IN ({marks}) OR dst IN ({marks}))",
         ids + ids,
     ).fetchall()
     keep = set(ids)

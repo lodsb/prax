@@ -42,7 +42,6 @@ class Typing(Step):
         run = t.run("typing-model")
         for r in t.results:
             t.release([it["id"] for it in r.get("items") or []])
-            leases.note_spend(t.con, self.name, r.get("usage"), run=run)
         rep = typing_pass.take_in(t.con, t.results, model=model, run=run)
         t.out["applied"] = rep.requests
         t.out["report"] = {

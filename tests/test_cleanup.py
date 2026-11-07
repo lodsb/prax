@@ -98,9 +98,26 @@ def test_a_set_is_shown_retired_and_restored_with_its_facts(
     runs = client.get("/cleanup").json()["runs"]
     assert [r["run"] for r in runs] == [done["run"]] and runs[0]["documents"] == 1
     # restored in one go: the chunks back, and the very facts it ended
+    ended = con.execute(
+        "SELECT id, valid_to FROM edges WHERE source_doc = ?", (eula,)
+    ).fetchone()
     back = client.post("/cleanup-restore", json={"run": done["run"]}).json()
-    assert back == {"run": done["run"], "restored": 1, "edges_reopened": 1}
+    assert back == {"run": done["run"], "restored": 1, "edges_restated": 1}
     assert not _retired(con, eula)
+    # stated again as a new edge: the ended one keeps its ending, so what
+    # prax held while the set was retired stays history (invariant 8)
+    assert (
+        con.execute("SELECT valid_to FROM edges WHERE id = ?", (ended[0],)).fetchone()[
+            0
+        ]
+        == ended[1]
+    )
+    assert [
+        r[0]
+        for r in con.execute(
+            "SELECT edge_id FROM edge_endings WHERE run = ?", (done["run"],)
+        )
+    ] == [ended[0]]
     assert (
         con.execute("SELECT count(*) FROM chunks WHERE doc_id = ?", (eula,)).fetchone()[
             0
@@ -126,6 +143,39 @@ def test_a_set_is_shown_retired_and_restored_with_its_facts(
             m == method and pattern.fullmatch(path)
             for m, pattern in auth.RESTRICTED_ROUTES
         )
+
+
+def test_a_clean_up_from_before_the_endings_is_restored(
+    con: sqlite3.Connection,
+) -> None:
+    # until 2026-11-07 a clean-up kept the edges it ended in its meta and
+    # reopened them in place; one made then is restored the new way
+    eula = _doc(con, "/nas/Windows/System32/license.rtf", "Terms. " * 60, "Licence")
+    store.link(
+        con,
+        store.Edge("Licence", "document", "published_by", "Vendor", "organization"),
+        source_doc=eula,
+    )
+    edge = con.execute("SELECT id FROM edges WHERE source_doc = ?", (eula,)).fetchone()[
+        0
+    ]
+    store.retire_document(con, eula, reason="clean-up")
+    meta = json.loads(
+        con.execute("SELECT meta FROM documents WHERE id = ?", (eula,)).fetchone()[0]
+    )
+    meta["retired"].update(run="cleanup-old", ended=[edge])
+    con.execute("UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), eula))
+    con.commit()
+    back = store.restore_set(con, "cleanup-old")
+    assert back["restored"] == 1 and back["edges_restated"] == 1
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+            (eula,),
+        ).fetchone()[0]
+        == 1
+    )
+    assert con.execute("SELECT valid_to FROM edges WHERE id = ?", (edge,)).fetchone()[0]
 
 
 def test_the_same_text_twice_is_kept_as_one(client: TestClient) -> None:

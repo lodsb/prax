@@ -175,7 +175,12 @@ def _split_page(
         force=True,
     )
     _refuse_lost_words(con, text, head, children)
-    _end_given_edges(con, doc_id, [c["text"] for c in children])
+    _end_given_edges(
+        con,
+        doc_id,
+        [c["text"] for c in children],
+        run=f"{slug}@{written['revision']}",
+    )
     after = get_meta(con, doc_id)
     page = dict(after.get("page") or {})
     page["split"] = [
@@ -375,7 +380,9 @@ def _refuse_lost_words(
         raise ValueError("the split pages do not add up to the page: nothing written")
 
 
-def _end_given_edges(con: sqlite3.Connection, doc_id: int, texts: list[str]) -> None:
+def _end_given_edges(
+    con: sqlite3.Connection, doc_id: int, texts: list[str], *, run: str
+) -> None:
     """An ``annotates`` or ``synthesizes`` edge the page was given with no
     link behind it ends on the index when a child links its document (the
     children's ``texts``): the child's link is the edge now. One a child
@@ -394,7 +401,7 @@ def _end_given_edges(con: sqlite3.Connection, doc_id: int, texts: list[str]) -> 
         (doc_id, _LINK_EVIDENCE + " %"),
     ).fetchall():
         if edge["name"] in linked:
-            _invalidate_edge(con, int(edge["id"]))
+            _invalidate_edge(con, int(edge["id"]), run=run)
 
 
 def _split_children(con: sqlite3.Connection, doc_id: int) -> list[int]:

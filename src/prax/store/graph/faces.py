@@ -29,7 +29,9 @@ from ..base import (
     _reading,
     _serialized,
     document_hidden,
+    first_fresh_id,
     hidden_documents,
+    mark_ids,
     now,
 )
 from ..documents import _checked_face, _put_meta, get_meta
@@ -170,10 +172,7 @@ def replace_face_groups(
     taken: set[int] = set()
     # an id no group ever had: a page names a group by its id, and a group
     # that dissolved must not lend its id to another (id_marks, 59)
-    mark = con.execute(
-        "SELECT last FROM id_marks WHERE name = 'face_groups'"
-    ).fetchone()
-    next_id = max(int(mark[0]) if mark else 0, max(old, default=0)) + 1
+    next_id = first_fresh_id(con, "face_groups", above=max(old, default=0))
     stamp = now()
     groups, rows = [], []
     report = {"groups": len(members), "carried": 0, "new": 0, "doubled": 0}
@@ -202,11 +201,7 @@ def replace_face_groups(
             (gid, len(mine), len(per_doc), doubled, persistence[g], model, run, stamp)
         )
         rows += [(faces[i], gid, round(strength[i], 4)) for i in at]
-    con.execute(
-        "INSERT INTO id_marks (name, last) VALUES ('face_groups', ?)"
-        " ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)",
-        (next_id - 1,),
-    )
+    mark_ids(con, "face_groups", next_id - 1)
     con.execute("DELETE FROM face_group_members")
     con.execute("DELETE FROM face_groups")
     con.executemany(

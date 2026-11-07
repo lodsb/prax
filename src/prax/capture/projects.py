@@ -402,7 +402,7 @@ def _keep_in_step(con: sqlite3.Connection, run: str, want: Want) -> dict[str, in
     ended = 0
     for key, edge_id in existing.items():
         if key not in held:
-            store.invalidate_edge(con, edge_id)
+            store.invalidate_edge(con, edge_id, run=run)
             ended += 1
     return {"added": added, "kept": kept, "ended": ended}
 

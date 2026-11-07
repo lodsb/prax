@@ -605,3 +605,33 @@ def test_no_export_holds_who_a_picture_shows(client: TestClient) -> None:
     # past the header, which carries the ontology's text
     body = "".join(got.text.splitlines()[1:])
     assert "Rome" in body and "Ada" not in body and '"depicts"' not in body
+
+
+def test_a_derived_fact_does_not_name_an_entity_its_premises_hide(
+    con: sqlite3.Connection,
+) -> None:
+    # two research documents place a town; the rule pass derives the town
+    # in the country, open and sourced to no document. A token that sees
+    # only the kitchen sees neither document, so not the town's name either
+    # (the structure review of 2026-11-07)
+    for a, b in (("Aldmouth", "Lower Vale"), ("Lower Vale", "Ardenia")):
+        doc = int(store.ingest_text(con, f"{a} lies in {b}. " * 20, title=a)["doc_id"])
+        store.set_domains(con, doc, ["research"])
+        store.link(
+            con, store.Edge(a, "place", "located_in", b, "place"), source_doc=doc
+        )
+    store.derive_rules(con)
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges WHERE producer = 'rule:transitive'"
+            " AND source_doc IS NULL AND valid_to IS NULL"
+        ).fetchone()[0]
+        == 1
+    )
+    assert [e["name"] for e in store.find_entities(con, "Aldmouth")] == ["Aldmouth"]
+    token = store.VIEWER.set(store.Viewer("cook", domains=frozenset({"kitchen"})))
+    try:
+        assert store.find_entities(con, "Aldmouth") == []
+        assert store.find_entities(con, "Ardenia") == []
+    finally:
+        store.VIEWER.reset(token)

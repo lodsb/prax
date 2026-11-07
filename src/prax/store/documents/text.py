@@ -151,6 +151,14 @@ def register_references(
     return out
 
 
+# The marks a step leaves when it read a document's text and got nothing
+# (``meta.<step>_tried``): the step passes the document by until the text
+# changes, and a new text clears them. Until 2026-11-07 none was cleared, so
+# a scan that failed on its OCR layer was never asked again after marker
+# read it properly (the structure review of that day).
+TRIED_ON_TEXT = ("genres_tried", "published_tried", "summary_tried", "titles_tried")
+
+
 def _index_text(
     con: sqlite3.Connection,
     doc_id: int,
@@ -166,7 +174,9 @@ def _index_text(
     language the text is in (``prax.text.language``), which nothing recorded
     before and every side of retrieval had to guess.
     """
-    exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    exists = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
     if exists is None:
         raise KeyError(f"no such document: {doc_id}")
     text = _cleaned(text)
@@ -178,6 +188,14 @@ def _index_text(
         " WHERE id = ?",
         (text_hash, len(text), doc_id),
     )
+    if exists["text_hash"] and exists["text_hash"] != text_hash:
+        # a step that failed on the old text may do better on this one
+        con.execute(
+            "UPDATE documents SET meta = json_remove(meta, "
+            + ", ".join(f"'$.{k}'" for k in TRIED_ON_TEXT)
+            + ") WHERE id = ? AND meta IS NOT NULL",
+            (doc_id,),
+        )
     if text_source is not None:
         con.execute(
             "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"

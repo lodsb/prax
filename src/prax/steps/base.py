@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from prax import models
+from prax.ml import usage
 
 from . import leases
 
@@ -160,6 +161,12 @@ class Pass:
         return got
 
     def post(self, step: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Results to the door, with what the paid calls behind them used
+        (``prax.ml.usage``, as ``spent``), which the door writes to the
+        ledger: one way home for every step's spending."""
+        spent = usage.take()
+        if spent:
+            body = {**body, "spent": spent}
         got: dict[str, Any] = self.door.post_json(f"/work/{step}", body)
         return got
 

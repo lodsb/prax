@@ -873,3 +873,29 @@ def test_a_forced_reading_that_found_nothing_is_empty(con: sqlite3.Connection) -
     doc = store.get_document(con, doc_id, max_chars=0)
     assert doc is not None and not doc["text_len"] and not doc.get("text_hash")
     assert store.get_meta(con, doc_id)["parse_history"][-1]["outcome"] == "empty"
+
+
+def test_a_new_read_keeps_what_the_models_read_in_figures_and_formulas() -> None:
+    from prax.parsers import figures
+
+    ref = "a" * 64
+    old = (
+        "Intro.\n\n"
+        f"![Figure 1: the bench](figure:{ref})\n"
+        "*Figure, as read by vision-m:* A bench with a scope.\n\n"
+        "$$ V = I R $$\n"
+        "*Formula, as read by maths-m:* Ohm's law.\n"
+    )
+    # a replacing read writes its own text: the same figure and equation,
+    # the prose around them changed, no readings
+    new = (
+        "Introduction, read again.\n\n"
+        f"![Figure 1: the bench](figure:{ref})\n\n"
+        "$$V = I  R$$\n\nMore text.\n"
+    )
+    carried = figures.carry_readings([old], new)
+    assert "*Figure, as read by vision-m:* A bench with a scope." in carried
+    assert "$$V = I  R$$\n*Formula, as read by maths-m:* Ohm's law." in carried
+    # a formula the new text no longer holds takes its reading with it
+    gone = figures.carry_readings([old], f"![Figure 1](figure:{ref})\n")
+    assert "Ohm's law" not in gone

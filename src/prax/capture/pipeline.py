@@ -132,13 +132,15 @@ def mark_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> None
 
 
 def _free(step: str) -> bool:
-    """Whether a reading by that step's model costs nothing (a local
-    server): the readings the door asks for on its own are only those."""
+    """Whether a reading by that step's model costs nothing
+    (``ModelSpec.paid``): the readings the door asks for on its own are
+    only those. Until 2026-11-07 any OpenAI-shaped model counted as free,
+    a priced API among them."""
     try:
         spec = models.resolve(step)
     except Exception:  # noqa: BLE001 - a broken prax.yaml is not this step's problem
         return False
-    return spec is not None and spec.kind == "openai"
+    return spec is not None and not spec.paid
 
 
 def vision_is_free() -> bool:
