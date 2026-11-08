@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any
 
@@ -12,6 +11,7 @@ from ..base import (
     _reading,
     document_hidden,
     hidden_documents,
+    meta_of,
 )
 from .texts import (
     _slug_of,
@@ -53,7 +53,7 @@ def get_page(
     if row is None or document_hidden(con, int(row["doc_id"])):
         return None
     doc_id = int(row["doc_id"])
-    meta = json.loads(row["meta"] or "{}")
+    meta = meta_of(row["meta"])
     revisions = [
         dict(r)
         for r in con.execute(

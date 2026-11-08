@@ -4,7 +4,6 @@ duplicates and the captures of one page."""
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 from typing import Any
 
@@ -19,6 +18,7 @@ from ..base import (
     _reading,
     _serialized,
     document_hidden,
+    meta_of,
     now,
 )
 from .meta import _put_meta, _refresh_document_field, get_meta
@@ -286,7 +286,7 @@ def live_captures_of(con: sqlite3.Connection, url: str) -> list[dict[str, Any]]:
         f"SELECT id, meta FROM documents WHERE source_url = ? AND {LIVE} ORDER BY id",
         (url,),
     ):
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         out.append({"doc_id": r["id"], "meta": meta})
     return out
 
@@ -333,7 +333,7 @@ def dedupe_captures(
         f" AND {LIVE} ORDER BY id"
     ):
         groups.setdefault(r["source_url"], []).append(
-            {"doc_id": r["id"], "meta": json.loads(r["meta"] or "{}")}
+            {"doc_id": r["id"], "meta": meta_of(r["meta"])}
         )
     report: dict[str, Any] = {"groups": [], "retired": 0, "kept_apart": 0}
     for url, docs in groups.items():

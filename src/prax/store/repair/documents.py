@@ -5,7 +5,7 @@ referenced originals out of reach."""
 
 from __future__ import annotations
 
-import json
+import functools
 import re
 import sqlite3
 from typing import Any
@@ -13,7 +13,16 @@ from typing import Any
 from prax.text import glyphs
 
 from .. import documents as docs
-from ..base import _ASIDE, LIVE, _read_archive, live, now, rows_in
+from ..base import (
+    _ASIDE,
+    LIVE,
+    DocumentMeta,
+    _read_archive,
+    live,
+    meta_of,
+    now,
+    rows_in,
+)
 from ..documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -309,10 +318,9 @@ def _repair_extraction_failed(
     for r in rows:
         if not SERVER_FAULT.search(str(r.get("error") or "")):
             continue
-        meta = docs.get_meta(con, r["id"])
-        if meta.pop("extraction_error", None) is not None:
-            docs.set_meta(con, r["id"], meta)
-            done += 1
+        had = "extraction_error" in docs.get_meta(con, r["id"])
+        docs.update_meta(con, r["id"], _forget_extraction_error)
+        done += had
     return done
 
 
@@ -388,7 +396,7 @@ def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
         " ORDER BY id",
         tuple(ids),
     ):
-        last = (json.loads(r["meta"] or "{}").get("parse_history") or [{}])[-1]
+        last = (meta_of(r["meta"]).get("parse_history") or [{}])[-1]
         out.append(
             {
                 "id": r["id"],
@@ -640,7 +648,7 @@ def _stale_parses(con: sqlite3.Connection) -> list[dict[str, Any]]:
         f"SELECT id, title, meta FROM documents WHERE id IN ({marks}) ORDER BY id",
         tuple(ids),
     ):
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         out.append(
             {
                 "id": r["id"],
@@ -652,6 +660,17 @@ def _stale_parses(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return out
 
 
+def _forget_extraction_error(meta: DocumentMeta) -> None:
+    meta.pop("extraction_error", None)
+
+
+def _stamp_parse(reader: str, meta: DocumentMeta) -> None:
+    """The text source moved to ``reader``, which already made the change."""
+    stamped = {"at": now(), "extractor": reader, "outcome": "stamped"}
+    meta["parse_history"] = [*(meta.get("parse_history") or []), stamped]
+    meta["text_source"] = reader
+
+
 def _repair_stale_parses(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Move the stamp where an annotation already made the revision's
     change; the others wait for the backlog pass."""
@@ -660,13 +679,7 @@ def _repair_stale_parses(con: sqlite3.Connection, rows: list[dict[str, Any]]) ->
     for r in rows:
         if not r.get("covered"):
             continue
-        meta = docs.get_meta(con, r["id"])
-        history = list(meta.get("parse_history", []))
-        at = now()
-        history.append({"at": at, "extractor": r["covered"], "outcome": "stamped"})
-        meta["parse_history"] = history
-        meta["text_source"] = r["covered"]
-        docs.set_meta(con, r["id"], meta)
+        docs.update_meta(con, r["id"], functools.partial(_stamp_parse, r["covered"]))
         done += 1
     return done
 

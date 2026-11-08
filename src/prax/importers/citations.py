@@ -339,8 +339,8 @@ def _one(
     }
     if work is None:
         rep.unresolved += 1
-        meta["citations"] = {**stamp, "resolved": False}
-        store.set_meta(con, doc_id, meta)
+        unresolved = {**stamp, "resolved": False}
+        store.update_meta(con, doc_id, keys={"citations": unresolved})
         return
     linked = 0
     for ref in work.references:
@@ -370,7 +370,7 @@ def _one(
         linked += 1
     rep.linked += linked
     rep.documents += 1
-    meta["citations"] = {
+    resolved = {
         **stamp,
         "resolved": True,
         "id": work.id,
@@ -380,4 +380,4 @@ def _one(
         "references": len(work.references),
         "linked": linked,
     }
-    store.set_meta(con, doc_id, meta)
+    store.update_meta(con, doc_id, keys={"citations": resolved})

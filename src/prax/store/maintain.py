@@ -49,6 +49,7 @@ from .base import (
     _serialized,
     archive_path,
     live,
+    meta_of,
     now,
     run_name,
     vectors_available,
@@ -67,9 +68,9 @@ from .documents import (
     rechunk,
     reference_chunks,
     refresh_document_fields,
-    set_meta,
     set_reference_links,
     suspect,
+    update_meta,
 )
 from .graph import (
     Edge,
@@ -343,7 +344,7 @@ def _library(con: sqlite3.Connection) -> dict[int, dict[str, Any]]:
     for r in con.execute(
         f"SELECT id, title, meta FROM documents WHERE title IS NOT NULL AND {LIVE}"
     ):
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         year = None
         for key in ("year", "date", "published"):
             m = re.search(r"(?:19|20)\d{2}", str(meta.get(key) or ""))
@@ -526,8 +527,7 @@ def link_references(
                 ambiguous += 1
             else:
                 linked += 1
-        meta = get_meta(con, doc_id)
-        meta["references"] = {
+        stamp = {
             "text_hash": text_hash,
             "entries": len(entries),
             "linked": linked,
@@ -535,7 +535,7 @@ def link_references(
             "at": at,
             "run": run,
         }
-        set_meta(con, doc_id, meta)
+        update_meta(con, doc_id, keys={"references": stamp})
         # what each entry cites, on the document and on its chunks (a
         # rechunk re-applies it): the link's title is the cited document's
         set_reference_links(con, doc_id, links)
@@ -933,7 +933,7 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             # lines', detected or else by whose ingredient words they use
             lines = [line for x in page.recipes for line in x.ingredient_lines]
             lang = (
-                json.loads(r["meta"] or "{}").get("lang")
+                meta_of(r["meta"]).get("lang")
                 or language.detect(" ".join(lines))
                 or schemaorg.likely_language(lines, by_lang)
             )
@@ -983,7 +983,7 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     found: Counter[str] = Counter()
     pending: list[tuple[Any, ...]] = []
     for n, r in enumerate(rows, 1):
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         page = None
         if (r["mime"] or "") in ("text/html", "application/xhtml+xml"):
             try:
@@ -1043,7 +1043,7 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             except OSError:
                 return None
 
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         got = quality.assess(
             text,
             stamp=str(meta.get("text_source") or ""),

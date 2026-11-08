@@ -55,6 +55,7 @@ from ..base import (
     _reading,
     _serialized,
     hidden_documents,
+    meta_of,
     now,
     run_name,
 )
@@ -220,7 +221,7 @@ def _side(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         " FROM documents WHERE id = ?",
         (doc_id,),
     ).fetchone()
-    meta = json.loads(row["meta"] or "{}")
+    meta = meta_of(row["meta"])
     headings: list[str] = []
     for (h,) in con.execute(
         "SELECT DISTINCT json_extract(heading, '$[0]') FROM chunks"

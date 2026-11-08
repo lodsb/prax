@@ -20,7 +20,6 @@ often the model and the person agree.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any, Literal
 
@@ -33,6 +32,7 @@ from ..base import (
     _reading,
     _serialized,
     document_hidden,
+    meta_of,
     now,
 )
 from .meta import _put_meta, get_meta
@@ -218,7 +218,7 @@ def genre_training(
         " WHERE json_extract(meta, '$.genres_by') IS NOT NULL"
         f" AND {LIVE} ORDER BY id"
     ).fetchall():
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         text = ""
         if r["text_hash"]:
             try:
@@ -291,7 +291,7 @@ def genres_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> No
 
 
 def _genre_item(row: sqlite3.Row, opening: int) -> dict[str, Any]:
-    meta = json.loads(row["meta"] or "{}")
+    meta = meta_of(row["meta"])
     text = ""
     if opening and row["text_hash"]:
         try:

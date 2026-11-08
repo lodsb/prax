@@ -26,8 +26,9 @@ import threading
 from collections import defaultdict
 from typing import Any
 
-from ..base import _reading, _serialized, live, run_name, store_state
+from ..base import _reading, _serialized, live, meta_of, run_name, store_state
 from .domains import SENSITIVITY, _set_sensitivity
+from .meta import _put_meta
 
 MEDIA_BY = ("folder", "month", "event")
 MEDIA_STATES = ("suspected", "open", "personal")
@@ -326,16 +327,13 @@ def undo_media(con: sqlite3.Connection, run: str) -> dict[str, Any]:
         (run,),
     ).fetchall()
     for r in rows:
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         before = (meta.get("sensitivity") or {}).get("before") or {}
         if before.get("meta") is None:
             meta.pop("sensitivity", None)
         else:
             meta["sensitivity"] = before["meta"]
-        con.execute(
-            "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
-            (before.get("column"), json.dumps(meta), r["id"]),
-        )
+        _put_meta(con, r["id"], meta, sensitivity=before.get("column"))
     con.commit()
     return {"run": run, "restored": len(rows)}
 

@@ -812,14 +812,13 @@ def note_failure(
     it out until the ontology moves or a reading succeeds; the
     ``extraction-failed`` ailment lists them."""
     onto = ontology.current().for_domains(store.document_domains(con, doc_id))
-    meta = store.get_meta(con, doc_id)
-    meta["extraction_error"] = {
+    failed = {
         "extractor": extractor,
         "ontology_version": onto.version,
         "at": store.now(),
         "error": error[:500],
     }
-    store.set_meta(con, doc_id, meta)
+    store.update_meta(con, doc_id, keys={"extraction_error": failed})
 
 
 def current(step: str = "extract") -> Extractor:
@@ -1087,17 +1086,7 @@ def apply(
             source_doc=doc_id,
         )
         report.queued += 1
-    meta = store.get_meta(con, doc_id)
-    meta.pop("extraction_error", None)  # a reading that worked
-    stale_now = meta.get("extraction_stale") or {}
-    if stale_now.get("extractor") == extractor or stale_now.get("requested"):
-        meta.pop("extraction_stale")
-    if extraction.summary:
-        store.keep_summary(meta, extraction.summary)
-    if meta.get("extraction"):  # every model that has read the document
-        history = meta.setdefault("extraction_history", [])
-        history.append(meta["extraction"])
-    meta["extraction"] = {
+    stamp = {
         "extractor": extractor,
         "ontology_version": onto.version,
         "run": run,
@@ -1109,7 +1098,19 @@ def apply(
         **({"drops": report.drops} if report.drops else {}),
         **extraction.usage,
     }
-    store.set_meta(con, doc_id, meta)
+
+    def took(meta: store.DocumentMeta) -> None:
+        meta.pop("extraction_error", None)  # a reading that worked
+        stale_now = meta.get("extraction_stale") or {}
+        if stale_now.get("extractor") == extractor or stale_now.get("requested"):
+            meta.pop("extraction_stale")
+        if extraction.summary:
+            store.keep_summary(meta, extraction.summary)
+        if meta.get("extraction"):  # every model that has read the document
+            meta.setdefault("extraction_history", []).append(meta["extraction"])
+        meta["extraction"] = stamp
+
+    store.update_meta(con, doc_id, took)
     if report.queued:
         # the rules never invent; what they can settle from the names and
         # the document's title need not wait in the queue for a pass

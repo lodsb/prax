@@ -9891,3 +9891,38 @@ Four stages, each green before the next (plan item 0, the review of
 
 The four together: 42 files, 575 lines out and 495 in, five tests added,
 1,760 passing.
+
+
+## 2026-11-08: one owner of a document's meta
+
+Step 3 of the structure review's order, its first concept (findings 8,
+19, 26, 27).
+
+- **`store.update_meta(con, doc_id, change, keys=...)`**: reads the
+  meta, hands it to `change` (in place, or a meta to keep), sets `keys`
+  over it and writes it back in one `_serialized` write, refreshing the
+  document field only when something changed. It replaces 18 pairs of
+  `get_meta` then `set_meta` outside the store (capture, project sync,
+  the parse queue, extraction, citations, Zotero, questions), each two
+  transactions in which a write landing between was lost, and five
+  inside it (`summary_tried`, `count_pages`, the references pass, two
+  repairs, `mark_open_answer`). `set_meta` stays for a whole
+  replacement.
+- **`_put_meta(..., sensitivity=, title=)`**: the four raw
+  `UPDATE documents SET sensitivity = ?, meta = ?` writers (`mark_suspected`,
+  `suspect`, `_set_sensitivity`, `undo_media`) and `retitle`'s
+  `SET title = ?, meta = ?` go through it, so `check_meta` and
+  `bounded_histories` now run on every write path but the SQL
+  `json_set`s, whose keys `test_meta_keys` already reads off the source.
+- **`store.meta_of`** decodes a meta column: 32 hand decodes in 13
+  store modules. `_document_meta(con, id, *columns)` is the select,
+  `NotFound` and decode that eight functions wrote out.
+- The decoded meta stays `dict[str, Any]`: typing every reader as
+  `DocumentMeta` ripples through some 30 helpers taking a dict, and is
+  the strict-typing stage, not this one.
+- The maintain pass's conditional `json_set` batches stay SQL, as the
+  review's check said: they are guarded per row against a person's
+  concurrent write, and a Python read-modify-write would undo that.
+
+29 files, 344 lines in and 253 out (the docstrings and two tests are
+most of the difference); 1,762 passing, 4 skipped, UI 89.

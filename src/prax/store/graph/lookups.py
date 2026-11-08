@@ -5,11 +5,10 @@ the global ids of entities and pages (docs/global-ids.md)."""
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any
 
-from ..base import _reading, hidden_documents, rows_in
+from ..base import _reading, hidden_documents, meta_of, rows_in
 
 
 @_reading
@@ -58,7 +57,7 @@ def document_identities(
         " WHERE id IN ({ids})",
         doc_ids,
     ):
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         kept = {k: meta[k] for k in IDENTITY_META if meta.get(k)}
         if meta.get("summary"):
             kept["summary"] = meta["summary"]

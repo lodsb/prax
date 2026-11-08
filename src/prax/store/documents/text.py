@@ -27,7 +27,13 @@ from ..base import (
     check_meta,
     now,
 )
-from .meta import _is_indexed, _put_meta, _refresh_document_field, get_meta
+from .meta import (
+    _document_meta,
+    _is_indexed,
+    _put_meta,
+    _refresh_document_field,
+    get_meta,
+)
 from .places import (
     _referenced_private,
     live_photo_clip,
@@ -640,18 +646,10 @@ def mark_suspected(
     it is open and no person has decided about it (the wall's stage V: a
     rule suspects, a person decides). The one writer of that mark; the
     caller commits. True when it was marked."""
-    row = con.execute(
-        "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"] or "{}")
+    row, meta = _document_meta(con, doc_id, "sensitivity")
     if row["sensitivity"] is not None or _person_decided(meta):
         return False
-    con.execute(
-        "UPDATE documents SET sensitivity = 'suspected', meta = ? WHERE id = ?",
-        (json.dumps(_suspected(meta, cues, by)), doc_id),
-    )
+    _put_meta(con, doc_id, _suspected(meta, cues, by), sensitivity="suspected")
     return True
 
 
@@ -672,14 +670,9 @@ def _suspect(
     from prax.wall import private
 
     rules = rules or private.rules()
-    row = con.execute(
-        "SELECT sensitivity, title, original_path, source_url, text_hash, meta"
-        " FROM documents WHERE id = ?",
-        (doc_id,),
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"] or "{}")
+    row, meta = _document_meta(
+        con, doc_id, "sensitivity", "title", "original_path", "source_url", "text_hash"
+    )
     if row["sensitivity"] is not None or _person_decided(meta):
         return None
     if text is None and row["text_hash"]:
@@ -721,10 +714,7 @@ def _suspect(
             "at": now(),
             "read": read,
         }
-    con.execute(
-        "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
-        (state, json.dumps(meta), doc_id),
-    )
+    _put_meta(con, doc_id, meta, sensitivity=state)
     return cues
 
 

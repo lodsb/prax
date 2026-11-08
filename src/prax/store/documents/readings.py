@@ -21,10 +21,11 @@ from ..base import (
     _serialized,
     archive_path,
     live,
+    meta_of,
     now,
     rows_in,
 )
-from .meta import DOCTYPES, _put_meta, get_meta, set_meta
+from .meta import DOCTYPES, _put_meta, get_meta, update_meta
 from .places import original_file
 
 # A reading request: a person (or an agent) asks for a named extractor on
@@ -150,7 +151,7 @@ def unreadable_documents(
     )
     for r in rows:
         exts = parsers.candidates((r["mime"] or "").strip())
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         if exts and any(queue.seen(meta, e.stamp) for e in exts):
             out.append(r["id"])
             if limit and len(out) >= limit:
@@ -254,11 +255,9 @@ def count_pages(con: sqlite3.Connection, ids: list[int]) -> int:
         n = counted.get(doc_id)
         if n is None:
             continue
-        meta = get_meta(con, doc_id)
-        if meta.get("pages") is not None:
+        if get_meta(con, doc_id).get("pages") is not None:
             continue
-        meta["pages"] = n
-        set_meta(con, doc_id, meta)
+        update_meta(con, doc_id, keys={"pages": n})
         done += 1
     return done
 

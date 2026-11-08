@@ -31,6 +31,7 @@ applied:
 
 from __future__ import annotations
 
+import functools
 import re
 import sqlite3
 from typing import Any
@@ -458,25 +459,20 @@ def _statuses(
     stale = 0
     for path, (doc_id, text) in texts.items():
         st = status_mod.read(text, path, prefix, words)
-        meta = store.get_meta(con, doc_id)
-        held = meta.get("status") or {}
-        if held and held.get("by") not in (None, "sync"):
+        said = (
+            None
+            if st is None
+            else {
+                "state": st.state,
+                "since": st.since,
+                "words": st.words[:EVIDENCE_CHARS],
+                "by": "sync",
+            }
+        )
+        meta = store.update_meta(con, doc_id, functools.partial(_said, said))
+        if (meta.get("status") or {}).get("by") not in (None, "sync"):
             continue  # a person said it
-        if st is None:
-            if held:
-                meta.pop("status", None)
-                store.set_meta(con, doc_id, meta)
-            continue
-        said = {
-            "state": st.state,
-            "since": st.since,
-            "words": st.words[:EVIDENCE_CHARS],
-            "by": "sync",
-        }
-        if {k: held.get(k) for k in said} != said:
-            meta["status"] = {**said, "at": store.now()}
-            store.set_meta(con, doc_id, meta)
-        if not st.stale:
+        if st is None or not st.stale:
             continue
         stale += 1
         rel = status_mod.stale_rel(st.state)
@@ -485,6 +481,30 @@ def _statuses(
             if hit is not None and hit != doc_id:
                 want.setdefault((doc_id, hit, doc_id, rel), (st.words, st.since))
     return {**_keep_in_step(con, f"status:{name}", want), "stale": stale}
+
+
+def _own(own: dict[str, Any], tags: list[str], meta: store.DocumentMeta) -> None:
+    """A project's record of its file on the document, and its tags; with
+    tags, only on a document the project's own sync wrote (these bytes may
+    be someone else's capture of the same file)."""
+    if tags and meta.get("source") != store.PROJECT_SOURCE:
+        return
+    meta[store.PROJECT_SOURCE] = {**(meta.get(store.PROJECT_SOURCE) or {}), **own}
+    if tags:
+        meta["tags"] = sorted({*(meta.get("tags") or []), *tags})
+
+
+def _said(said: dict[str, Any] | None, meta: store.DocumentMeta) -> None:
+    """What a sync's reading of a note's status does to its meta: a
+    person's status is kept; the sync's own is replaced, or dropped when
+    the note says none any more."""
+    held = meta.get("status") or {}
+    if held and held.get("by") not in (None, "sync"):
+        return
+    if said is None:
+        meta.pop("status", None)
+    elif {k: held.get(k) for k in said} != said:
+        meta["status"] = {**said, "at": store.now()}
 
 
 def _apply(
@@ -523,12 +543,7 @@ def _apply(
         }
         if action in ("unchanged", "moved"):
             if r.get("old_key") != r["key"] or action == "moved":
-                meta = store.get_meta(con, r["doc_id"])
-                meta[store.PROJECT_SOURCE] = {
-                    **(meta.get(store.PROJECT_SOURCE) or {}),
-                    **own,
-                }
-                store.set_meta(con, r["doc_id"], meta)
+                store.update_meta(con, r["doc_id"], functools.partial(_own, own, []))
             store.add_to_project(con, slug, r["doc_id"], promote=False)
             continue
         if action not in ("add", "refresh"):
@@ -547,14 +562,7 @@ def _apply(
         if not got.get("created", True):
             # these bytes are a document already: someone else's capture of
             # the same file, or this project's own under a key it lost
-            meta = store.get_meta(con, doc_id)
-            if meta.get("source") == store.PROJECT_SOURCE:
-                meta[store.PROJECT_SOURCE] = {
-                    **(meta.get(store.PROJECT_SOURCE) or {}),
-                    **own,
-                }
-                meta["tags"] = sorted({*(meta.get("tags") or []), *tags})
-                store.set_meta(con, doc_id, meta)
+            store.update_meta(con, doc_id, functools.partial(_own, own, tags))
             r["action"] = "same"
         for d in settings["domains"]:
             store.add_domain(con, doc_id, d)

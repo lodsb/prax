@@ -466,9 +466,7 @@ def ingest_bytes(
         if previous is not None and previous in hidden:
             previous = None
         if previous is not None:
-            m = store.get_meta(con, doc_id)
-            m["previous_capture"] = previous
-            store.set_meta(con, doc_id, m)
+            store.update_meta(con, doc_id, keys={"previous_capture": previous})
     elif extra_meta:
         # the same bytes again, sent by someone who knows more about them
         # (a paper's ids and authors read off its abstract page): what the
@@ -521,10 +519,13 @@ FILL_IN_KEYS = ("doi", "arxiv", "creators", "paper", "video")
 
 
 def _fill_in(con: sqlite3.Connection, doc_id: int, extra: dict[str, Any]) -> None:
-    m = store.get_meta(con, doc_id)
-    added = {k: v for k, v in extra.items() if k in FILL_IN_KEYS and v and not m.get(k)}
-    if added:
-        store.set_meta(con, doc_id, {**m, **added})
+    def fill(m: store.DocumentMeta) -> store.MetaLike:
+        added = {
+            k: v for k, v in extra.items() if k in FILL_IN_KEYS and v and not m.get(k)
+        }
+        return {**m, **added}
+
+    store.update_meta(con, doc_id, fill)
 
 
 _TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)

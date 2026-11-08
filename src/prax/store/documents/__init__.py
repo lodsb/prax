@@ -139,6 +139,7 @@ from .meta import (  # noqa: F401
     set_summary,
     stamp_world_dates,
     summary_tried,
+    update_meta,
     world_dates_needed,
 )
 from .opens import (  # noqa: F401

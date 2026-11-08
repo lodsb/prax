@@ -22,11 +22,12 @@ from ..base import (
     domain_clause,
     hidden_documents,
     live,
+    meta_of,
     now,
     personal_sql,
     rows_in,
 )
-from .meta import _put_meta, get_meta, set_meta
+from .meta import _document_meta, _put_meta, get_meta, set_meta
 
 # Which ontology modules a document is read against (``meta.domains``): the
 # research papers see the research module, the family photos the family
@@ -150,10 +151,7 @@ def request_extraction(
     puts first whatever the scope. A document never extracted is marked
     the same way. The new reading retires the old one's edges
     (``extraction.apply``), history kept. Returns the stale record."""
-    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"]) if row["meta"] else {}
+    _, meta = _document_meta(con, doc_id)
     gone = meta.pop("extraction", None)
     meta.pop("extraction_error", None)
     if gone:
@@ -406,7 +404,7 @@ def domains_dry_run(
             "id": r["id"],
             "mime": r["mime"],
             "original_path": r["original_path"],
-            "meta": json.loads(r["meta"] or "{}"),
+            "meta": meta_of(r["meta"]),
         }
         for i, rule in enumerate(rules):
             if _rule_matches(rule, doc, con):
@@ -460,7 +458,7 @@ def assign_domains(
         sql += f" AND id IN ({','.join('?' * len(ids))})"
         args = tuple(ids)
     for r in con.execute(sql, args).fetchall():
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         doc = {
             "id": r["id"],
             "mime": r["mime"],
@@ -577,7 +575,7 @@ def promoted_documents(
         " WHERE json_extract(meta, '$.promote') IS NOT NULL"
         " ORDER BY json_extract(meta, '$.promote.at'), id"
     ):
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         out.append(
             {
                 "doc_id": r["id"],
@@ -608,7 +606,7 @@ def promotion_candidates(
         " AND coalesce(json_extract(meta, '$.source'), '') != 'wiki'"
     ):
         titles.setdefault(r["title"], r["id"])
-        if json.loads(r["meta"] or "{}").get("promote"):
+        if meta_of(r["meta"]).get("promote"):
             promoted.add(r["id"])
     counts: dict[int, dict[str, int]] = {}
 
@@ -701,12 +699,7 @@ def _set_sensitivity(
     had."""
     if state is not None and state not in SENSITIVITY:
         raise ValueError(f"sensitivity is one of {SENSITIVITY}, or none")
-    row = con.execute(
-        "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"] or "{}")
+    row, meta = _document_meta(con, doc_id, "sensitivity")
     decided: dict[str, Any] = {"state": state, "by": by, "at": now()}
     if run is not None:
         decided["run"] = run
@@ -715,10 +708,7 @@ def _set_sensitivity(
             "meta": meta.get("sensitivity"),
         }
     meta["sensitivity"] = decided
-    con.execute(
-        "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
-        (state, json.dumps(meta), doc_id),
-    )
+    _put_meta(con, doc_id, meta, sensitivity=state)
     got: str | None = row["sensitivity"]
     return got
 
@@ -772,7 +762,7 @@ def suspected_page(
     ).fetchall()
     items = []
     for r in rows:
-        meta = json.loads(r["meta"] or "{}")
+        meta = meta_of(r["meta"])
         items.append(
             {
                 "id": r["id"],

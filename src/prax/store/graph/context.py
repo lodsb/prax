@@ -4,13 +4,12 @@ similar documents) and the documents its title's entities reach."""
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _guards, _reading, _scrubbed, hidden_documents, rows_in
+from ..base import _guards, _reading, _scrubbed, hidden_documents, meta_of, rows_in
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
 
 
@@ -104,7 +103,7 @@ def document_context(
     if doc is None:
         return None
     title = doc["title"] or ""
-    meta = json.loads(doc["meta"] or "{}")
+    meta = meta_of(doc["meta"])
 
     # the document's own edges, by the entity they point at
     entities: list[dict[str, Any]] = []

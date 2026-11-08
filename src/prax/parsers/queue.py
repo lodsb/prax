@@ -60,14 +60,15 @@ def _record(
     *,
     pages: int | None = None,
 ) -> store.DocumentMeta:
-    meta = store.get_meta(con, doc_id)
-    history = list(meta.get("parse_history", []))
-    history.append({"at": _now(), **entry})
-    meta["parse_history"] = history
-    if pages:  # a fact of the original the worker counted on the way
-        meta["pages"] = int(pages)
-    store.set_meta(con, doc_id, meta)
-    return meta
+    def record(meta: store.DocumentMeta) -> None:
+        meta["parse_history"] = [
+            *meta.get("parse_history", []),
+            {"at": _now(), **entry},
+        ]
+        if pages:  # a fact of the original the worker counted on the way
+            meta["pages"] = int(pages)
+
+    return store.update_meta(con, doc_id, record)
 
 
 # refusals in a row after which an extractor has seen a document, whatever

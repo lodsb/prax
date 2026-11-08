@@ -285,6 +285,11 @@ def door_written(meta: MetaLike | None) -> list[str]:
     return sorted(k for k in meta if k not in CLIENT_META and k != own)
 
 
+def meta_of(raw: str | None) -> dict[str, Any]:
+    """A document's ``meta`` column decoded: ``{}`` for none."""
+    return dict(json.loads(raw)) if raw else {}
+
+
 def undeclared_meta(meta: MetaLike) -> list[str]:
     """The top-level keys of ``meta`` that ``DocumentMeta`` does not name."""
     return sorted(k for k in meta if k not in DocumentMeta.__annotations__)

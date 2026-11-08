@@ -772,10 +772,10 @@ def apply(
         if old.get("zotero", {}).get("modified", {}).get(p.key) == p.date_modified:
             report.actions["skipped"] += 1
             return "skipped"
-        store.set_meta(
+        store.update_meta(
             con,
             doc_id,
-            _merge_meta(old, meta),
+            lambda m: _merge_meta(m, meta),
             title=None if title_repaired(old) else p.title,
             source_url=p.source_url,
         )
@@ -808,7 +808,7 @@ def apply(
         action = "created"
     else:
         action = "merged"
-        store.set_meta(con, doc_id, _merge_meta(store.get_meta(con, doc_id), meta))
+        store.update_meta(con, doc_id, lambda m: _merge_meta(m, meta))
     if text is not None and not store.is_indexed(con, doc_id):
         store.index_text(con, doc_id, text)
     report.edges += _seed_edges(con, p, doc_id, version)

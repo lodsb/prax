@@ -29,6 +29,7 @@ from ..base import (
     _reading,
     domain_clause,
     hidden_documents,
+    meta_of,
     rows_in,
 )
 from .readings import _CURRENT_QUALITY
@@ -114,7 +115,7 @@ def earlier_texts(
     current = row["text_hash"]
     seen = {current}
     out: list[str] = []
-    history = json.loads(row["meta"] or "{}").get("parse_history") or []
+    history = meta_of(row["meta"]).get("parse_history") or []
     for entry in reversed(history):
         digest = entry.get("text_hash") if isinstance(entry, dict) else None
         if not digest or digest in seen:
@@ -151,7 +152,7 @@ def get_document(
     if not doc:
         return None
     row = dict(doc)
-    row["meta"] = json.loads(row["meta"]) if row["meta"] else {}
+    row["meta"] = meta_of(row["meta"])
     offset = max(0, offset)
     known = doc["text_len"] if doc["text_hash"] else 0
     if max_chars == 0 and known is not None:
@@ -381,7 +382,7 @@ def list_documents(
     items = []
     for r in rows:
         item = dict(r)
-        item["meta"] = json.loads(item["meta"]) if item["meta"] else {}
+        item["meta"] = meta_of(item["meta"])
         items.append(item)
     return {"total": total, "items": items}
 
@@ -767,7 +768,7 @@ def document_state(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | Non
     return {
         "mime": row["mime"],
         "text_hash": row["text_hash"],
-        "meta": json.loads(row["meta"] or "{}"),
+        "meta": meta_of(row["meta"]),
         "text_len": int(chars),
     }
 
@@ -817,7 +818,7 @@ def recent_captures(
         " ORDER BY json_extract(meta, '$.capture.at') DESC, id DESC LIMIT ?",
         (*CAPTURE_SOURCES, limit),
     ).fetchall()
-    return [{**dict(r), "meta": json.loads(r["meta"] or "{}")} for r in rows]
+    return [{**dict(r), "meta": meta_of(r["meta"])} for r in rows]
 
 
 @_reading

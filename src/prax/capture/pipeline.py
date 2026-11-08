@@ -117,9 +117,8 @@ def mark_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> None
     """Remember that a guess was made and not applied, so the pipeline does
     not ask the model again every pass (a later titles pass over the document
     or ``--apply-low`` still can)."""
-    meta = store.get_meta(con, doc_id)
-    meta["titles_tried"] = {"run": run, "why": why}
-    store.set_meta(con, doc_id, meta)
+    tried = {"run": run, "why": why}
+    store.update_meta(con, doc_id, keys={"titles_tried": tried})
 
 
 # ------------------------------------------------- the readings the door asks for

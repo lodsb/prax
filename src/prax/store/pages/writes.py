@@ -9,6 +9,7 @@ from typing import Any
 from prax.text import blocks, markup
 
 from ..base import (
+    DocumentMeta,
     NotFound,
     _committing,
     _read_archive,
@@ -22,7 +23,7 @@ from ..documents import (
     _set_promote,
     _set_sensitivity,
     get_meta,
-    set_meta,
+    update_meta,
 )
 from ..graph import (
     Edge,
@@ -654,6 +655,8 @@ def mark_open_answer(con: sqlite3.Connection, doc_id: int) -> None:
     the model's own knowledge beside the library's passages. A later
     search still finds the page; ``ask`` and the surfer never take it as
     the library's evidence. The mark stays with the page's revisions."""
-    meta = get_meta(con, doc_id)
-    meta["page"] = {**(meta.get("page") or {}), "open": True}
-    set_meta(con, doc_id, meta)
+
+    def mark(meta: DocumentMeta) -> None:
+        meta["page"] = {**(meta.get("page") or {}), "open": True}
+
+    update_meta(con, doc_id, mark)

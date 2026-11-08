@@ -4,9 +4,11 @@ change them."""
 
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 from prax.graph import ontology
 from prax.text import dates, language, mimes
@@ -22,6 +24,7 @@ from ..base import (
     _reading,
     _serialized,
     check_meta,
+    meta_of,
     now,
 )
 
@@ -90,24 +93,49 @@ def is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
     return _is_indexed(con, doc_id)
 
 
+def _document_meta(
+    con: sqlite3.Connection, doc_id: int, *columns: str
+) -> tuple[sqlite3.Row, dict[str, Any]]:
+    """A document's row (its meta and ``columns``) and its meta decoded;
+    NotFound when there is no such document."""
+    row = con.execute(
+        f"SELECT {', '.join(('meta', *columns))} FROM documents WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
+    if row is None:
+        raise NotFound(f"no such document: {doc_id}")
+    return row, meta_of(row["meta"])
+
+
 @_reading
 def get_meta(con: sqlite3.Connection, doc_id: int) -> DocumentMeta:
     """The document's ``meta`` JSON without touching the text artifact."""
-    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    return json.loads(row["meta"]) if row["meta"] else {}
+    return cast(DocumentMeta, _document_meta(con, doc_id)[1])
 
 
-def _put_meta(con: sqlite3.Connection, doc_id: int, meta: MetaLike) -> None:
+# the columns a meta write may change with it: the wall's mark
+# (``sensitivity``, decided with the cues in ``meta.private``) and the
+# title (with ``meta.title_history``)
+_META_COLUMNS = ("sensitivity", "title")
+
+
+def _put_meta(
+    con: sqlite3.Connection, doc_id: int, meta: MetaLike, **columns: Any
+) -> None:
     """Write a document's meta back, inside the caller's transaction: the
-    read-modify-write of every store function that changes a key of it.
-    It refreshes nothing; a caller that changes what the document field
-    indexes (title, kind, summary) refreshes it itself."""
+    read-modify-write of every store function that changes a key of it,
+    with any of ``_META_COLUMNS`` that change with it. It refreshes
+    nothing; a caller that changes what the document field indexes
+    (title, kind, summary) refreshes it itself."""
+    unknown = set(columns) - set(_META_COLUMNS)
+    if unknown:
+        raise ValueError(f"not a column a meta write sets: {sorted(unknown)}")
     check_meta(meta)
     bounded_histories(meta, HISTORY_KEEP)
+    sets = "".join(f", {c} = ?" for c in columns)
     con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+        f"UPDATE documents SET meta = ?{sets} WHERE id = ?",
+        (json.dumps(meta), *columns.values(), doc_id),
     )
 
 
@@ -137,6 +165,35 @@ def _set_meta(
 
 
 set_meta = _serialized(_committing(_set_meta))
+
+
+def _update_meta(
+    con: sqlite3.Connection,
+    doc_id: int,
+    change: Callable[[DocumentMeta], MetaLike | None] | None = None,
+    *,
+    keys: MetaLike | None = None,
+    title: str | None = None,
+    source_url: str | None = None,
+) -> DocumentMeta:
+    """Change a document's meta in one write: read it, hand it to
+    ``change`` (which changes it in place, or returns the meta to keep),
+    set ``keys`` over it, and write it back when it changed, the document
+    field with it. A write between a separate ``get_meta`` and
+    ``set_meta`` is lost; one in here waits. ``change`` must not call the
+    store. Returns the meta."""
+    meta = cast(DocumentMeta, _document_meta(con, doc_id)[1])
+    before = copy.deepcopy(meta)
+    got = change(meta) if change is not None else None
+    if got is not None:
+        meta = cast(DocumentMeta, got)
+    meta.update(cast(DocumentMeta, keys or {}))
+    if meta != before or title is not None or source_url is not None:
+        _set_meta(con, doc_id, meta, title=title, source_url=source_url)
+    return meta
+
+
+update_meta = _serialized(_committing(_update_meta))
 
 
 # what says when a document was published, the most trusted first
@@ -335,10 +392,7 @@ def set_summary(
     text = text.strip()
     if not text:
         raise ValueError("a summary cannot be empty")
-    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"] or "{}")
+    _, meta = _document_meta(con, doc_id)
     was = str(meta.get("summary") or "")
     code = keep_summary(meta, text, lang=lang)
     meta.pop("summary_tried", None)  # it worked this time
@@ -362,9 +416,8 @@ def summary_tried(
     """Note that a summary could not be translated, so the next pass does
     not hand out the same document to the same model for ever. A pass that
     wants them again clears ``meta.summary_tried``."""
-    meta = get_meta(con, doc_id)
-    meta["summary_tried"] = {"run": run, "why": why[:200], "at": now()}
-    set_meta(con, doc_id, meta)
+    tried = {"run": run, "why": why[:200], "at": now()}
+    update_meta(con, doc_id, keys={"summary_tried": tried})
 
 
 def _retitle_document(
@@ -383,15 +436,10 @@ def _retitle_document(
     Does not commit: the graph's half follows in the same write."""
     if not title:
         raise ValueError("a title cannot be empty")
-    row = con.execute(
-        "SELECT title, meta FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
+    row, meta = _document_meta(con, doc_id, "title")
     old = row["title"] or ""
     if old == title:
         return None
-    meta = json.loads(row["meta"] or "{}")
     history = list(meta.get("title_history") or [])
     history.append(
         {
@@ -404,10 +452,7 @@ def _retitle_document(
     meta["title_source"] = source
     meta["title_run"] = run
     meta["title_confidence"] = confidence
-    con.execute(
-        "UPDATE documents SET title = ?, meta = ? WHERE id = ?",
-        (title, json.dumps(meta), doc_id),
-    )
+    _put_meta(con, doc_id, meta, title=title)
     return str(old)
 
 
@@ -547,7 +592,7 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     ).fetchone()
     if row is None:
         return None
-    meta = json.loads(row["meta"] or "{}")
+    meta = meta_of(row["meta"])
     if meta.get("retired"):
         return None  # a retired document has no retrieval field
     source = str(meta.get("text_source") or "")
@@ -729,14 +774,9 @@ def set_quality(
     ``profile``, when the original was read for them, is kept as
     ``meta.profile`` (``quality.assess``). None, and nothing kept, when
     the document holds another text by now."""
-    row = con.execute(
-        "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
+    row, meta = _document_meta(con, doc_id, "text_hash")
     if row["text_hash"] != text_hash:
         return None  # a text that landed since: its own checks will run
-    meta = json.loads(row["meta"] or "{}")
     meta["quality"] = held = quality_record(findings, text_hash, version)
     if profile is not None:
         meta["profile"] = profile
@@ -771,12 +811,7 @@ def set_sections(
     the text artifact they were read from — so a re-parse makes them
     stale rather than wrong. The document field is refreshed, which is
     how they reach a search."""
-    row = con.execute(
-        "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"] or "{}")
+    row, meta = _document_meta(con, doc_id, "text_hash")
     meta["sections"] = {
         "text_hash": row["text_hash"],
         "source": source,

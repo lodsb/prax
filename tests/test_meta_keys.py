@@ -60,3 +60,42 @@ def test_an_undeclared_key_is_refused_in_a_test_and_logged_on_a_host(
     assert store.get_meta(con, doc)["colour"] == "teal"  # a host keeps it
     assert "'colour' is undeclared" in caplog.text
     assert store.undeclared_meta({"source": "x", "colour": 1}) == ["colour"]
+
+
+def test_update_meta_changes_a_document_in_one_write(con: sqlite3.Connection) -> None:
+    """``store.update_meta`` reads, changes and writes under the one lock,
+    so a key another writer put in between is never lost (structure review
+    findings 19, 26); a change that changes nothing writes nothing."""
+    doc = store.ingest_text(con, "a text " * 20, meta={"tags": ["a"]})["doc_id"]
+
+    def tag(meta: store.DocumentMeta) -> None:
+        meta["tags"] = [*meta.get("tags", []), "b"]
+
+    got = store.update_meta(con, doc, tag, keys={"previous_capture": 7})
+    assert got["tags"] == ["a", "b"] and got["previous_capture"] == 7
+    assert store.get_meta(con, doc) == got
+    replaced = store.update_meta(con, doc, lambda m: {"tags": m["tags"][:1]})
+    assert store.get_meta(con, doc) == replaced == {"tags": ["a"]}
+
+    before = con.total_changes
+    store.update_meta(con, doc, lambda m: None, keys={"tags": ["a"]})
+    assert con.total_changes == before
+    with pytest.raises(ValueError, match="colour"):
+        store.update_meta(con, doc, keys={"colour": "teal"})
+    assert "colour" not in store.get_meta(con, doc)
+    with pytest.raises(store.NotFound):
+        store.update_meta(con, 10_000, keys={"tags": []})
+
+
+def test_a_meta_write_sets_only_the_columns_it_may(con: sqlite3.Connection) -> None:
+    from prax.store.documents import meta as part
+
+    doc = store.ingest_text(con, "a text " * 20)["doc_id"]
+    part._put_meta(con, doc, {"source": "t"}, sensitivity="personal")
+    row = con.execute(
+        "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc,)
+    ).fetchone()
+    assert row["sensitivity"] == "personal"
+    assert store.meta_of(row["meta"]) == {"source": "t"}
+    with pytest.raises(ValueError, match="hash"):
+        part._put_meta(con, doc, {}, hash="x")

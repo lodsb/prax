@@ -18,6 +18,17 @@ writer's; the comment names who that is.
 literal keys and the type of what it reads. The writers (`set_meta`,
 `_put_meta`, `register`) take `store.MetaLike`, the declared shape or a
 plain dict. A key read through a variable is a `Final` or a `Literal`.
+A row read in SQL is decoded with `store.meta_of`.
+
+A change to a document's meta is `store.update_meta(con, doc_id, change,
+keys=...)`: it reads the meta, hands it to `change` (which changes it in
+place or returns the meta to keep), sets `keys` over it, and writes it
+back under the one write lock, refreshing the document field when it
+changed. `change` must not call the store. A `get_meta` followed by a
+`set_meta` is two transactions, and a write that lands between them is
+lost; `set_meta` is for an importer that replaces the whole object.
+Inside the store a write function changes meta with `_put_meta`, which
+also sets the columns that change with it (`sensitivity`, `title`).
 
 To add a key: declare it in `store.DocumentMeta` with its shape and
 writer, and add its row here.

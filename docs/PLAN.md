@@ -41,8 +41,8 @@ and its item 5 is items 1 and 2 below.
    (2026-11-08, the log): `NotFound` and the door's two handlers,
    `base.rows_in`, `base.live`, the store's surface pruned and held by a
    test, the dead code. Then one owner
-   for each concept, a stage each: a document's meta (read and written by
-   hand at about 70 places, some across two transactions); the entity a
+   for each concept, a stage each: a document's meta (done 2026-11-08:
+   `store.update_meta`, `_put_meta` with its columns, `meta_of`); the entity a
    name means, its canonical id and alias group, a document's node; ending
    and undoing edges (seven functions, four undos); the tried marks of the
    steps in one shape, with a migration. Then findings 8 to 56 by cost.

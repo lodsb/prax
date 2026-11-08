@@ -12,7 +12,7 @@ from typing import Any
 
 from prax.text import clutter
 
-from ..base import LIVE, NotFound, _reading, _serialized, rows_in, run_name
+from ..base import LIVE, NotFound, _reading, _serialized, meta_of, rows_in, run_name
 from ..documents import (
     _put_meta,
     get_meta,
@@ -24,7 +24,7 @@ from ..graph import end_edges, restore_run
 
 
 def _origin(row: sqlite3.Row) -> str:
-    meta = json.loads(row["meta"] or "{}")
+    meta = meta_of(row["meta"])
     return str((meta.get("origin") or {}).get("path") or row["original_path"] or "")
 
 
@@ -68,7 +68,7 @@ def cleanup_set(
         return [
             (int(r["id"]), None)
             for r in rows
-            if (json.loads(r["meta"] or "{}").get("photo") or {}).get("error")
+            if (meta_of(r["meta"]).get("photo") or {}).get("error")
         ]
     if rule == "clips":
         return [(int(r["id"]), None) for r in rows if _only_clip(con, r)]

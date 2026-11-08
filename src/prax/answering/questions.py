@@ -180,8 +180,7 @@ def create(
         and v not in (None, "")
     }
     print_ = _fingerprint(con, question, opts)
-    meta = store.get_meta(con, written["doc_id"])
-    meta["question"] = {
+    asked = {
         "question": question,
         "options": opts,
         "asked_at": _now(),
@@ -193,7 +192,7 @@ def create(
         "since_id": print_["since_id"],
         "history": [],
     }
-    store.set_meta(con, written["doc_id"], meta)
+    store.update_meta(con, written["doc_id"], keys={"question": asked})
     return {**written, "question": question}
 
 
@@ -358,33 +357,32 @@ def refresh(
         force=True,  # the answer is the agent's; a person's sections were kept above
     )
     print_ = _fingerprint(con, question, opts)
-    meta = store.get_meta(con, written["doc_id"])
-    kept = dict(meta.get("question") or {})
-    history = list(kept.get("history") or [])
-    history.append(
-        {
-            "revision": written["revision"],
-            "at": _now(),
-            "model": model,
-            "new": [{"doc_id": n["doc_id"], "title": n["title"]} for n in seen["new"]],
-            "reread": seen["reread"],
-            "forced": bool(force and not seen["due"]),
-        }
-    )
-    kept.update(
-        question=question,
-        options=opts,
-        asked_at=_now(),
-        model=model,
-        revision=written["revision"],
-        sources=docs,
-        source_hashes=_hashes(con, docs),
-        top=print_["top"],
-        since_id=print_["since_id"],
-        history=history[-50:],
-    )
-    meta["question"] = kept
-    store.set_meta(con, written["doc_id"], meta)
+    entry = {
+        "revision": written["revision"],
+        "at": _now(),
+        "model": model,
+        "new": [{"doc_id": n["doc_id"], "title": n["title"]} for n in seen["new"]],
+        "reread": seen["reread"],
+        "forced": bool(force and not seen["due"]),
+    }
+    asked = {
+        "question": question,
+        "options": opts,
+        "asked_at": _now(),
+        "model": model,
+        "revision": written["revision"],
+        "sources": docs,
+        "source_hashes": _hashes(con, docs),
+        "top": print_["top"],
+        "since_id": print_["since_id"],
+    }
+
+    def ask_again(meta: store.DocumentMeta) -> None:
+        kept = dict(meta.get("question") or {})
+        history = [*(kept.get("history") or []), entry]
+        meta["question"] = {**kept, **asked, "history": history[-50:]}
+
+    store.update_meta(con, written["doc_id"], ask_again)
     return {
         "slug": slug,
         "refreshed": True,
@@ -600,9 +598,7 @@ def refresh_blocks(
     asks = {
         k: v for k, v in asks.items() if any(b.id == k for b in blocks.blocks(text))
     }
-    held = store.get_meta(con, page["doc_id"])
-    held["asks"] = asks
-    store.set_meta(con, page["doc_id"], held)
+    store.update_meta(con, page["doc_id"], keys={"asks": asks})
     return {
         "slug": slug,
         "refreshed": sum(1 for r in report.values() if r.get("filled")),
@@ -834,8 +830,7 @@ def briefing(
         note=f"{len(arrived)} documents, {len(moved)} questions moved",
         force=True,
     )
-    meta = store.get_meta(con, written["doc_id"])
-    meta["briefing"] = {
+    briefing = {
         "day": day,
         "since": since,
         "until": until,
@@ -846,7 +841,7 @@ def briefing(
         "own_chars": len(own),
         "own_sha256": _sha256(own),
     }
-    store.set_meta(con, written["doc_id"], meta)
+    store.update_meta(con, written["doc_id"], keys={"briefing": briefing})
     return {**written, "documents": len(arrived), "moved": len(moved)}
 
 
