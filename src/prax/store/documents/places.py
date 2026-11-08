@@ -23,7 +23,7 @@ from typing import Any
 from prax import config
 from prax.text import mimes
 
-from ..base import _reading, _serialized, archive_path, now
+from ..base import LIVE, _reading, _serialized, archive_path, now
 
 ROOT_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -229,8 +229,7 @@ def unreachable_originals(
     out: list[dict[str, Any]] = []
     checks = 0
     for r in con.execute(
-        "SELECT id, title, hash FROM documents WHERE held = 0"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f"SELECT id, title, hash FROM documents WHERE held = 0 AND {LIVE} ORDER BY id"
     ):
         on = place_roots_of(con, r["hash"])
         if any(n in present for n in on):

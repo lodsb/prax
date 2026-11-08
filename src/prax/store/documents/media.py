@@ -26,7 +26,7 @@ import threading
 from collections import defaultdict
 from typing import Any
 
-from ..base import _reading, _serialized, run_name, store_state
+from ..base import _reading, _serialized, live, run_name, store_state
 from .domains import SENSITIVITY, _set_sensitivity
 
 MEDIA_BY = ("folder", "month", "event")
@@ -37,13 +37,13 @@ UNDATED = "undated"  # the month key of a member without a taken date
 HERE = "="  # before a folder: its own files, not its folders' ("(here)")
 NOWHERE = "-"  # the key of the members no live place holds any more
 
-_MEMBERS = """
+_MEMBERS = f"""
     SELECT d.id, d.mime, d.sensitivity, json_extract(d.meta, '$.taken.date') AS taken,
            (SELECT p.root || ':' || p.path FROM places p
             WHERE p.sha256 = d.hash AND p.gone IS NULL
             ORDER BY p.root, p.path LIMIT 1) AS place
     FROM documents d
-    WHERE d.held = 0 AND json_extract(d.meta, '$.retired') IS NULL
+    WHERE d.held = 0 AND {live("d")}
 """
 
 

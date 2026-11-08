@@ -15,7 +15,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ..base import NotFound, _reading, hidden_documents
+from ..base import NotFound, _reading, hidden_documents, live
 from .events import RECORDED_AT
 from .people import DEPICTS
 
@@ -142,7 +142,7 @@ def picture_set(
     base = (
         f"FROM ({members}) m JOIN documents d ON d.id = m.doc"
         " WHERE d.id NOT IN (SELECT value FROM json_each(?))"
-        " AND json_extract(d.meta, '$.retired') IS NULL"
+        f" AND {live('d')}"
     )
     # the whole set in its order once, and only the page's titles: a count
     # and a page each read every member's meta again (2026-10-28, 37 ms of

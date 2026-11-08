@@ -13,12 +13,14 @@ from prax.text import arxiv
 
 from ..base import (
     _NOW,
+    LIVE,
     NotFound,
     _guards,
     _like_prefix,
     _reading,
     _serialized,
     archive_path,
+    live,
     now,
     rows_in,
 )
@@ -142,7 +144,7 @@ def unreadable_documents(
     out: list[int] = []
     rows = con.execute(
         "SELECT id, mime, meta FROM documents WHERE text_hash IS NULL"
-        "   AND json_extract(meta, '$.retired') IS NULL"
+        f"   AND {LIVE}"
         "   AND json_extract(meta, '$.parse_history') IS NOT NULL"
         " ORDER BY id"
     )
@@ -232,7 +234,7 @@ def uncounted_pages(con: sqlite3.Connection, *, limit: int | None = None) -> lis
         "SELECT id FROM documents WHERE mime = 'application/pdf'"
         "   AND text_hash IS NOT NULL"
         "   AND json_extract(meta, '$.pages') IS NULL"
-        "   AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f"   AND {LIVE} ORDER BY id"
     )
     if limit:
         sql += f" LIMIT {int(limit)}"
@@ -282,7 +284,7 @@ def thin_documents(
     rows = con.execute(
         "SELECT id, text_hash FROM documents d WHERE mime = 'application/pdf'"
         "   AND text_hash IS NOT NULL"
-        "   AND json_extract(meta, '$.retired') IS NULL"
+        f"   AND {LIVE}"
         "   AND NOT EXISTS (SELECT 1 FROM json_each(d.meta, '$.quality.findings') f"
         "     WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
         "     AND json_extract(f.value, '$.check') IN ('ocr-layer', 'no-layer'))"
@@ -351,7 +353,7 @@ def select_for_reading(
     where the finding names that reading as its fix, so a reading that ran
     and could not help is not asked again); every filter given must
     hold. Retired documents are never selected."""
-    sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
+    sql = f"SELECT id FROM documents WHERE {LIVE}"
     args: list[Any] = []
     if ids:
         sql += f" AND id IN ({','.join('?' * len(ids))})"
@@ -451,7 +453,7 @@ NOT_MATHS_P = 0.5  # the labeller's probability for it; a person's counts always
 _CURRENT_QUALITY = (
     " FROM documents d, json_each(d.meta, '$.quality.findings') f"
     " WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
-    " AND json_extract(d.meta, '$.retired') IS NULL"
+    f" AND {live('d')}"
 )
 
 

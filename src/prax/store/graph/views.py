@@ -14,7 +14,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import names
 
-from ..base import _guards, _reading, domain_clause, hidden_documents, rows_in
+from ..base import _guards, _reading, domain_clause, hidden_documents, live, rows_in
 from .edges import held_in_world, hidden_by_premise
 from .lookups import entity_named_in
 
@@ -528,13 +528,13 @@ def seed_documents(
     on the document; one without a set is in every module and is left
     out here), or a tag's. Ascending ids."""
     ids: set[int] = set()
-    live = " AND json_extract(d.meta, '$.retired') IS NULL"
+    alive = f" AND {live('d')}"
     for t in ([f"project:{project}"] if project else []) + ([tag] if tag else []):
         ids |= {
             int(r[0])
             for r in con.execute(
                 "SELECT d.id FROM documents d WHERE EXISTS (SELECT 1 FROM"
-                " json_each(d.meta, '$.tags') WHERE value = ?)" + live,
+                " json_each(d.meta, '$.tags') WHERE value = ?)" + alive,
                 (t,),
             )
         }

@@ -13,7 +13,7 @@ from typing import Any
 from prax.text import glyphs
 
 from .. import documents as docs
-from ..base import _ASIDE, _read_archive, now, rows_in
+from ..base import _ASIDE, LIVE, _read_archive, live, now, rows_in
 from ..documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -38,7 +38,7 @@ def _twin_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     groups: dict[tuple[str, str], list[sqlite3.Row]] = {}
     for r in con.execute(
         "SELECT id, title, mime FROM documents WHERE text_hash IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ):
         key = title_key(r["title"])  # the versions' title key
         if not key:
@@ -148,7 +148,7 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     out = []
     for r in con.execute(
         "SELECT id, hash, mime, title FROM documents"
-        " WHERE json_extract(meta, '$.retired') IS NULL AND text_hash IS NULL"
+        f" WHERE {LIVE} AND text_hash IS NULL"
         # a referenced file is one a crawl hashed where it lies: opening
         # each over the network for a header would walk the whole share
         " AND held = 1 ORDER BY id"
@@ -230,7 +230,7 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = con.execute(
         "SELECT mime, count(*) AS documents, min(id) AS first_id, min(title) AS title"
         " FROM documents WHERE text_hash IS NULL"
-        "   AND json_extract(meta, '$.retired') IS NULL"
+        f"   AND {LIVE}"
         # a referenced recording waits for its transcription (AQ stage 4)
         # and a referenced photo for its reading: no parser is meant for them
         "   AND held = 1"
@@ -254,7 +254,7 @@ def _untyped_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     for r in con.execute(
         "SELECT id, title, original_path, mime FROM documents"
         " WHERE text_hash IS NULL AND coalesce(mime, '') IN (?, ?)"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id LIMIT ?",
+        f" AND {LIVE} ORDER BY id LIMIT ?",
         (*UNTYPED, CAP),
     ):
         name = r["original_path"] or r["title"] or ""
@@ -284,7 +284,7 @@ def _extraction_failed(con: sqlite3.Connection) -> list[dict[str, Any]]:
             " json_extract(meta, '$.extraction_error.error') AS error,"
             " json_extract(meta, '$.extraction_error.at') AS at"
             " FROM documents WHERE json_extract(meta, '$.extraction_error') IS NOT NULL"
-            " AND json_extract(meta, '$.retired') IS NULL ORDER BY id LIMIT ?",
+            f" AND {LIVE} ORDER BY id LIMIT ?",
             (CAP,),
         )
     ]
@@ -331,7 +331,7 @@ def _unread_figures(con: sqlite3.Connection) -> list[dict[str, Any]]:
         " FROM chunks c JOIN documents d ON d.id = c.doc_id"
         " WHERE c.kind = 'figure'"
         "   AND json_extract(c.data, '$.ref') IS NOT NULL"
-        "   AND json_extract(d.meta, '$.retired') IS NULL"
+        f"   AND {live('d')}"
         "   AND coalesce("
         "         json_array_length(json_extract(c.data, '$.readings')), 0) = 0"
         " GROUP BY c.doc_id ORDER BY unread DESC, c.doc_id LIMIT ?",
@@ -357,7 +357,7 @@ def _unread_formulas(con: sqlite3.Connection) -> list[dict[str, Any]]:
         "       json_extract(d.meta, '$.source') AS source"
         " FROM chunks c JOIN documents d ON d.id = c.doc_id"
         " WHERE c.kind = 'formula'"
-        "   AND json_extract(d.meta, '$.retired') IS NULL"
+        f"   AND {live('d')}"
         "   AND coalesce("
         "         json_array_length(json_extract(c.data, '$.readings')), 0) = 0"
         " GROUP BY c.doc_id ORDER BY unread DESC, c.doc_id LIMIT ?",
@@ -432,7 +432,7 @@ def _labelled_summaries(con: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = con.execute(
         "SELECT id, title, json_extract(meta, '$.summary') AS summary"
         " FROM documents WHERE json_extract(meta, '$.summary') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
     ).fetchall()
     out = []
     for r in rows:
@@ -528,7 +528,7 @@ def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     live: set[int] = set()
     for r in con.execute(
         "SELECT id, title, text_hash FROM documents WHERE text_hash IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ):
         live.add(r["id"])
         seen = _glyphs_seen.get(r["id"])
@@ -603,7 +603,7 @@ def _picture_text_in_prose(con: sqlite3.Connection) -> list[dict[str, Any]]:
             "SELECT d.id, d.title, d.text_len FROM documents d WHERE d.id IN ("
             "  SELECT DISTINCT doc_id FROM chunks WHERE kind = 'text'"
             "  AND text LIKE '%<!-- Start of picture text -->%')"
-            " AND json_extract(d.meta, '$.retired') IS NULL"
+            f" AND {live('d')}"
             " ORDER BY d.text_len LIMIT ?",
             (CAP,),
         )
@@ -690,7 +690,7 @@ def _stale_extractions(con: sqlite3.Connection) -> list[dict[str, Any]]:
         "       json_extract(h.value, '$.at') AS read_at"
         " FROM documents d, json_each(d.meta, '$.parse_history') h"
         " WHERE json_extract(d.meta, '$.extraction') IS NOT NULL"
-        "   AND json_extract(d.meta, '$.retired') IS NULL"
+        f"   AND {live('d')}"
         "   AND json_extract(h.value, '$.outcome') = 'upgraded'"
         "   AND json_extract(h.value, '$.at') > json_extract(d.meta, '$.extraction.at')"
         f"  AND {not_annotator}"
@@ -758,7 +758,7 @@ def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for r in con.execute(
         "SELECT id, title, text_hash FROM documents d WHERE text_hash IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " AND json_extract(meta, '$.parse_history') LIKE '%text_hash%'"
         " AND EXISTS (SELECT 1 FROM chunks c WHERE c.doc_id = d.id"
         " AND c.kind = 'figure')"

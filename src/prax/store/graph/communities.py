@@ -14,6 +14,7 @@ from ..base import (
     _serialized,
     first_fresh_id,
     hidden_documents,
+    live,
     mark_ids,
     now,
 )
@@ -237,13 +238,13 @@ def community(
     if r is None:
         return None
     docs = con.execute(
-        """
+        f"""
         SELECT d.id, d.title, COUNT(DISTINCT m.entity_id) AS named
         FROM entity_communities m
         JOIN entities e0 ON COALESCE(e0.canonical_id, e0.id) = m.entity_id
         JOIN edges x ON (x.src = e0.id OR x.dst = e0.id) AND x.valid_to IS NULL
         JOIN documents d ON d.id = x.source_doc
-        WHERE m.community_id = ? AND json_extract(d.meta, '$.retired') IS NULL
+        WHERE m.community_id = ? AND {live("d")}
         GROUP BY d.id ORDER BY named DESC, d.id LIMIT ?
         """,
         (cid, max(1, min(documents, 50))),

@@ -12,6 +12,7 @@ from prax.text import chunking
 
 from ..base import (
     _NOW,
+    LIVE,
     MetaLike,
     NotFound,
     _read_archive,
@@ -31,7 +32,9 @@ from .text import _write_chunks
 
 
 def is_retired(meta: MetaLike) -> bool:
-    return bool(meta.get("retired"))
+    """The Python half of ``base.live``: a document is retired when its
+    meta has the key, whatever it holds."""
+    return meta.get("retired") is not None
 
 
 @_serialized
@@ -280,8 +283,7 @@ def live_captures_of(con: sqlite3.Connection, url: str) -> list[dict[str, Any]]:
     """The live (not retired) captures of one canonical URL, oldest first."""
     out = []
     for r in con.execute(
-        "SELECT id, meta FROM documents WHERE source_url = ?"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id",
+        f"SELECT id, meta FROM documents WHERE source_url = ? AND {LIVE} ORDER BY id",
         (url,),
     ):
         meta = json.loads(r["meta"] or "{}")
@@ -328,7 +330,7 @@ def dedupe_captures(
     for r in con.execute(
         "SELECT id, source_url, meta FROM documents WHERE source_url IS NOT NULL"
         " AND json_extract(meta, '$.source') = 'capture'"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ):
         groups.setdefault(r["source_url"], []).append(
             {"doc_id": r["id"], "meta": json.loads(r["meta"] or "{}")}

@@ -50,6 +50,7 @@ from prax.text import arxiv, shingles
 
 from ..base import (
     _ASIDE,
+    LIVE,
     NotFound,
     _reading,
     _serialized,
@@ -119,7 +120,7 @@ def _groups(con: sqlite3.Connection) -> list[tuple[str, list[sqlite3.Row]]]:
     for r in con.execute(
         "SELECT id, title, mime, text_hash, json_extract(meta, '$.arxiv') AS arxiv"
         " FROM documents"
-        " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+        f" WHERE text_hash IS NOT NULL AND {LIVE}"
         " ORDER BY id"
     ):
         if key := title_key(r["title"]):

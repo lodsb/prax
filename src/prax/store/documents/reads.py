@@ -19,6 +19,7 @@ from prax.text import arxiv, dates
 
 from ..base import (
     _TOKEN,
+    LIVE,
     UNASSIGNED,
     Document,
     SearchHit,
@@ -63,10 +64,7 @@ def select_documents(
         args.append("%" + _like_prefix(title)[:-1] + "%")
     if not clauses:
         return []
-    sql = (
-        f"SELECT id FROM documents WHERE ({' OR '.join(clauses)})"
-        " AND json_extract(meta, '$.retired') IS NULL"
-    )
+    sql = f"SELECT id FROM documents WHERE ({' OR '.join(clauses)}) AND {LIVE}"
     if mime_prefix is not None:
         sql += " AND mime LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime_prefix))
@@ -798,7 +796,7 @@ def untexted_captures(con: sqlite3.Connection) -> list[int]:
         r[0]
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NULL"
-            " AND json_extract(meta, '$.retired') IS NULL"
+            f" AND {LIVE}"
             f" AND json_extract(meta, '$.source') IN ({marks}) ORDER BY id",
             CAPTURE_SOURCES,
         )
@@ -815,7 +813,7 @@ def recent_captures(
     rows = con.execute(
         "SELECT id, title, mime, source_url, text_hash, meta FROM documents"
         f" WHERE json_extract(meta, '$.source') IN ({marks})"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " ORDER BY json_extract(meta, '$.capture.at') DESC, id DESC LIMIT ?",
         (*CAPTURE_SOURCES, limit),
     ).fetchall()
@@ -828,7 +826,7 @@ def previous_capture(con: sqlite3.Connection, url: str, *, exclude: int) -> int 
     ``exclude``."""
     row = con.execute(
         "SELECT id FROM documents WHERE source_url = ? AND id != ?"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",
+        f" AND {LIVE} ORDER BY id DESC LIMIT 1",
         (url, exclude),
     ).fetchone()
     return row[0] if row else None
@@ -842,7 +840,7 @@ def text_sources(con: sqlite3.Connection) -> list[tuple[int, str]]:
         (int(r["id"]), str(r["src"] or ""))
         for r in con.execute(
             "SELECT id, json_extract(meta, '$.text_source') AS src FROM documents"
-            " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+            f" WHERE text_hash IS NOT NULL AND {LIVE}"
             " ORDER BY id"
         )
     ]
@@ -851,10 +849,7 @@ def text_sources(con: sqlite3.Connection) -> list[tuple[int, str]]:
 def _summary_where(
     untried_only: bool, ids: list[int] | None
 ) -> tuple[str, tuple[Any, ...]]:
-    where = (
-        " WHERE json_extract(meta, '$.summary') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
-    )
+    where = f" WHERE json_extract(meta, '$.summary') IS NOT NULL AND {LIVE}"
     if untried_only:
         where += " AND json_extract(meta, '$.summary_tried') IS NULL"
     if ids is None:
@@ -927,10 +922,7 @@ def title_rows(
     under the GIL on each titles hand-out, 1.3 s of the door
     (2026-10-18)."""
     keys = ", ".join(f"json_extract(meta, '$.{k}') AS {k}" for k in TITLE_KEYS)
-    sql = (
-        f"SELECT id, title, text_hash, {keys} FROM documents"
-        " WHERE coalesce(json_extract(meta, '$.retired'), 0) IN (0, '')"
-    )
+    sql = f"SELECT id, title, text_hash, {keys} FROM documents WHERE {LIVE}"
     rows = (
         con.execute(sql + " ORDER BY id")
         if ids is None
@@ -1050,7 +1042,7 @@ def documents_added(
         dict(r)
         for r in con.execute(
             "SELECT id, title, mime FROM documents WHERE added_at > ?"
-            " AND added_at <= ? AND json_extract(meta, '$.retired') IS NULL"
+            f" AND added_at <= ? AND {LIVE}"
             " AND json_extract(meta, '$.page') IS NULL ORDER BY id",
             (since, until),
         )
@@ -1102,7 +1094,7 @@ def shared_titles(con: sqlite3.Connection, *, at_least: int = SHARED_TITLE) -> s
         str(r[0])
         for r in con.execute(
             "SELECT title FROM documents WHERE title IS NOT NULL"
-            " AND text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+            f" AND text_hash IS NOT NULL AND {LIVE}"
             " GROUP BY title HAVING count(*) >= ?",
             (at_least,),
         )
@@ -1118,7 +1110,7 @@ def documents_of_key(con: sqlite3.Connection, source: str, key: str) -> list[int
     rows = con.execute(
         "SELECT id FROM documents WHERE json_extract(meta, '$.source') = ?"
         f" AND json_extract(meta, '$.{source}.key') = ?"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id",
+        f" AND {LIVE} ORDER BY id",
         (source, key),
     )
     return [int(r[0]) for r in rows]

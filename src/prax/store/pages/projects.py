@@ -8,6 +8,7 @@ import sqlite3
 from typing import Any, Final
 
 from ..base import (
+    LIVE,
     _reading,
     _serialized,
 )
@@ -135,7 +136,7 @@ def project_documents(
         " json_extract(meta, '$.project.version') AS version,"
         " json_extract(meta, '$.project.path') AS path FROM documents"
         " WHERE json_extract(meta, '$.source') = ?"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " AND (json_extract(meta, '$.project.name') = ?"
         f" OR json_extract(meta, '$.project.key') IN ({marks}))"
         " ORDER BY id",

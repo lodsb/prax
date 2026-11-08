@@ -13,6 +13,7 @@ from prax.text import dates, language, mimes
 
 from ..base import (
     ASIDE_KINDS,
+    LIVE,
     DocumentMeta,
     MetaLike,
     NotFound,
@@ -239,7 +240,7 @@ def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
             "SELECT id FROM documents WHERE text_hash IS NOT NULL"
             " AND json_extract(meta, '$.published') IS NULL"
             " AND json_extract(meta, '$.published_tried') IS NULL"
-            " AND json_extract(meta, '$.retired') IS NULL"
+            f" AND {LIVE}"
             " ORDER BY id DESC LIMIT ?",
             (limit,),
         )
@@ -255,7 +256,7 @@ def world_dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NOT NULL"
             " AND json_extract(meta, '$.world_dates.text_hash') IS NOT text_hash"
-            " AND json_extract(meta, '$.retired') IS NULL"
+            f" AND {LIVE}"
             " ORDER BY id DESC LIMIT ?",
             (limit,),
         )
@@ -799,7 +800,7 @@ def sections_needed(
 
     rows = con.execute(
         "SELECT id FROM documents WHERE text_len >= ?"
-        " AND json_extract(meta, '$.retired') IS NULL AND text_hash IS NOT NULL"
+        f" AND {LIVE} AND text_hash IS NOT NULL"
         " AND (json_extract(meta, '$.sections.text_hash') IS NULL"
         "      OR json_extract(meta, '$.sections.text_hash') != text_hash)"
         + (

@@ -27,6 +27,7 @@ from typing import Any, Literal
 from prax.graph import ontology
 
 from ..base import (
+    LIVE,
     NotFound,
     _read_archive,
     _reading,
@@ -53,7 +54,7 @@ _GENRE_SOURCE = (
 # nobody, person or model, has labelled or skipped them
 _GENRE_OPEN = (
     " FROM documents WHERE text_hash IS NOT NULL"
-    " AND json_extract(meta, '$.retired') IS NULL"
+    f" AND {LIVE}"
     " AND coalesce(json_extract(meta, '$.source'), '') != 'wiki'"
     " AND json_extract(meta, '$.genres_by') IS NULL"
     " AND json_extract(meta, '$.genres_skip') IS NULL"
@@ -63,7 +64,7 @@ _GENRE_LABELLED = " FROM documents WHERE json_extract(meta, '$.genres_by') = 'hu
 _GENRE_CHECK = (
     " FROM documents WHERE json_extract(meta, '$.genres_by') IS NOT NULL"
     " AND json_extract(meta, '$.genres_by') != 'human'"
-    " AND json_extract(meta, '$.retired') IS NULL"
+    f" AND {LIVE}"
 )
 # of those, the ones a domain rule placed by their labels: a rule set the
 # domains, and not the Zotero one, which goes by the source alone. A wrong
@@ -216,7 +217,7 @@ def genre_training(
     for r in con.execute(
         "SELECT id, title, meta, text_hash, source_url, original_path FROM documents"
         " WHERE json_extract(meta, '$.genres_by') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ).fetchall():
         meta = json.loads(r["meta"] or "{}")
         text = ""
@@ -269,7 +270,7 @@ def genres_needed(
             "SELECT id FROM documents"
             " WHERE json_extract(meta, '$.genres_by') LIKE 'labeller:%'"
             " AND json_extract(meta, '$.genres_by') != ?"
-            " AND json_extract(meta, '$.retired') IS NULL"
+            f" AND {LIVE}"
             # tried by the new run and nothing kept: the old labels stay,
             # and it is not handed out again (set_genres clears the mark)
             " AND json_extract(meta, '$.genres_tried') IS NULL"

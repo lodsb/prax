@@ -52,6 +52,18 @@ _ASIDE = (  # a legacy row without a kind is text
 )
 
 
+def live(alias: str | None = None) -> str:
+    """The SQL test that a document is live, not retired: the one spelling,
+    which is also the WHERE of the partial index ``idx_documents_live``
+    (migration 32), so a query that writes it is served by that index.
+    ``alias`` is the documents table's name in the query (``d``)."""
+    meta = f"{alias}.meta" if alias else "meta"
+    return f"json_extract({meta}, '$.retired') IS NULL"
+
+
+LIVE = live()
+
+
 _indexes: dict[tuple[str, bool], vectors.VectorIndex] = {}  # (path, writable)
 
 

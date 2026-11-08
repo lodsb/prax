@@ -43,7 +43,16 @@ from prax.graph import ontology
 from prax.ml import clusters, embeddings
 from prax.text import acronyms, arxiv, dates, language, quotes, references, schemaorg
 
-from .base import _reading, _serialized, archive_path, now, run_name, vectors_available
+from .base import (
+    LIVE,
+    _reading,
+    _serialized,
+    archive_path,
+    live,
+    now,
+    run_name,
+    vectors_available,
+)
 from .documents import (
     HISTORY_KEEP,
     _put_meta,
@@ -182,7 +191,7 @@ def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     counts: Counter[tuple[str, str]] = Counter()
     rows = con.execute(
         "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ).fetchall()
     scanned = 0
     for n, r in enumerate(rows, 1):
@@ -310,7 +319,7 @@ def bibliographies(
         " json_extract(c.heading, '$[#-1]') AS h"
         " FROM chunks c JOIN documents d ON d.id = c.doc_id"
         " WHERE c.kind IN ('text', 'reference') AND c.heading IS NOT NULL"
-        " AND json_extract(d.meta, '$.retired') IS NULL"
+        f" AND {live('d')}"
     )
     args: list[Any] = []
     if ids:
@@ -332,8 +341,7 @@ def _library(con: sqlite3.Connection) -> dict[int, dict[str, Any]]:
     """Every live document's title, creators, year and ids, once per pass."""
     lib: dict[int, dict[str, Any]] = {}
     for r in con.execute(
-        "SELECT id, title, meta FROM documents WHERE title IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f"SELECT id, title, meta FROM documents WHERE title IS NOT NULL AND {LIVE}"
     ):
         meta = json.loads(r["meta"] or "{}")
         year = None
@@ -616,8 +624,7 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         return {"skipped": "this ontology has no proposes relation"}
     titles: dict[str, int] = {}
     for doc_id, title in con.execute(
-        "SELECT id, title FROM documents WHERE title IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f"SELECT id, title FROM documents WHERE title IS NOT NULL AND {LIVE}"
     ):
         titles.setdefault(title.lower(), doc_id)
     by_name: dict[str, list[tuple[str, str]]] = {}
@@ -701,7 +708,7 @@ def _attachment(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     its job row where the Jobs view shows them.
     """
     out: dict[str, Any] = {}
-    live = " AND json_extract(meta,'$.retired') IS NULL"
+    live = f" AND {LIVE}"
     counts = {
         "documents": f"SELECT COUNT(*) FROM documents WHERE 1=1{live}",
         "with a summary": "SELECT COUNT(*) FROM documents"
@@ -779,7 +786,7 @@ def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     stamp = rules.stamp()
     rows = con.execute(
         "SELECT id FROM documents WHERE sensitivity IS NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " AND coalesce(json_extract(meta, '$.sensitivity.by'), '') != 'human'"
         " AND (coalesce(json_extract(meta, '$.private.rules'), '') != ?"
         "  OR (text_hash IS NOT NULL AND json_extract(meta, '$.private.read') IS NULL))"
@@ -890,7 +897,7 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     rows = con.execute(
         "SELECT id, hash, title, meta FROM documents"
         " WHERE mime IN ('text/html', 'application/xhtml+xml') AND title IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " AND COALESCE(json_extract(meta, '$.markup.hash'), '') != hash ORDER BY id"
     ).fetchall()
     onto = ontology.current()
@@ -971,7 +978,7 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     rows = con.execute(
         "SELECT id, hash, mime, meta FROM documents"
         " WHERE json_extract(meta, '$.published') IS NULL"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ).fetchall()
     found: Counter[str] = Counter()
     pending: list[tuple[Any, ...]] = []
@@ -1013,7 +1020,7 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
     rows = con.execute(
         "SELECT id, hash, mime, text_hash, meta FROM documents"
-        " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+        f" WHERE text_hash IS NOT NULL AND {LIVE}"
         " AND (COALESCE(json_extract(meta, '$.quality.text_hash'), '') != text_hash"
         " OR COALESCE(json_extract(meta, '$.quality.version'), 0) < ?) ORDER BY id",
         (quality.VERSION,),
@@ -1078,7 +1085,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     rows = con.execute(
         "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
         " AND json_extract(meta, '$.lang') IS NULL"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" AND {LIVE} ORDER BY id"
     ).fetchall()
     found: Counter[str] = Counter()
     unsure = 0
@@ -1166,7 +1173,7 @@ def _rechunk(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         r[0]
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NOT NULL"
-            " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+            f" AND {LIVE} ORDER BY id"
         )
     ]
     chunks = 0

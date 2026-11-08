@@ -12,7 +12,7 @@ from typing import Any
 
 from prax.text import clutter
 
-from ..base import NotFound, _reading, _serialized, rows_in, run_name
+from ..base import LIVE, NotFound, _reading, _serialized, rows_in, run_name
 from ..documents import (
     _put_meta,
     get_meta,
@@ -52,7 +52,7 @@ def cleanup_set(
         raise ValueError("a folder rule needs a folder")
     rows = con.execute(
         "SELECT id, title, mime, original_path, text_hash, text_len, meta"
-        " FROM documents WHERE json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        f" FROM documents WHERE {LIVE} ORDER BY id"
     ).fetchall()
     if rule == "same-text":
         first: dict[str, int] = {}

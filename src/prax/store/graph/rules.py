@@ -35,7 +35,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _NOW, _reading, _scrubbed, _serialized, personal_sql, rows_in
+from ..base import _NOW, _reading, _scrubbed, _serialized, live, personal_sql, rows_in
 from .edges import Edge, end_edges, link
 
 RULE_CAP = 20_000  # derivations a relation at most
@@ -67,7 +67,7 @@ def _premises(con: sqlite3.Connection, rel: str) -> list[Premise]:
         LEFT JOIN documents d ON d.id = e.source_doc
         WHERE e.rel = ? AND e.valid_to IS NULL
           AND COALESCE(e.producer, '') NOT LIKE 'rule:%'
-          AND (e.source_doc IS NULL OR json_extract(d.meta, '$.retired') IS NULL)
+          AND (e.source_doc IS NULL OR {live("d")})
         """,
         (rel,),
     ).fetchall()

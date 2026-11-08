@@ -15,6 +15,7 @@ from prax.text import dates, mimes, quotes
 
 from ..base import (
     _NOW,
+    LIVE,
     NotFound,
     _committing,
     _like_prefix,
@@ -951,10 +952,7 @@ def select_for_extraction(
     ``meta.source`` values (captures); ``skip_mime_prefix`` drops images
     and the like."""
     stamp = "json_extract(meta, '$.extraction.ontology_version')"
-    base = (
-        "SELECT id FROM documents WHERE text_hash IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
-    )
+    base = f"SELECT id FROM documents WHERE text_hash IS NOT NULL AND {LIVE}"
     sql = ""  # the predicates every variant shares, after the scope's own
     args: list[Any] = []
     want, want_args = _subset_version_case(con, onto, ontology_version)

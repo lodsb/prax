@@ -483,3 +483,38 @@ def test_a_store_function_that_writes_and_commits_holds_the_lock() -> None:
             if writes and commits and fn.name not in COMMITS_UNDER_A_CALLER:
                 bare.append(f"{path.relative_to(SRC).as_posix()}:{fn.lineno} {fn.name}")
     assert not bare, bare
+
+
+def test_a_live_document_is_spelled_one_way() -> None:
+    """``store.base.live`` is the one spelling of "not retired", and the
+    WHERE of the partial index ``idx_documents_live``: a query that writes
+    it another way (77 sites did, one with ``coalesce`` that no index
+    served) loses the index on the largest table without a word."""
+    raw = [
+        f"{p.relative_to(SRC)}:{i}"
+        for p in sorted((SRC / "store").rglob("*.py"))
+        if p.name != "base.py"
+        for i, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1)
+        if "'$.retired')" in line and "IS NULL" in line
+    ]
+    assert not raw, "the live test spelled by hand: " + "; ".join(raw)
+
+
+LIVE_INDEXES = ("idx_documents_live", "idx_documents_source")
+
+
+def test_the_live_spelling_is_served_by_its_index(tmp_path: Path) -> None:
+    from prax import store
+    from prax.store import base
+
+    con = store.connect(tmp_path / "prax.db")
+    store.init_db(con)
+    for sql in (
+        f"SELECT id FROM documents WHERE {base.LIVE}",
+        f"SELECT d.id FROM documents d WHERE {base.live('d')}",
+    ):
+        plan = " ".join(str(r[-1]) for r in con.execute("EXPLAIN QUERY PLAN " + sql))
+        # two indexes are partial on that WHERE (0010, 0032): either one
+        # chosen says the planner matched the spelling
+        assert any(i in plan for i in LIVE_INDEXES), plan
+    con.close()

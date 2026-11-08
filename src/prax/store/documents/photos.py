@@ -22,6 +22,7 @@ from typing import Any
 from prax.text import mimes
 
 from ..base import (
+    LIVE,
     _archive_bytes,
     _guards,
     _reading,
@@ -65,7 +66,7 @@ def photos_due(
     clock = time.monotonic()
     rows = con.execute(
         "SELECT id, hash, mime, held FROM documents d"
-        " WHERE mime LIKE 'image/%' AND json_extract(meta, '$.retired') IS NULL"
+        f" WHERE mime LIKE 'image/%' AND {LIVE}"
         " AND coalesce(json_extract(meta, '$.photo.v'), 0) < ?"
         " AND (held = 1 OR EXISTS (SELECT 1 FROM places p WHERE p.sha256 = d.hash"
         "  AND p.gone IS NULL AND p.root IN (SELECT value FROM json_each(?))))"
@@ -100,7 +101,7 @@ def photo_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
         " sum(coalesce(json_extract(meta, '$.photo.v'), 0) < ?)"
         " FROM documents WHERE mime LIKE 'image/%'"
         " AND mime NOT IN (" + ",".join("?" * len(mimes.DOCUMENT_IMAGES)) + ")"
-        " AND json_extract(meta, '$.retired') IS NULL",
+        f" AND {LIVE}",
         (version, version, version, *sorted(mimes.DOCUMENT_IMAGES)),
     ).fetchone()
     return {"read": row[0] or 0, "failed": row[1] or 0, "waiting": row[2] or 0}
@@ -223,7 +224,7 @@ def faces_due(
     rows = con.execute(
         "SELECT id FROM documents"
         " WHERE json_extract(meta, '$.photo.preview') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " AND coalesce(json_extract(meta, '$.faces.v'), 0) < ? ORDER BY id",
         (version,),
     )
@@ -247,7 +248,7 @@ def face_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
         "     AND json_extract(meta, '$.faces.n') > 0),"
         " sum(coalesce(json_extract(meta, '$.faces.v'), 0) < ?)"
         " FROM documents WHERE json_extract(meta, '$.photo.preview') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL",
+        f" AND {LIVE}",
         (version, version, version),
     ).fetchone()
     found = con.execute("SELECT count(*) FROM faces WHERE gone_at IS NULL").fetchone()

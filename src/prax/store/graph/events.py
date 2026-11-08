@@ -50,6 +50,7 @@ from ..base import (
     _reading,
     _serialized,
     first_fresh_id,
+    live,
     mark_ids,
     now,
     run_name,
@@ -153,7 +154,7 @@ def photo_groups(con: sqlite3.Connection) -> list[dict[str, Any]]:
         " json_extract(d.meta, '$.place.country') AS country, p.path"
         " FROM documents d LEFT JOIN places p ON p.sha256 = d.hash AND p.gone IS NULL"
         " WHERE json_extract(d.meta, '$.taken.date') IS NOT NULL"
-        " AND json_extract(d.meta, '$.retired') IS NULL"
+        f" AND {live('d')}"
     ):
         if not mimes.is_picture(r["mime"]):
             continue
@@ -524,7 +525,7 @@ def decide_event(
         " json_extract(d.meta, '$.place.name') AS town,"
         " json_extract(d.meta, '$.place.country') AS country"
         " FROM event_candidate_photos p JOIN documents d ON d.id = p.doc_id"
-        " WHERE p.candidate_id = ? AND json_extract(d.meta, '$.retired') IS NULL"
+        f" WHERE p.candidate_id = ? AND {live('d')}"
         " ORDER BY taken, d.id",
         (candidate_id,),
     ).fetchall()

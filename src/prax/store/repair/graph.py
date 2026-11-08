@@ -15,7 +15,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import glyphs, language, names
 
-from ..base import _serialized, hidden_documents, rows_in, run_name
+from ..base import LIVE, _serialized, hidden_documents, rows_in, run_name
 from ..graph import (
     Edge,
     _refresh_name,
@@ -703,7 +703,7 @@ def _document_twins(con: sqlite3.Connection) -> list[dict[str, Any]]:
     titles: dict[str, list[int]] = {}
     for r in con.execute(
         "SELECT id, title FROM documents WHERE title IS NOT NULL"
-        " AND sensitivity IS NULL AND json_extract(meta, '$.retired') IS NULL"
+        f" AND sensitivity IS NULL AND {LIVE}"
         " AND id NOT IN (SELECT doc_id FROM pages)"
     ):
         titles.setdefault(str(r["title"]), []).append(int(r["id"]))
@@ -1180,7 +1180,7 @@ def _stale_document_nodes(con: sqlite3.Connection) -> list[dict[str, Any]]:
     for doc in con.execute(
         "SELECT id, title, json_extract(meta, '$.title_history') AS history"
         " FROM documents WHERE json_extract(meta, '$.title_history') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
     ):
         try:
             target = document_node(con, int(doc["id"]))[0]
@@ -1210,8 +1210,7 @@ def _stale_document_nodes(con: sqlite3.Connection) -> list[dict[str, Any]]:
                     "cleaned": target,
                 }
                 if con.execute(
-                    "SELECT 1 FROM documents WHERE title = ? AND id != ?"
-                    " AND json_extract(meta, '$.retired') IS NULL",
+                    f"SELECT 1 FROM documents WHERE title = ? AND id != ? AND {LIVE}",
                     (old, doc["id"]),
                 ).fetchone():
                     row["left"] = "another document holds the old title"

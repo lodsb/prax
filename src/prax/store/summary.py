@@ -12,7 +12,7 @@ from typing import Any
 from prax import config
 from prax.graph import ontology
 
-from .base import _reading, decode_domains
+from .base import LIVE, _reading, decode_domains, live
 from .documents import DOCTYPES
 from .jobs import running_jobs
 from .retrieval import vec_status
@@ -41,16 +41,13 @@ def stats(con: sqlite3.Connection) -> dict[str, Any]:
         f"sum(CASE WHEN {expr} THEN 1 ELSE 0 END) AS {name}"
         for name, expr in DOCTYPES.items()
     )
-    krow = con.execute(
-        f"SELECT {kinds} FROM documents d"
-        " WHERE json_extract(d.meta, '$.retired') IS NULL"
-    ).fetchone()
+    krow = con.execute(f"SELECT {kinds} FROM documents d WHERE {live('d')}").fetchone()
     docs["by_type"] = {k: krow[k] or 0 for k in DOCTYPES if krow[k]}
     docs["by_source"] = {
         (r[0] or "—"): r[1]
         for r in con.execute(
             "SELECT json_extract(meta, '$.source'), count(*) FROM documents"
-            " WHERE json_extract(meta, '$.retired') IS NULL GROUP BY 1"
+            f" WHERE {LIVE} GROUP BY 1"
             " ORDER BY 2 DESC"
         )
     }
@@ -58,7 +55,7 @@ def stats(con: sqlite3.Connection) -> dict[str, Any]:
     unset = 0
     for raw, n in con.execute(
         "SELECT json_extract(meta, '$.domains'), count(*) FROM documents"
-        " WHERE json_extract(meta, '$.retired') IS NULL GROUP BY 1"
+        f" WHERE {LIVE} GROUP BY 1"
     ):
         names = decode_domains(raw)
         if not names:

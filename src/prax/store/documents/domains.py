@@ -11,6 +11,7 @@ from typing import Any
 from prax.graph import ontology
 
 from ..base import (
+    LIVE,
     MetaLike,
     NotFound,
     _committing,
@@ -20,6 +21,7 @@ from ..base import (
     document_hidden,
     domain_clause,
     hidden_documents,
+    live,
     now,
     personal_sql,
     rows_in,
@@ -225,8 +227,7 @@ def domain_counts(con: sqlite3.Connection) -> dict[str, Any]:
     Counts what the viewer may see; one read of the distinct sets."""
     hidden = hidden_documents(con)
     sql = (
-        "SELECT json_extract(meta, '$.domains'), count(*) FROM documents"
-        " WHERE json_extract(meta, '$.retired') IS NULL"
+        f"SELECT json_extract(meta, '$.domains'), count(*) FROM documents WHERE {LIVE}"
     )
     args: list[Any] = []
     if hidden:
@@ -398,7 +399,7 @@ def domains_dry_run(
     for r in con.execute(
         "SELECT id, title, mime, original_path, meta FROM documents"
         " WHERE json_extract(meta, '$.domains') IS NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         f"{_NOT_PERSONAL}"
     ).fetchall():
         doc = {
@@ -603,7 +604,7 @@ def promotion_candidates(
     promoted: set[int] = set()
     for r in con.execute(
         "SELECT id, title, meta FROM documents WHERE title IS NOT NULL"
-        " AND text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+        f" AND text_hash IS NOT NULL AND {LIVE}"
         " AND coalesce(json_extract(meta, '$.source'), '') != 'wiki'"
     ):
         titles.setdefault(r["title"], r["id"])
@@ -831,7 +832,7 @@ def sensitivity_counts(con: sqlite3.Connection) -> dict[str, int]:
         " sum(d.sensitivity IS NULL"
         "     AND json_extract(d.meta, '$.sensitivity.by') = 'human'),"
         f" sum(d.sensitivity IS NULL AND {personal_sql('d')})"
-        " FROM documents d WHERE json_extract(d.meta, '$.retired') IS NULL"
+        f" FROM documents d WHERE {live('d')}"
     ).fetchone()
     return {
         "suspected": row[0] or 0,

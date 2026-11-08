@@ -19,12 +19,14 @@ from prax.ml import rerank as rerank_mod
 from prax.text import dates, status
 
 from ..base import (
+    LIVE,
     SearchHit,
     _has_vectors,
     _index_path,
     _reading,
     hidden_documents,
     holds_domain,
+    live,
     vectors_available,
 )
 from ..documents import DOCTYPES
@@ -413,7 +415,7 @@ def work_versions(con: sqlite3.Connection, work: int) -> list[int]:
                 " JOIN documents d ON d.id = e.source_doc"
                 " WHERE e.rel = ? AND e.valid_to IS NULL"
                 " AND COALESCE(w.canonical_id, w.id) = ?"
-                " AND json_extract(d.meta, '$.retired') IS NULL",
+                f" AND {live('d')}",
                 (EXAMPLE_OF, work),
             )
         }
@@ -538,7 +540,7 @@ def staleness(
             continue  # what only a hidden document says is not said
         other = con.execute(
             "SELECT id FROM documents WHERE title = ?"
-            " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",
+            f" AND {LIVE} ORDER BY id DESC LIMIT 1",
             (r["src"],),
         ).fetchone()
         for doc_id in titles.get(str(r["dst"]), []):

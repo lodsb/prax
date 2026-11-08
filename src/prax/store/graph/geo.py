@@ -44,7 +44,7 @@ from typing import Any
 
 from prax.text import mimes
 
-from ..base import _reading, _serialized, now
+from ..base import LIVE, _reading, _serialized, now
 from ..documents import _put_meta, _refresh_document_field, get_meta
 from .edges import Edge, document_edges_of, document_node, end_edges, link
 from .labels import add_label
@@ -74,7 +74,7 @@ def places_due(
         "SELECT id, mime, json_extract(meta, '$.photo.gps.lat') AS lat,"
         " json_extract(meta, '$.photo.gps.lon') AS lon FROM documents"
         " WHERE json_extract(meta, '$.photo.gps.lat') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
         " AND coalesce(json_extract(meta, '$.place.v'), 0) < ?"
         " ORDER BY id",
         (version,),
@@ -99,7 +99,7 @@ def place_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
         "     AND json_extract(meta, '$.place.name') IS NULL),"
         " sum(coalesce(json_extract(meta, '$.place.v'), 0) < ?)"
         " FROM documents WHERE json_extract(meta, '$.photo.gps.lat') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL",
+        f" AND {LIVE}",
         (version, version, version),
     ).fetchone()
     return {"placed": row[0] or 0, "nowhere": row[1] or 0, "waiting": row[2] or 0}

@@ -9,7 +9,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _NOW, NotFound, _reading, _serialized, hidden_documents
+from ..base import _NOW, LIVE, NotFound, _reading, _serialized, hidden_documents
 
 
 @_serialized
@@ -394,7 +394,7 @@ def extraction_drops(con: sqlite3.Connection) -> dict[str, Any]:
     for doc_id, raw in con.execute(
         "SELECT id, json_extract(meta, '$.extraction.drops') FROM documents"
         " WHERE json_extract(meta, '$.extraction.drops') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
+        f" AND {LIVE}"
     ):
         if int(doc_id) in hidden:
             continue
