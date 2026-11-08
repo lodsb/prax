@@ -35,7 +35,7 @@ from ..base import (
     meta_of,
     now,
 )
-from .meta import _put_meta, get_meta
+from .meta import _put_meta, _untried, get_meta
 
 GENRE_OPENING = 1500  # characters of the text a labeller reads beside the summary
 
@@ -259,7 +259,7 @@ def genres_needed(
     are never taken."""
     limit = max(1, limit)
     rows = con.execute(
-        "SELECT id" + _GENRE_OPEN + " AND json_extract(meta, '$.genres_tried') IS NULL"
+        "SELECT id" + _GENRE_OPEN + f" AND {_untried('genres')}"
         " ORDER BY id DESC LIMIT ?",
         (limit,),
     ).fetchall()
@@ -272,22 +272,12 @@ def genres_needed(
             f" AND {LIVE}"
             # tried by the new run and nothing kept: the old labels stay,
             # and it is not handed out again (set_genres clears the mark)
-            " AND json_extract(meta, '$.genres_tried') IS NULL"
+            f" AND {_untried('genres')}"
             " ORDER BY id DESC LIMIT ?",
             (current, limit - len(out)),
         ).fetchall()
         out += [int(r[0]) for r in stale]
     return out
-
-
-@_serialized
-def genres_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> None:
-    """A pass asked and kept no genre: the document is not handed out
-    again until its labels are taken back (``set_genres`` with None)."""
-    meta = get_meta(con, doc_id)
-    meta["genres_tried"] = {"run": run, "why": why[:200], "at": now()}
-    _put_meta(con, doc_id, meta)
-    con.commit()
 
 
 def _genre_item(row: sqlite3.Row, opening: int) -> dict[str, Any]:

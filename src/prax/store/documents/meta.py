@@ -276,16 +276,6 @@ def set_published(
     return dict(entry)
 
 
-@_serialized
-def published_tried(con: sqlite3.Connection, doc_id: int, run: str) -> None:
-    """The ``dates`` step read the first page and found no date it could
-    stand behind: not asked again by that step (a person still may set one)."""
-    meta = get_meta(con, doc_id)
-    meta["published_tried"] = {"run": run, "at": now()}
-    _put_meta(con, doc_id, meta)
-    con.commit()
-
-
 @_reading
 def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
     """Documents with a text that say nothing of when they were published,
@@ -296,7 +286,7 @@ def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NOT NULL"
             " AND json_extract(meta, '$.published') IS NULL"
-            " AND json_extract(meta, '$.published_tried') IS NULL"
+            f" AND {_untried('published')}"
             f" AND {LIVE}"
             " ORDER BY id DESC LIMIT ?",
             (limit,),
@@ -410,14 +400,40 @@ def set_summary(
     }
 
 
-def summary_tried(
-    con: sqlite3.Connection, doc_id: int, run: str | None, why: str
+# The steps that mark a document whose text they read and kept nothing
+# from (``meta.<step>_tried``), so it is not handed out to the same model
+# for ever: dates found no date, genres no label, summaries no translation,
+# titles no better title. The step's own result clears its mark, and so
+# does a new text (``index_text``, ``TRIED_ON_TEXT``): a scan that failed
+# on its OCR layer is asked again once marker has read it.
+TRIED_STEPS = ("genres", "published", "summary", "titles")
+
+
+def _tried_key(step: str) -> str:
+    if step not in TRIED_STEPS:
+        raise ValueError(f"not a step that marks a document tried: {step}")
+    return f"{step}_tried"
+
+
+def _untried(step: str) -> str:
+    """The SQL that keeps the documents ``step`` has not marked tried."""
+    return f"json_extract(meta, '$.{_tried_key(step)}') IS NULL"
+
+
+def step_tried(
+    con: sqlite3.Connection,
+    doc_id: int,
+    step: str,
+    run: str | None,
+    why: str | None = None,
 ) -> None:
-    """Note that a summary could not be translated, so the next pass does
-    not hand out the same document to the same model for ever. A pass that
-    wants them again clears ``meta.summary_tried``."""
-    tried = {"run": run, "why": why[:200], "at": now()}
-    update_meta(con, doc_id, keys={"summary_tried": tried})
+    """``step`` read the document and kept nothing: mark it, ``{run, why,
+    at}`` (``why`` cut to 200 characters), so the step passes it by until
+    its text changes (``TRIED_STEPS``)."""
+    entry: dict[str, Any] = {"run": run, "at": now()}
+    if why:
+        entry["why"] = why[:200]
+    update_meta(con, doc_id, keys={_tried_key(step): entry})
 
 
 def _retitle_document(

@@ -50,7 +50,9 @@ and its item 5 is items 1 and 2 below.
    and undoing edges (done 2026-11-08: `_end_edges` the one ending by id,
    `correct_edge` one write; still open: the repairs that end without a
    run, and a retired document's edges); the tried marks of the
-   steps in one shape, with a migration. Then findings 8 to 56 by cost.
+   steps in one shape (done 2026-11-08: `store.step_tried`, the four keys
+   kept, so no migration; the retry on a new text was the bug fix of
+   2026-11-07). Then findings 8 to 56 by cost.
 1. (asked for by the clock from 2026-11-05) **AO's fixes, now the card
    runs.** The maths as text was read by marker on the night of
    2026-11-03: 529 papers, and the formulas after them. The rest is

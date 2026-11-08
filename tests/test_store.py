@@ -773,13 +773,20 @@ def test_a_new_text_clears_what_the_steps_tried_on_the_old_one(
     # a step that got nothing from a text passes the document by; a new
     # text (marker over a bad OCR layer) gives it another try
     doc = store.ingest_text(con, "an unreadable scan " * 20, title="Scan")["doc_id"]
-    store.genres_tried(con, doc, "r1", "no labels")
-    store.published_tried(con, doc, "r1")
+    store.step_tried(con, doc, "genres", "r1", "no labels")
+    store.step_tried(con, doc, "published", "r1")
     store.index_text(con, doc, "an unreadable scan " * 20)
     assert set(store.get_meta(con, doc)) >= {"genres_tried", "published_tried"}
     store.index_text(con, doc, "A paper on wavelets, read properly. " * 20)
     meta = store.get_meta(con, doc)
     assert not set(meta) & set(store.TRIED_ON_TEXT)
+    # one writer, one shape: {run, why, at}, the reason cut to 200
+    store.step_tried(con, doc, "titles", "r2", "x" * 500)
+    mark = store.get_meta(con, doc)["titles_tried"]
+    assert set(mark) == {"run", "why", "at"} and len(mark["why"]) == 200
+    assert tuple(f"{s}_tried" for s in store.TRIED_STEPS) == store.TRIED_ON_TEXT
+    with pytest.raises(ValueError, match="not a step"):
+        store.step_tried(con, doc, "sections", "r2")
 
 
 def test_an_exited_process_is_not_alive() -> None:

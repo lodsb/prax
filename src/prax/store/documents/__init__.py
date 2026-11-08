@@ -74,7 +74,6 @@ from .genres import (  # noqa: F401
     genre_sample,
     genre_training,
     genres_needed,
-    genres_tried,
     set_genres,
 )
 from .library import (  # noqa: F401
@@ -112,6 +111,7 @@ from .meta import (  # noqa: F401
     HISTORY_TAIL,
     PUBLISHED_BY,
     SECTION_FIELD_CHARS,
+    TRIED_STEPS,
     _history_key,
     _is_indexed,
     _put_meta,
@@ -127,7 +127,6 @@ from .meta import (  # noqa: F401
     is_indexed,
     keep_summary,
     published_of,
-    published_tried,
     quality_record,
     refresh_document_fields,
     sections_needed,
@@ -138,7 +137,7 @@ from .meta import (  # noqa: F401
     set_sections,
     set_summary,
     stamp_world_dates,
-    summary_tried,
+    step_tried,
     update_meta,
     world_dates_needed,
 )

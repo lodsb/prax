@@ -30,6 +30,12 @@ lost; `set_meta` is for an importer that replaces the whole object.
 Inside the store a write function changes meta with `_put_meta`, which
 also sets the columns that change with it (`sensitivity`, `title`).
 
+A step that read a document and kept nothing marks it with
+`store.step_tried(con, doc_id, step, run, why)`: `meta.<step>_tried`,
+`{run, why, at}`, for the steps in `store.TRIED_STEPS` (genres,
+published, summary, titles). The step's own result and a new text
+(`index_text`) clear the mark.
+
 To add a key: declare it in `store.DocumentMeta` with its shape and
 writer, and add its row here.
 

@@ -113,14 +113,6 @@ def titles_needed(
     return out
 
 
-def mark_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> None:
-    """Remember that a guess was made and not applied, so the pipeline does
-    not ask the model again every pass (a later titles pass over the document
-    or ``--apply-low`` still can)."""
-    tried = {"run": run, "why": why}
-    store.update_meta(con, doc_id, keys={"titles_tried": tried})
-
-
 # ------------------------------------------------- the readings the door asks for
 # The edges of the process graph: after a parse lands, what the door asks
 # the worker to read next, on its own — only from a model that costs

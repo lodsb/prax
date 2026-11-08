@@ -460,7 +460,7 @@ def test_a_newer_labeller_run_makes_the_older_ones_labels_stale(
     store.set_genres(con, ids[2], ["essay"])  # a person's
     store.set_genres(con, ids[3], ["essay"], by="claude")
     store.set_genres(con, ids[4], ["essay"], by=old)
-    store.genres_tried(con, ids[4], "pass-1", "no genre kept")
+    store.step_tried(con, ids[4], "genres", "pass-1", "no genre kept")
     assert store.genres_needed(con, limit=50) == []
     assert store.genres_needed(con, limit=50, current=new) == [ids[0]]
     store.set_genres(con, ids[0], ["paper"], by=new)

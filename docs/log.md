@@ -10003,3 +10003,29 @@ gone.
   with `corrected_by`: two commits, but a failure between leaves both
   live, which the next pass sees as existing. Left as it is.
 
+## 2026-11-08: the steps' tried marks in one shape
+
+The last stage of "one owner per concept" (findings 1 and 32). The
+behaviour the owner was asked about, a step trying again after a new
+text, was already in place: the bug fixes of 2026-11-07 made
+`index_text` clear the marks (`TRIED_ON_TEXT`). What was left was the
+shape.
+
+- **`store.step_tried(con, doc_id, step, run, why=None)`** is the one
+  writer: `meta.<step>_tried = {run, why, at}`, `why` cut to 200
+  characters, through `update_meta`, for the steps in
+  `store.TRIED_STEPS` (genres, published, summary, titles); another name
+  is a ValueError. It replaces `published_tried`, `genres_tried` (both a
+  get-then-put of their own), `summary_tried` and the capture
+  pipeline's `mark_tried`, which wrote `titles_tried` with no `at` and
+  an uncut reason.
+- `_untried(step)` is the SQL the due queries keep (`dates_needed`,
+  `genres_needed`, the summaries' `untried_only`), and `TRIED_ON_TEXT`
+  is derived from `TRIED_STEPS`, so a fifth step joins all three by
+  being named once.
+- The keys stay as they were, so no migration: the UI, the Jobs page and
+  `docs/meta.md`'s rows read them unchanged. The review's single
+  `meta.steps.<step>` stamp for every step (version stamps, text-hash
+  stamps, the readings queue) is a larger change with a migration and
+  the meta-path indexes to rebuild; it stays with findings 8 to 56.
+

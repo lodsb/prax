@@ -28,6 +28,7 @@ from ..base import (
     now,
 )
 from .meta import (
+    TRIED_STEPS,
     _document_meta,
     _is_indexed,
     _put_meta,
@@ -159,11 +160,11 @@ def register_references(
 
 
 # The marks a step leaves when it read a document's text and got nothing
-# (``meta.<step>_tried``): the step passes the document by until the text
+# (``step_tried``): the step passes the document by until the text
 # changes, and a new text clears them. Until 2026-11-07 none was cleared, so
 # a scan that failed on its OCR layer was never asked again after marker
 # read it properly (the structure review of that day).
-TRIED_ON_TEXT = ("genres_tried", "published_tried", "summary_tried", "titles_tried")
+TRIED_ON_TEXT = tuple(f"{step}_tried" for step in TRIED_STEPS)
 
 
 def _index_text(

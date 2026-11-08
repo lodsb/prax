@@ -56,7 +56,7 @@ class Titles(ModelStep):
         run = t.run()
 
         def tried(doc_id: int, r: dict[str, Any]) -> None:
-            pipeline.mark_tried(t.con, doc_id, run, str(r["tried"]))
+            store.step_tried(t.con, doc_id, "titles", run, str(r["tried"]))
 
         def apply(doc_id: int, r: dict[str, Any]) -> None:
             got = store.retitle(
@@ -117,7 +117,7 @@ class Dates(ModelStep):
         run = t.run()
 
         def tried(doc_id: int, r: dict[str, Any]) -> None:
-            store.published_tried(t.con, doc_id, run)
+            store.step_tried(t.con, doc_id, "published", run)
 
         def apply(doc_id: int, r: dict[str, Any]) -> None:
             store.set_published(
@@ -201,7 +201,7 @@ class Summaries(ModelStep):
             # the model could not translate it: the summary stays as it was
             # written, and the document is not offered again
             with contextlib.suppress(Exception):
-                store.summary_tried(t.con, doc_id, run, str(r["tried"]))
+                store.step_tried(t.con, doc_id, "summary", run, str(r["tried"]))
 
         def apply(doc_id: int, r: dict[str, Any]) -> None:
             store.set_summary(
@@ -424,7 +424,7 @@ class Genres(ModelStep):
         run = t.run()
 
         def tried(doc_id: int, r: dict[str, Any]) -> None:
-            store.genres_tried(t.con, doc_id, run, str(r["tried"]))
+            store.step_tried(t.con, doc_id, "genres", run, str(r["tried"]))
 
         def apply(doc_id: int, r: dict[str, Any]) -> str:
             g, s = dict(r.get("g") or {}), dict(r.get("s") or {})
