@@ -85,7 +85,7 @@ def _premises(con: sqlite3.Connection, rel: str) -> list[Premise]:
     ]
 
 
-def by_document(
+def _by_document(
     premises: list[Premise],
     derive: Callable[..., Plan],
     *,
@@ -118,7 +118,7 @@ def by_document(
     return plan, sources
 
 
-def chain(
+def _chain(
     first: list[Premise], second: list[Premise], *, cap: int
 ) -> tuple[Plan, dict[Pair, int | None]]:
     """The pairs ``a -first-> m -second-> c`` reaches, each through the
@@ -388,14 +388,14 @@ def derive_rules(
                 _oriented(_premises(con, s.removeprefix("~")), s)
                 for s in onto.relations[read].chain
             )
-            plan, sources = chain(first, second, cap=cap)
+            plan, sources = _chain(first, second, cap=cap)
             premises = first + second
         else:
             premises = _premises(con, read)
             if read == "part_of":
                 doubted = {int(x["edge_id"]) for x in part_of_suspects(con)}
                 premises = [p for p in premises if p[0] not in doubted]
-            plan, sources = by_document(
+            plan, sources = _by_document(
                 premises,
                 closure if kind == "transitive" else converse,
                 cap=cap,

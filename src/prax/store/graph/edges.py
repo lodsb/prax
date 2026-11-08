@@ -459,7 +459,7 @@ def held_in_world(alias: str, world_at: str | None = None) -> tuple[str, list[st
     return held, [day, day, day, day]
 
 
-def changed_between(
+def _changed_between(
     alias: str, side: str, begin: str, end: str
 ) -> tuple[str, list[str], str]:
     """The SQL that keeps the edges prax wrote (``added``) or ended
@@ -724,17 +724,6 @@ def edge_hidden(con: sqlite3.Connection, edge_id: int) -> bool:
     if row[0] is not None and int(row[0]) in hidden:
         return True
     return bool(hidden_by_premise(con, [edge_id], hidden))
-
-
-@_serialized
-def record_ending(con: sqlite3.Connection, edge_id: int, run: str) -> None:
-    """Note that ``run`` ended this edge, for ``restore_run``."""
-    con.execute(
-        "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
-        f" VALUES (?, ?, {_NOW})",
-        (edge_id, run),
-    )
-    con.commit()
 
 
 @_serialized

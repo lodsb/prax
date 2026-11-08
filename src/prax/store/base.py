@@ -917,11 +917,6 @@ def _index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
     return _open_index(_index_path(model), writable=writable)
 
 
-def _doc_index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
-    """The document-field index for ``model`` (keys are document ids)."""
-    return _open_index(_doc_index_path(model), writable=writable)
-
-
 def _drop_index_views(model: str) -> None:
     """Forget the read-only views so the next read reopens the saved files."""
     with _INDEX_LOCK:

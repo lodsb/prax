@@ -108,7 +108,6 @@ GENRE_KEYS: tuple[
 )
 
 
-@_serialized
 def _sure(labels: list[dict[str, Any]] | None, key: str) -> list[str]:
     """The labels given with ``p`` of 0.5 or more."""
     return [str(x[key]) for x in labels or [] if float(x.get("p", 1.0)) >= 0.5]

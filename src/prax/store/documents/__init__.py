@@ -56,7 +56,6 @@ from .domains import (  # noqa: F401
     promotion_candidates,
     remove_domain,
     request_extraction,
-    restamp_ontology,
     sensitivity_counts,
     set_domains,
     set_sensitivity,

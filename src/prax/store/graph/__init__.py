@@ -119,7 +119,6 @@ from .edges import (  # noqa: F401
     media_node_name,
     provenance_summary,
     record_correction,
-    record_ending,
     restore_run,
     retire_reading,
     retire_run,

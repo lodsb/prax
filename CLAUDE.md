@@ -151,7 +151,7 @@ revisit threshold, under "Decision thresholds" below.
    time is `valid_from` and `valid_to` (and `ingested_at`): when prax wrote the edge and
    when a later reading ended it (`store.held_at` says which edges were
    held at a moment; `traverse(as_of=)`; `store.changes` what was
-   written and ended in a period, beside it in `changed_between`). World time is `world_from` and
+   written and ended in a period, the edges' half `graph.edges._changed_between`). World time is `world_from` and
    `world_to` with their precision (migration 36): when the fact holds
    in the world, as its source states it, and only where it does;
    migration 47's triggers hold a date and its precision together.

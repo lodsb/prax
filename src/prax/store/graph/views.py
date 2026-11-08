@@ -33,7 +33,7 @@ _HUBS: dict[tuple[Any, ...], tuple[tuple[Any, ...], float, list[sqlite3.Row]]] =
 _HUBS_LOCK = threading.Lock()
 
 
-def graph_stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
+def _graph_stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
     """What moves when the graph does: an edge written or ended, an entity
     merged, a name changed (a rename writes a label). Each read on an
     index, about 25 ms together."""
@@ -53,7 +53,7 @@ def _hubs(
     changed, or changed less than ``HUB_REFRESH`` seconds ago."""
     where = str(con.execute("PRAGMA database_list").fetchone()[2])
     key = (where, sql, args)
-    stamp = graph_stamp(con)
+    stamp = _graph_stamp(con)
     now = time.monotonic()
     with _HUBS_LOCK:
         held = _HUBS.get(key)

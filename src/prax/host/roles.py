@@ -102,12 +102,6 @@ def is_chat(name: str) -> bool:
     return name == "llama-server" or bool(_CHAT.match(name))
 
 
-def is_served(name: str) -> bool:
-    """Whether the role serves a ``models:`` entry: a chat server, the
-    reranker or marker's OCR server."""
-    return is_chat(name) or name in ("reranker", "ocr-server")
-
-
 def role_keys(name: str) -> tuple[str, ...]:
     return ROLE_KEYS["llama-server" if is_chat(name) else name]
 

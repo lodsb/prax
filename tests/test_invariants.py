@@ -518,3 +518,31 @@ def test_the_live_spelling_is_served_by_its_index(tmp_path: Path) -> None:
         # chosen says the planner matched the spelling
         assert any(i in plan for i in LIVE_INDEXES), plan
     con.close()
+
+
+def test_every_public_name_of_a_part_is_on_its_package() -> None:
+    """A part of a store package (``store/graph/edges.py``) is reached
+    through its package or through ``store``, never by its own path
+    (invariant 3). A public function a part defines and neither lists is
+    one somebody forgot to add, or a helper that should say it is one with
+    a ``_``; the lists are written by hand (structure review finding 13)."""
+    import importlib
+
+    from prax import store
+
+    missing = []
+    for path in sorted((SRC / "store").glob("*/*.py")):
+        if path.name == "__init__.py":
+            continue
+        package = importlib.import_module(f"prax.store.{path.parent.name}")
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if (
+                isinstance(node, ast.FunctionDef | ast.ClassDef)
+                and not node.name.startswith("_")
+                and not hasattr(store, node.name)
+                and not hasattr(package, node.name)
+            ):
+                missing.append(f"{path.relative_to(SRC)}:{node.lineno} {node.name}")
+    assert not missing, "public, and on neither its package nor store: " + "; ".join(
+        missing
+    )

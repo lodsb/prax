@@ -791,9 +791,7 @@ def set_sections(
 
 
 @_reading
-def sections_needed(
-    con: sqlite3.Connection, *, limit: int = 200, untried_only: bool = True
-) -> list[int]:
+def sections_needed(con: sqlite3.Connection, *, limit: int = 200) -> list[int]:
     """Long documents whose sections nobody has read, or has read from a
     text that has since been replaced. Longest first: a book gains most."""
     from prax.writing import sections as sec
@@ -803,12 +801,7 @@ def sections_needed(
         f" AND {LIVE} AND text_hash IS NOT NULL"
         " AND (json_extract(meta, '$.sections.text_hash') IS NULL"
         "      OR json_extract(meta, '$.sections.text_hash') != text_hash)"
-        + (
-            " AND json_extract(meta, '$.sections_tried') IS NULL"
-            if untried_only
-            else ""
-        )
-        + " ORDER BY text_len DESC LIMIT ?",
+        " ORDER BY text_len DESC LIMIT ?",
         (sec.MIN_DOCUMENT, max(1, limit)),
     ).fetchall()
     return [int(r["id"]) for r in rows]

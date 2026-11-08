@@ -68,7 +68,7 @@ def referenced_kind(mime: str) -> bool:
     return m.startswith(kinds) and m not in mimes.DOCUMENT_IMAGES
 
 
-def referenced_private() -> bool:
+def _referenced_private() -> bool:
     """Whether a referenced original is ``suspected`` from its
     registration (``private.referenced``, on by default; the user,
     2026-10-23): a phone's photos and recordings are personal more often

@@ -29,12 +29,12 @@ from ..base import (
 )
 from .meta import _is_indexed, _put_meta, _refresh_document_field, get_meta
 from .places import (
+    _referenced_private,
     live_photo_clip,
     original_file,
     place_roots_of,
     record_places,
     referenced_kind,
-    referenced_private,
 )
 
 
@@ -93,7 +93,7 @@ def register_references(
     with its ``doc_id`` and ``created``."""
     refused = set(record_places(con, root, entries)["refused"])
     check_meta(meta or {})
-    private = referenced_private()
+    private = _referenced_private()
     out: dict[str, Any] = {
         "created": 0,
         "known": 0,

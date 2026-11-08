@@ -18,8 +18,8 @@ from .communities import community_of
 from .edges import (
     _ASSERTED,
     _MOMENT_ISO,
+    _changed_between,
     _end_of,
-    changed_between,
     document_node,
     held_at,
     held_in_world,
@@ -788,7 +788,7 @@ def _change_sides(
     else:
         held, held_args = held_at("p", begin)
         for k in ("added", "ended"):
-            cond, bounds, column = changed_between("e", k, begin, end)
+            cond, bounds, column = _changed_between("e", k, begin, end)
             if not rereadings:
                 # news only: a fact added that was held when the period
                 # began, or ended while another edge still states it, is

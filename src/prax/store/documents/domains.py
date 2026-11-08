@@ -654,37 +654,6 @@ def promotion_candidates(
 
 
 @_serialized
-def restamp_ontology(
-    con: sqlite3.Connection, src: str, dst: str, *, commit: bool = True
-) -> int:
-    """Rewrite ``meta.extraction.ontology_version`` (and the history entries)
-    from ``src`` to ``dst`` on every document: the ontology's version string
-    changed shape without a change in what it accepts (the split into
-    modules). Edges keep their version. Returns the documents touched."""
-    n = 0
-    for r in con.execute(
-        "SELECT id, meta FROM documents WHERE meta LIKE ?",
-        (f'%"ontology_version": "{src}"%',),
-    ).fetchall():
-        meta = json.loads(r["meta"] or "{}")
-        changed = False
-        for stamp in [
-            meta.get("extraction") or {},
-            *(meta.get("extraction_history") or []),
-        ]:
-            if stamp.get("ontology_version") == src:
-                stamp["ontology_version"] = dst
-                changed = True
-        if changed:
-            n += 1
-            if commit:
-                _put_meta(con, r["id"], meta)
-    if commit:
-        con.commit()
-    return n
-
-
-@_serialized
 def unstamp_extraction(con: sqlite3.Connection, doc_id: int, stamp: str) -> bool:
     """The text an extraction was made from has been replaced (by the
     reader ``stamp``): the extraction stamp goes to the history, so the
