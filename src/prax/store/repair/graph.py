@@ -1229,7 +1229,12 @@ def _stale_document_nodes(con: sqlite3.Connection) -> list[dict[str, Any]]:
                     row["left"] = "it states facts from other documents too"
                 else:
                     twin = con.execute(_HOLDER, (target, etype)).fetchone()
-                    if twin is not None and int(twin[0]) != row["id"]:
+                    if twin is not None and twin[1] == row["id"]:
+                        # the title is a name already folded into this node:
+                        # which of the two is canonical is a person's call
+                        # (as _repair_damaged_names leaves it)
+                        row["left"] = "its title is an alias folded into it"
+                    elif twin is not None and int(twin[0]) != row["id"]:
                         row["into"] = int(twin[1] or twin[0])
                 found.append(row)
                 if len(found) >= CAP:
@@ -1257,8 +1262,15 @@ def _repair_stale_document_nodes(
             continue  # merged since it was found
         if here["name"] != row["name"]:
             continue  # renamed since
-        how = rename_entity(
-            con, int(row["id"]), row["cleaned"], producer=STALE_NODES_PRODUCER, run=run
-        )
+        try:
+            how = rename_entity(
+                con,
+                int(row["id"]),
+                row["cleaned"],
+                producer=STALE_NODES_PRODUCER,
+                run=run,
+            )
+        except (KeyError, ValueError):  # a merge the store refuses: left
+            continue
         done += how != "unchanged"
     return done

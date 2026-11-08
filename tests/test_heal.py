@@ -769,12 +769,24 @@ def test_a_node_left_with_its_documents_old_title_is_renamed(
     shared = _paper(con, "Untitled", "A note on reverb. ")
     _paper(con, "Untitled", "A note on delay lines. ")
     _retitled_before_the_fix(con, shared, "Reverb Notes")
+    # a title already folded into the node as an alias: merging the node
+    # into it would be a cycle
+    folded = _paper(con, "draft.pdf", "On allpass chains. ")
+    alias = _paper(con, "Allpass Chains", "On allpass chains, again. ")
+    store.merge_entities(
+        con,
+        store._entity_id(con, "Allpass Chains", "paper"),
+        store._entity_id(con, "draft.pdf", "paper"),
+    )
+    store.retire_document(con, alias, reason="test")
+    _retitled_before_the_fix(con, folded, "Allpass Chains")
     found = store.health(con, only=["retitled-nodes"])["ailments"][0]
     by_name = {r["name"]: r for r in found["examples"]}
     assert by_name["scan_0042.pdf"]["cleaned"] == "Wave Digital Filters"
     assert "left" in by_name["Untitled"]
+    assert by_name["draft.pdf"]["left"] == "its title is an alias folded into it"
     healed = store.heal(con, only=["retitled-nodes"])["retitled-nodes"]
-    assert healed == {"found": 2, "repaired": 1, "left alone": 1}
+    assert healed == {"found": 3, "repaired": 1, "left alone": 2}
     store.rename_display_language(con)
     node = store._entity_id(con, "Wave Digital Filters", "paper")
     assert node is not None
