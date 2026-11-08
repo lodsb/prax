@@ -734,3 +734,56 @@ def test_a_models_names_are_mended_as_its_answer_is_read() -> None:
         "Università di Pisa",
         "genetic algorithms",
     )
+
+
+def _paper(con: sqlite3.Connection, title: str, text: str) -> int:
+    doc = int(store.ingest_text(con, text * 30, title=title)["doc_id"])
+    store.link(
+        con,
+        store.Edge(title, "paper", "authored_by", "A. Writer", "person"),
+        source_doc=doc,
+        producer="test",
+    )
+    return doc
+
+
+def _retitled_before_the_fix(con: sqlite3.Connection, doc: int, title: str) -> None:
+    # what a retitle left until 2026-11-07: the document's title changed, the
+    # node's name reverted by the names pass
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.title_history',"
+        " json_array(json_object('title', title))), title = ? WHERE id = ?",
+        (title, doc),
+    )
+    con.commit()
+
+
+def test_a_node_left_with_its_documents_old_title_is_renamed(
+    con: sqlite3.Connection,
+) -> None:
+    """``retitled-nodes``: a node whose document has another title now is
+    renamed to it, unless another document still holds the old title. The
+    rename survives the names pass, and ``unmerge_run`` takes it back."""
+    alone = _paper(con, "scan_0042.pdf", "On wave digital filters. ")
+    _retitled_before_the_fix(con, alone, "Wave Digital Filters")
+    shared = _paper(con, "Untitled", "A note on reverb. ")
+    _paper(con, "Untitled", "A note on delay lines. ")
+    _retitled_before_the_fix(con, shared, "Reverb Notes")
+    found = store.health(con, only=["retitled-nodes"])["ailments"][0]
+    by_name = {r["name"]: r for r in found["examples"]}
+    assert by_name["scan_0042.pdf"]["cleaned"] == "Wave Digital Filters"
+    assert "left" in by_name["Untitled"]
+    healed = store.heal(con, only=["retitled-nodes"])["retitled-nodes"]
+    assert healed == {"found": 2, "repaired": 1, "left alone": 1}
+    store.rename_display_language(con)
+    node = store._entity_id(con, "Wave Digital Filters", "paper")
+    assert node is not None
+    assert store._entity_id(con, "Untitled", "paper") is not None
+    run = con.execute(
+        "SELECT run FROM entity_labels WHERE entity_id = ? AND was = 1", (node,)
+    ).fetchone()[0]
+    assert run.startswith("heal:retitled-nodes")
+    store.unmerge_run(con, run)
+    assert con.execute("SELECT name FROM entities WHERE id = ?", (node,)).fetchone()[
+        0
+    ] == ("scan_0042.pdf")

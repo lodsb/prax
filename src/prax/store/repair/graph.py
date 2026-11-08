@@ -6,6 +6,7 @@ ontology versions."""
 from __future__ import annotations
 
 import functools
+import json
 import re
 import sqlite3
 import time
@@ -19,10 +20,12 @@ from ..graph import (
     Edge,
     _refresh_name,
     add_label,
+    document_node,
     entities_with_degree,
     entity_named_in,
     functional_breaches,
     link,
+    media_node_name,
     merge_entities,
     part_of_ancestry,
     part_of_suspects,
@@ -1161,3 +1164,101 @@ def _repair_wire_labels(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> 
         )
         for row in rows
     )
+
+
+STALE_NODES_PRODUCER = "heal:retitled-nodes"
+
+
+def _stale_document_nodes(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Document nodes still named by a title their document no longer has:
+    until 2026-11-07 ``rename_entity`` wrote no label, so the names pass put
+    a retitled document's node back under its old title. Each row is the
+    node, the name it should have (``document_node``) and, when a node
+    already carries that name, the one it folds into. A node that is not
+    this document's alone is listed with ``left`` and not touched: another
+    live document holds the old title, or the node states facts read from
+    other documents too."""
+    onto = ontology.current()
+    found = []
+    for doc in con.execute(
+        "SELECT id, title, json_extract(meta, '$.title_history') AS history"
+        " FROM documents WHERE json_extract(meta, '$.title_history') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    ):
+        try:
+            target = document_node(con, int(doc["id"]))[0]
+        except KeyError:  # untitled or hidden: nothing to name it after
+            continue
+        media = target != doc["title"]
+        olds = {
+            str(h["title"])
+            for h in json.loads(doc["history"])
+            if h.get("title") and h["title"] != doc["title"]
+        }
+        for old in sorted(olds):
+            name = media_node_name(old, int(doc["id"])) if media else old
+            for e in con.execute(
+                "SELECT e.id, e.name, e.type FROM entities e WHERE e.name = ?"
+                " AND e.canonical_id IS NULL AND EXISTS (SELECT 1 FROM edges x"
+                " WHERE (x.src = e.id OR x.dst = e.id) AND x.source_doc = ?"
+                " AND x.valid_to IS NULL)",
+                (name, doc["id"]),
+            ):
+                etype = str(e["type"])
+                if etype not in onto.entity_types or not onto.is_a(etype, "document"):
+                    continue
+                row: dict[str, Any] = {
+                    **dict(e),
+                    "doc_id": int(doc["id"]),
+                    "cleaned": target,
+                }
+                if con.execute(
+                    "SELECT 1 FROM documents WHERE title = ? AND id != ?"
+                    " AND json_extract(meta, '$.retired') IS NULL",
+                    (old, doc["id"]),
+                ).fetchone():
+                    row["left"] = "another document holds the old title"
+                elif (
+                    con.execute(
+                        "SELECT count(DISTINCT source_doc) FROM edges"
+                        " WHERE src = ? AND valid_to IS NULL",
+                        (e["id"],),
+                    ).fetchone()[0]
+                    > 1
+                ):
+                    row["left"] = "it states facts from other documents too"
+                else:
+                    twin = con.execute(_HOLDER, (target, etype)).fetchone()
+                    if twin is not None and int(twin[0]) != row["id"]:
+                        row["into"] = int(twin[1] or twin[0])
+                found.append(row)
+                if len(found) >= CAP:
+                    return found
+    return found
+
+
+@_serialized
+def _repair_stale_document_nodes(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """Rename each node to its document's title through ``rename_entity``,
+    which folds it into a namesake of its type and keeps the old name as a
+    ``was`` label. One run for the round, which ``unmerge_run`` takes back.
+    The rows with ``left`` are skipped."""
+    run = run_name(STALE_NODES_PRODUCER, sep=":")
+    done = 0
+    for row in rows:
+        if row.get("left"):
+            continue
+        here = con.execute(
+            "SELECT name, canonical_id FROM entities WHERE id = ?", (row["id"],)
+        ).fetchone()
+        if here is None or here["canonical_id"] is not None:
+            continue  # merged since it was found
+        if here["name"] != row["name"]:
+            continue  # renamed since
+        how = rename_entity(
+            con, int(row["id"]), row["cleaned"], producer=STALE_NODES_PRODUCER, run=run
+        )
+        done += how != "unchanged"
+    return done

@@ -70,6 +70,7 @@ from .graph import (
     _repair_not_venues,
     _repair_part_of,
     _repair_spacing_twins,
+    _repair_stale_document_nodes,
     _repair_stray_versions,
     _repair_wire_labels,
     _repair_wire_names,
@@ -77,6 +78,7 @@ from .graph import (
     _slow_walks,
     _spacing_twins,
     _split_names,
+    _stale_document_nodes,
     _stray_version_modules,
     _unnamed_entities,
     _wire_labels,
@@ -201,6 +203,22 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_damaged_names,
         repair=_repair_damaged_names,
+    ),
+    Ailment(
+        name="retitled-nodes",
+        what=(
+            "a document's node still named by a title the document no longer"
+            " has: until 2026-11-07 the names pass put a retitled node's old"
+            " name back"
+        ),
+        fix=(
+            "rename the node to the document's title, or fold it into the node"
+            " that carries it, the old name kept as a label; one signed run"
+            " unmerge_run takes back. A node another document shares is listed"
+            " and left alone"
+        ),
+        find=_stale_document_nodes,
+        repair=_repair_stale_document_nodes,
     ),
     Ailment(
         name="wire-names",
