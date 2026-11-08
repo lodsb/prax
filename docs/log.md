@@ -9823,3 +9823,26 @@ Fixed the same day, each with a test that fails before:
 - A rule-derived fact no longer tells a module-limited token that an
   entity exists which only documents outside its modules speak of.
 
+
+## 2026-11-08: the retitled nodes put right
+
+Until 920c651 the `names` pass put a retitled document's node back
+under its old title, so the graph still knew many papers by an arXiv
+number or a file name (`1706.04599`, `dafx12_submission_4.pdf`). The
+heal pass has an ailment for it now, `retitled-nodes`: a node of a
+document type, still named by an old title of its document, that the
+document's live facts reach. It renames the node to `document_node`'s
+name through `rename_entity`, or folds it into the node that already
+carries that name, under one signed run `unmerge_run` takes back. It
+leaves alone a node whose old title another live document holds, one
+that states facts read from other documents too, and one whose new
+name is an alias already folded into it (merging would be a cycle).
+
+The look over the live store found 913 nodes, in 17 s. The first apply
+stopped at the cycle case, after the renames before it had committed;
+b008413 lists that case and skips a refused merge. Two runs did 685:
+1,367 labels written, 16 nodes folded. By the measure of the night
+before (a retitled document whose live facts start at a node of an old
+title) 596 documents became 57. The 228 the ailment still lists are
+the three kinds it leaves for a person: 89 shared old titles, 134
+nodes with facts from several documents, and the aliases.
