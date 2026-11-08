@@ -25,7 +25,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import VIEWER, _reading, hidden_documents, store_state
+from ..base import VIEWER, NotFound, _reading, hidden_documents, store_state
 from .edges import hidden_by_premise
 from .events import RECORDED_AT
 
@@ -51,7 +51,7 @@ def _group(con: sqlite3.Connection, entity_id: int) -> tuple[int, list[int]]:
         "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     canon = int(row[0])
     ids = [
         int(r[0])
@@ -186,7 +186,7 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
     name = str(row["name"])
     edges = _own_facts(con, ids, hidden)
     if not edges:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     # the pictures and the events are the photos part's: one answer each
     attended = {
         int(e["other_id"]) for e in edges if e["rel"] == ATTENDED and e["dir"] == "out"

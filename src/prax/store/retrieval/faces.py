@@ -30,6 +30,7 @@ from prax.ml import faces as faces_ml
 
 from ..base import (
     _INDEX_DIMS,
+    NotFound,
     _add_to_delta,
     _archive_bytes,
     _delta_path,
@@ -236,7 +237,7 @@ def similar_faces(
     Hidden pictures' faces are left out."""
     model = model or face_model()
     if _face_doc(con, face_id) is None:
-        raise KeyError(f"no such face: {face_id}")
+        raise NotFound(f"no such face: {face_id}")
     path = face_index_path(model)
     vec = _get_vector(path, face_id)
     if vec is None:

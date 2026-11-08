@@ -68,6 +68,7 @@ import re
 from pathlib import Path
 
 from prax import config, packs
+from prax.errors import NotFound
 from prax.parsers import figures  # noqa: F401 - parsers.figures is used
 from prax.text import mimes
 
@@ -454,7 +455,7 @@ def by_name(name: str) -> Extractor:
     for e in REGISTRY:
         if e.name == name:
             return e
-    raise KeyError(f"no extractor named {name!r}; known: {[e.name for e in REGISTRY]}")
+    raise NotFound(f"no extractor named {name!r}; known: {[e.name for e in REGISTRY]}")
 
 
 def candidates(mime: str, preferred: str | None = None) -> list[Extractor]:

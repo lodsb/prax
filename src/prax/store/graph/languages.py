@@ -10,7 +10,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import language
 
-from ..base import _reading, _serialized
+from ..base import NotFound, _reading, _serialized
 from ..documents import language_split
 from ..retrieval import phrase_languages
 from .decisions import queue_review
@@ -133,7 +133,7 @@ def name_in_english(
         "SELECT id, name, type, canonical_id FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     if row["canonical_id"]:
         # already folded into another entity, which `foreign_names` skips
         return {

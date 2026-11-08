@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any
 
 from ..base import (
+    NotFound,
     _committing,
     _serialized,
     document_hidden,
@@ -84,7 +85,7 @@ def _move_page(
         raise ValueError(f"author must be one of {PAGE_AUTHORS}")
     doc_id = page_id(con, slug)
     if doc_id is None or document_hidden(con, doc_id):
-        raise KeyError(f"no page {slug!r}")
+        raise NotFound(f"no page {slug!r}")
     current_slug = str(
         con.execute("SELECT slug FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()[0]
     )
@@ -159,7 +160,7 @@ def _project_named(con: sqlite3.Connection, part_of: str, doc_id: int) -> sqlite
         (_slug_of(con, slugify(part_of)),),
     ).fetchone()
     if project is None or document_hidden(con, int(project["doc_id"])):
-        raise KeyError(f"no project page {part_of!r}")
+        raise NotFound(f"no project page {part_of!r}")
     if int(project["doc_id"]) == doc_id:
         raise ValueError("a project is not part of itself")
     return project
@@ -182,7 +183,7 @@ def _destination(
     if parent is not None:
         under = page_id(con, parent) if parent else None
         if parent and (under is None or document_hidden(con, under)):
-            raise KeyError(f"no page {parent!r}")
+            raise NotFound(f"no page {parent!r}")
         return under
     target = int(project["doc_id"]) if project is not None else None
     if moving and (
@@ -286,7 +287,7 @@ def _rename_slug(
         raise ValueError(f"author must be one of {PAGE_AUTHORS}")
     doc_id = page_id(con, slug)
     if doc_id is None or document_hidden(con, doc_id):
-        raise KeyError(f"no page {slug!r}")
+        raise NotFound(f"no page {slug!r}")
     row = con.execute(
         "SELECT slug, kind FROM pages WHERE doc_id = ?", (doc_id,)
     ).fetchone()

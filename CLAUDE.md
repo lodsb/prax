@@ -366,8 +366,11 @@ reference `docs/ask.md`.
 
 - The layout (the engineering pass of 2026-09-28). The top of `prax`
   holds the foundations and the protocol the invariants name: `config`,
-  `models`, `client`, `work`, `worker`, `mcp_server`, and `evaluation`
-  for the scripts. `packs` holds every domain (2026-10-01,
+  `models`, `client`, `work`, `worker`, `mcp_server`, `evaluation`
+  for the scripts, and `errors`: `NotFound`, the miss a caller is meant
+  to see (`store.NotFound`). The door answers it 404 and a `ValueError`
+  400 in one place (`prax.api`); a route catches only to mean another
+  code, and a plain `KeyError` is a bug and a 500. `packs` holds every domain (2026-10-01,
   `docs/packs.md`): each pack's manifest is data that the config, the
   step names and the store may read, and its code loads when used. Everything else lives in a package that says what it
   is about: `store`, `api`, `steps`, `parsers` (its extractors in parts by

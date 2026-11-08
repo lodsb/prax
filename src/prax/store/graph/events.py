@@ -45,7 +45,15 @@ from typing import Any
 from prax import config
 from prax.text import dates, mimes
 
-from ..base import _reading, _serialized, first_fresh_id, mark_ids, now, run_name
+from ..base import (
+    NotFound,
+    _reading,
+    _serialized,
+    first_fresh_id,
+    mark_ids,
+    now,
+    run_name,
+)
 from .edges import Edge, document_node, link, retire_run
 from .labels import PERSON, display_language
 
@@ -331,7 +339,7 @@ def _open_candidate(con: sqlite3.Connection, candidate_id: int) -> sqlite3.Row:
         "SELECT * FROM event_candidates WHERE id = ?", (candidate_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such candidate: {candidate_id}")
+        raise NotFound(f"no such candidate: {candidate_id}")
     if row["state"] != "open":
         raise ValueError(f"candidate {candidate_id} is decided already: undo it first")
     return row
@@ -346,7 +354,7 @@ def event_timeline(con: sqlite3.Connection, candidate_id: int) -> dict[str, Any]
         "SELECT id, state FROM event_candidates WHERE id = ?", (candidate_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such candidate: {candidate_id}")
+        raise NotFound(f"no such candidate: {candidate_id}")
     bursts: list[dict[str, Any]] = []
     last: datetime | None = None
     for r in con.execute(
@@ -580,7 +588,7 @@ def undo_event(con: sqlite3.Connection, candidate_id: int) -> dict[str, Any]:
         "SELECT state, run FROM event_candidates WHERE id = ?", (candidate_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such candidate: {candidate_id}")
+        raise NotFound(f"no such candidate: {candidate_id}")
     ended = retire_run(con, run=row["run"]) if row["run"] else 0
     con.execute(
         "UPDATE event_candidates SET state = 'open', name = NULL, entity_id = NULL,"

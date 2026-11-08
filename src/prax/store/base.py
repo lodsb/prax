@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, ParamSpec, Required, TypedDict, TypeVar
 
 from prax import config, packs
+from prax.errors import NotFound  # noqa: F401  the store's miss, store.NotFound
 from prax.ml import vectors
 
 VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file

@@ -13,6 +13,7 @@ from prax.text import arxiv
 
 from ..base import (
     _NOW,
+    NotFound,
     _guards,
     _like_prefix,
     _reading,
@@ -111,7 +112,7 @@ def request_reading(
     check_mode(extractor, mode)
     row = con.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     con.execute(
         "INSERT OR IGNORE INTO readings (doc_id, extractor, mode, asked_by, at)"
         f" VALUES (?, ?, ?, ?, {_NOW})",

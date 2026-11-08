@@ -32,7 +32,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from ..base import _NOW, _reading, _serialized, run_name
+from ..base import _NOW, NotFound, _reading, _serialized, run_name
 from .decisions import queue_review
 from .edges import Edge, end_edges, link
 from .labels import add_label
@@ -414,7 +414,7 @@ def decide_foreign(
         "SELECT * FROM foreign_entities WHERE source = ? AND gid = ?", (source, gid)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no entity {gid} from {source}")
+        raise NotFound(f"no entity {gid} from {source}")
     if row["state"] != "likely":
         raise ValueError(f"{gid} from {source} is answered ({row['state']}): undo it")
     producer = f"import:{source}"
@@ -426,7 +426,7 @@ def decide_foreign(
             or con.execute("SELECT 1 FROM entities WHERE id = ?", (ours,)).fetchone()
             is None
         ):
-            raise KeyError(f"no such entity: {ours}")
+            raise NotFound(f"no such entity: {ours}")
         ours = int(
             con.execute(
                 "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (ours,)
@@ -507,7 +507,7 @@ def undo_foreign(con: sqlite3.Connection, source: str, gid: str) -> dict[str, An
         "SELECT * FROM foreign_entities WHERE source = ? AND gid = ?", (source, gid)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no entity {gid} from {source}")
+        raise NotFound(f"no entity {gid} from {source}")
     if row["candidate_id"] is None or row["state"] == "likely":
         raise ValueError(f"{gid} from {source} has no answer to take back")
     run = run_name(f"undo-import-{source}", unique=True)

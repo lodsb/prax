@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from prax import config, models, store
+from prax.errors import NotFound
 from prax.graph import ontology
 from prax.ml import pricing
 from prax.text import quotes
@@ -152,7 +153,7 @@ def build_input(
 ) -> DocumentInput:
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = doc["meta"] or {}
     domains = list(meta["domains"]) if meta.get("domains") else None
     # the text: chunks in order, up to the head budget; then the closing

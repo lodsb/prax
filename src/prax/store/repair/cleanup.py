@@ -12,7 +12,7 @@ from typing import Any
 
 from prax.text import clutter
 
-from ..base import _reading, _serialized, run_name
+from ..base import NotFound, _reading, _serialized, run_name
 from ..documents import (
     _put_meta,
     get_meta,
@@ -222,7 +222,7 @@ def restore_set(con: sqlite3.Connection, run: str) -> dict[str, Any]:
         (run,),
     ).fetchall()
     if not rows:
-        raise KeyError(f"no clean-up named {run}")
+        raise NotFound(f"no clean-up named {run}")
     for r in rows:
         con.executemany(
             "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"

@@ -28,6 +28,7 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 from prax import config
+from prax.errors import NotFound
 
 from .feed import Item
 
@@ -126,7 +127,7 @@ class GitHub:
             f"/repos/{full_name}", "application/vnd.github+json"
         )
         if status == 404:
-            raise KeyError(f"GitHub knows no repository {full_name!r}")
+            raise NotFound(f"GitHub knows no repository {full_name!r}")
         if status != 200:
             raise RuntimeError(f"GitHub answered {status} for {full_name}")
         data: dict[str, Any] = json.loads(body)

@@ -71,12 +71,7 @@ def ask(req: AskReq, request: Request) -> Any:
     model's own, said so."""
     if req.mode not in ask_mod.MODES:
         raise HTTPException(400, f"mode is {' or '.join(ask_mod.MODES)}")
-    try:
-        answerer = (
-            ask_mod.answerer_named(req.backend) if req.backend else ask_mod.current()
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    answerer = ask_mod.answerer_named(req.backend) if req.backend else ask_mod.current()
     con = _con(request)
     if answerer is not None and _reader_may_not_pay(req.backend):
         # a reader's token never spends the host's money: named, the paid
@@ -115,8 +110,6 @@ def ask(req: AskReq, request: Request) -> Any:
                 out = ask_mod.ask(con, req.question, **kw)
             _note_ask(con, out)
             return out
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
         except models.ServerNotReady as exc:
             raise HTTPException(503, _asked_for_server(exc)) from exc
         except RuntimeError as exc:
@@ -216,15 +209,10 @@ def _ask_stream(question: str, kw: dict[str, Any]) -> StreamingResponse:
 @router.post("/ask/save")
 def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
     """Append an answer (the result of ``POST /ask``) to a page as the agent."""
-    try:
-        return ask_mod.save(
-            _con(request),
-            req.result,
-            req.slug,
-            heading=req.heading,
-            create=req.create,
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return ask_mod.save(
+        _con(request),
+        req.result,
+        req.slug,
+        heading=req.heading,
+        create=req.create,
+    )

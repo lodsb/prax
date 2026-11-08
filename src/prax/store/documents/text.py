@@ -16,6 +16,7 @@ from ..base import (
     _SURROGATE,
     _TOKEN,
     ASIDE_KINDS,
+    NotFound,
     _archive_bytes,
     _committing,
     _guards,
@@ -178,7 +179,7 @@ def _index_text(
         "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if exists is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     text = _cleaned(text)
     data = text.encode("utf-8")
     text_hash = _archive_bytes(data)
@@ -369,7 +370,7 @@ def rechunk(con: sqlite3.Connection, doc_id: int) -> int:
         "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     if not row["text_hash"]:
         return 0
     text = _read_archive(row["text_hash"]).decode("utf-8")
@@ -516,7 +517,7 @@ def get_original(con: sqlite3.Connection, doc_id: int) -> bytes:
     """The archived original bytes of a document (what its hash names)."""
     row = con.execute("SELECT hash FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     return _read_archive(row["hash"])
 
 
@@ -643,7 +644,7 @@ def mark_suspected(
         "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
     if row["sensitivity"] is not None or _person_decided(meta):
         return False
@@ -677,7 +678,7 @@ def _suspect(
         (doc_id,),
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
     if row["sensitivity"] is not None or _person_decided(meta):
         return None

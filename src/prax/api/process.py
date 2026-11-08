@@ -30,15 +30,10 @@ class DomainsReq(BaseModel):
 
 @router.get("/doc/{doc_id}/domains")
 def get_domains(doc_id: int, request: Request) -> dict[str, Any]:
-    try:
-        return {
-            "domains": store.document_domains(_con(request), doc_id),
-            "modules": sorted(
-                m for m in ontology.current().modules if m != ontology.CORE
-            ),
-        }
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return {
+        "domains": store.document_domains(_con(request), doc_id),
+        "modules": sorted(m for m in ontology.current().modules if m != ontology.CORE),
+    }
 
 
 @router.put("/doc/{doc_id}/domains")
@@ -46,33 +41,20 @@ def put_domains(doc_id: int, req: DomainsReq, request: Request) -> dict[str, Any
     """Replace the document's domain set; null means every module.
     ``reread`` says the change left an extraction stale: the worker's
     next extract pass reads the document again against the new set."""
-    try:
-        con = _con(request)
-        domains = store.set_domains(con, doc_id, req.domains, by=req.by)
-        stale = store.get_meta(con, doc_id).get("extraction_stale") or {}
-        return {"domains": domains, "reread": bool(stale.get("domains_changed"))}
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    con = _con(request)
+    domains = store.set_domains(con, doc_id, req.domains, by=req.by)
+    stale = store.get_meta(con, doc_id).get("extraction_stale") or {}
+    return {"domains": domains, "reread": bool(stale.get("domains_changed"))}
 
 
 @router.post("/doc/{doc_id}/domains/{domain}")
 def post_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
-    try:
-        return {"domains": store.add_domain(_con(request), doc_id, domain)}
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return {"domains": store.add_domain(_con(request), doc_id, domain)}
 
 
 @router.delete("/doc/{doc_id}/domains/{domain}")
 def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
-    try:
-        return {"domains": store.remove_domain(_con(request), doc_id, domain)}
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return {"domains": store.remove_domain(_con(request), doc_id, domain)}
 
 
 @router.get("/domains/counts")
@@ -100,19 +82,13 @@ def domains_dry_run(req: DryRunReq, request: Request) -> dict[str, Any]:
     domain, written nowhere (stage Z, step 5). Without rules, the ones in
     prax.yaml (``domains:``); with ``pack``, the ones that pack suggests."""
     if req.pack is not None:
-        try:
-            path = packs.rules_file(req.pack)
-        except KeyError as exc:
-            raise HTTPException(404, str(exc)) from exc
+        path = packs.rules_file(req.pack)
         rules = yaml.safe_load(path.read_text(encoding="utf-8")) if path else []
     elif req.rules is not None:
         rules = req.rules
     else:
         rules = list(models.load().get("domains") or [])
-    try:
-        return store.domains_dry_run(_con(request), rules)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.domains_dry_run(_con(request), rules)
 
 
 class AssignReq(BaseModel):
@@ -128,10 +104,7 @@ def domains_assign(req: AssignReq, request: Request) -> dict[str, Any]:
     rules = list(models.load().get("domains") or [])
     if not rules or not req.ids:
         return {"unmatched": 0}
-    try:
-        return store.assign_domains(_con(request), rules, force=True, ids=req.ids)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.assign_domains(_con(request), rules, force=True, ids=req.ids)
 
 
 # ---------------------------------------------------------------- genres
@@ -154,12 +127,7 @@ def genre_sample(
     a model's labels to check (``check``, and ``ruled`` for those a domain
     rule placed), or the ones a person labelled, the last first
     (``labelled``)."""
-    try:
-        return store.genre_sample(
-            _con(request), state=state, offset=offset, limit=limit
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.genre_sample(_con(request), state=state, offset=offset, limit=limit)
 
 
 @router.get("/genres/training")
@@ -205,21 +173,16 @@ class GenresReq(BaseModel):
 def put_genres(doc_id: int, req: GenresReq, request: Request) -> dict[str, Any]:
     """A person's genres and subjects for a document: the gold sample of
     stage Z."""
-    try:
-        return store.set_genres(
-            _con(request),
-            doc_id,
-            req.genres,
-            subjects=req.subjects,
-            skip=req.skip,
-            by=req.by,
-            p=req.p,
-            note=req.note,
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.set_genres(
+        _con(request),
+        doc_id,
+        req.genres,
+        subjects=req.subjects,
+        skip=req.skip,
+        by=req.by,
+        p=req.p,
+        note=req.note,
+    )
 
 
 # --------------------------------------------------------------- promote
@@ -233,10 +196,7 @@ class PromoteReq(BaseModel):
 @router.post("/doc/{doc_id}/promote")
 def promote_doc(doc_id: int, req: PromoteReq, request: Request) -> dict[str, Any]:
     """Flag a document for the expensive pass (the ``promote`` work step)."""
-    try:
-        return store.promote(_con(request), doc_id, by=req.by, reason=req.reason)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.promote(_con(request), doc_id, by=req.by, reason=req.reason)
 
 
 @router.delete("/doc/{doc_id}/promote")
@@ -250,10 +210,7 @@ def doc_routes(doc_id: int, request: Request) -> dict[str, Any]:
     its text, figures, formulas and graph, and what can be asked for,
     with the model each step resolves to on this host and whether it
     costs money (``prax.capture.routes``). The UI's "process…" dialog."""
-    try:
-        return routes.routes_for(_con(request), doc_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return routes.routes_for(_con(request), doc_id)
 
 
 class ExtractReq(BaseModel):
@@ -320,12 +277,9 @@ def request_reading(doc_id: int, req: ReadingReq, request: Request) -> dict[str,
     # business when it runs the reading (the request waits otherwise)
     if not parsers.by_name(req.extractor).accepts(doc["mime"] or ""):
         raise HTTPException(400, f"{req.extractor} does not read {doc['mime']}")
-    try:
-        return store.request_reading(
-            _con(request), doc_id, req.extractor, mode=req.mode, by=req.by
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.request_reading(
+        _con(request), doc_id, req.extractor, mode=req.mode, by=req.by
+    )
 
 
 class BulkReadingReq(BaseModel):
@@ -372,10 +326,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
     if req.extractor is not None:
         if req.extractor not in store.READINGS:
             raise HTTPException(400, f"extractor must be one of {store.READINGS}")
-        try:
-            store.check_mode(req.extractor, req.mode)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
+        store.check_mode(req.extractor, req.mode)
     if not (
         req.ids
         or req.mime
@@ -400,57 +351,49 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
             " read_formulas,"
             " unread_formulas, maths or finding",
         )
-    try:
-        ids = store.select_for_reading(
-            con,
-            ids=req.ids,
-            mime=req.mime,
-            text_source=req.text_source,
-            title=req.title,
-            unreadable=req.unreadable,
-            thin=req.thin,
-            doctype=req.doctype,
-            unpolished=req.unpolished,
-            read_figures=req.read_figures,
-            unread_figures=req.unread_figures,
-            bare_captions=req.bare_captions,
-            read_formulas=req.read_formulas,
-            unread_formulas=req.unread_formulas,
-            maths=req.maths,
-            finding=req.finding,
-            # a finding is asked for by the reading it names: the crops
-            # that ran and filled nothing are not asked again. A reading
-            # no check names is the asker's own choice, over all of them
-            fixed_by=(
-                req.extractor
-                if req.finding and req.extractor in quality.FIXING
-                else None
-            ),
-            limit=req.limit,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    ids = store.select_for_reading(
+        con,
+        ids=req.ids,
+        mime=req.mime,
+        text_source=req.text_source,
+        title=req.title,
+        unreadable=req.unreadable,
+        thin=req.thin,
+        doctype=req.doctype,
+        unpolished=req.unpolished,
+        read_figures=req.read_figures,
+        unread_figures=req.unread_figures,
+        bare_captions=req.bare_captions,
+        read_formulas=req.read_formulas,
+        unread_formulas=req.unread_formulas,
+        maths=req.maths,
+        finding=req.finding,
+        # a finding is asked for by the reading it names: the crops
+        # that ran and filled nothing are not asked again. A reading
+        # no check names is the asker's own choice, over all of them
+        fixed_by=(
+            req.extractor if req.finding and req.extractor in quality.FIXING else None
+        ),
+        limit=req.limit,
+    )
     # the reading each document is asked for: the one named, or its fix
     unnamed = 0
-    try:
-        if req.extractor is not None:
-            got = request_groups(
-                con, {(req.extractor, req.mode): ids}, by=req.by, dry_run=req.dry_run
-            )
-        else:
-            named = {
-                d: fix for d, _, fix in store.finding_fixes(con, ids, str(req.finding))
-            }
-            pairs = []
-            for doc_id in ids:
-                fix = quality.Fix.of(named.get(doc_id))
-                if fix is None:
-                    unnamed += 1
-                else:
-                    pairs.append((doc_id, fix))
-            got = request_fixes(con, pairs, by=req.by, dry_run=req.dry_run)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    if req.extractor is not None:
+        got = request_groups(
+            con, {(req.extractor, req.mode): ids}, by=req.by, dry_run=req.dry_run
+        )
+    else:
+        named = {
+            d: fix for d, _, fix in store.finding_fixes(con, ids, str(req.finding))
+        }
+        pairs = []
+        for doc_id in ids:
+            fix = quality.Fix.of(named.get(doc_id))
+            if fix is None:
+                unnamed += 1
+            else:
+                pairs.append((doc_id, fix))
+        got = request_fixes(con, pairs, by=req.by, dry_run=req.dry_run)
     return {
         "selected": len(ids),
         "requested": sum(got["requested"].values()),

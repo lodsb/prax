@@ -141,8 +141,6 @@ def import_github(req: GitHubReq, request: Request) -> dict[str, Any]:
         raise HTTPException(400, f"not a GitHub repository: {req.url}")
     try:
         item = github.one(github.GitHub(token=github.token()), full)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except (RuntimeError, OSError) as exc:
         raise HTTPException(502, str(exc)) from exc
     con = _con(request)
@@ -157,11 +155,8 @@ def import_github(req: GitHubReq, request: Request) -> dict[str, Any]:
         meta=body["meta"],
     )
     doc_id = int(result["doc_id"])
-    try:
-        for d in req.domains or []:
-            store.add_domain(con, doc_id, d)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    for d in req.domains or []:
+        store.add_domain(con, doc_id, d)
     for old in before:
         if old != doc_id:
             store.retire_document(

@@ -15,7 +15,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ..base import _reading, hidden_documents
+from ..base import NotFound, _reading, hidden_documents
 from .events import RECORDED_AT
 from .people import DEPICTS
 
@@ -32,7 +32,7 @@ def _aliases(con: sqlite3.Connection, entity_id: int) -> tuple[int, str, list[in
         "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     canon = int(row[0])
     name = con.execute("SELECT name FROM entities WHERE id = ?", (canon,)).fetchone()
     ids = [
@@ -124,7 +124,7 @@ def picture_set(
             (key,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"no such event candidate: {key}")
+            raise NotFound(f"no such event candidate: {key}")
         ident, name = int(row[0]), str(row[1] or "")
         members = (
             "SELECT doc_id AS doc FROM event_candidate_photos WHERE candidate_id = ?"

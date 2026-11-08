@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from prax.errors import NotFound
 from prax.packs.base import Pack
 from prax.packs.computing import MANIFEST as COMPUTING
 from prax.packs.craft import MANIFEST as CRAFT
@@ -34,7 +35,7 @@ def by_name(name: str) -> Pack:
     for pack in PACKS:
         if pack.name == name:
             return pack
-    raise KeyError(f"no pack named {name!r}; the packs are {names()}")
+    raise NotFound(f"no pack named {name!r}; the packs are {names()}")
 
 
 def names() -> list[str]:

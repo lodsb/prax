@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any
 
 from ..base import (
+    NotFound,
     _read_archive,
     _reading,
     document_hidden,
@@ -107,7 +108,7 @@ def page_revision_text(con: sqlite3.Connection, slug: str, revision: int) -> str
         (_slug_of(con, slug), revision),
     ).fetchone()
     if row is None:
-        raise KeyError(f"no revision {revision} of page {slug!r}")
+        raise NotFound(f"no revision {revision} of page {slug!r}")
     return _read_archive(row["text_hash"]).decode("utf-8")
 
 

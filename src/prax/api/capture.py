@@ -53,10 +53,7 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
         raise HTTPException(400, "sensitivity on a write is personal, or none")
     if kept := store.door_written(req.meta):
         raise HTTPException(400, f"meta keys a client may not send: {kept}")
-    try:
-        store._check_domains(req.domains or [])
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    store._check_domains(req.domains or [])
     result = store.ingest_text(
         _con(request),
         req.text,
@@ -98,12 +95,8 @@ def projects_sync(req: ProjectSync, request: Request) -> dict[str, Any]:
 
     try:
         return projects.sync(_con(request), req.model_dump())
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
     except projects.NotAllowed as exc:
         raise HTTPException(403, str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(404, str(exc.args[0])) from exc
 
 
 @router.get("/projects")
@@ -136,8 +129,6 @@ def set_title(doc_id: int, req: TitleReq, request: Request) -> dict[str, Any]:
         out = store.retitle(con, doc_id, req.title, source=req.by)
     except KeyError as exc:
         raise HTTPException(404, str(exc).strip("'\"")) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
     return {**out, "url": ui_url(request, doc_id)}
 
 
@@ -149,25 +140,17 @@ class RetireReq(BaseModel):
 @router.post("/doc/{doc_id}/retire")
 def retire(doc_id: int, req: RetireReq, request: Request) -> dict[str, Any]:
     """Take a document out of search and the graph; row and bytes stay."""
-    try:
-        return store.retire_document(
-            _con(request),
-            doc_id,
-            reason=req.reason,
-            duplicate_of=req.duplicate_of,
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.retire_document(
+        _con(request),
+        doc_id,
+        reason=req.reason,
+        duplicate_of=req.duplicate_of,
+    )
 
 
 @router.delete("/doc/{doc_id}/retire")
 def unretire(doc_id: int, request: Request) -> dict[str, Any]:
-    try:
-        return store.unretire_document(_con(request), doc_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.unretire_document(_con(request), doc_id)
 
 
 @router.get("/cleanup")
@@ -183,12 +166,9 @@ def cleanup_preview(
     rule: str, request: Request, folder: str | None = None, limit: int = 30
 ) -> dict[str, Any]:
     """What a clean-up rule would retire, before it does (stage X)."""
-    try:
-        return store.cleanup_preview(
-            _con(request), rule, folder=folder, limit=max(1, min(limit, 200))
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.cleanup_preview(
+        _con(request), rule, folder=folder, limit=max(1, min(limit, 200))
+    )
 
 
 class CleanupReq(BaseModel):
@@ -198,10 +178,7 @@ class CleanupReq(BaseModel):
 @router.post("/cleanup/{rule}")
 def cleanup_retire(rule: str, req: CleanupReq, request: Request) -> dict[str, Any]:
     """Retire every document the rule picks, under one run name."""
-    try:
-        return store.retire_set(_con(request), rule, folder=req.folder)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.retire_set(_con(request), rule, folder=req.folder)
 
 
 class RestoreReq(BaseModel):
@@ -211,20 +188,14 @@ class RestoreReq(BaseModel):
 @router.post("/cleanup-restore")
 def cleanup_restore(req: RestoreReq, request: Request) -> dict[str, Any]:
     """Bring a clean-up's documents back, with the facts it ended."""
-    try:
-        return store.restore_set(_con(request), req.run)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.restore_set(_con(request), req.run)
 
 
 @router.get("/captures")
 def captures(url: str, request: Request) -> list[dict[str, Any]]:
     """The live captures of one URL (canonicalised here), oldest first:
     what an importer asks before fetching a link it may already hold."""
-    try:
-        inbox.check_url(url)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    inbox.check_url(url)
     return store.live_captures_of(_con(request), inbox.canonical_url(url))
 
 
@@ -305,25 +276,22 @@ def ingest_file(
         raise HTTPException(
             413, f"file over {max_upload() >> 20} MB (door.max_upload_mb)"
         )
-    try:
-        cap = inbox.ingest_upload(
-            _con(request),
-            data,
-            filename=file.filename,
-            mime=file.content_type,
-            title=title,
-            source_url=source_url,
-            domains=_split(domains),
-            tags=_split(tags),
-            session=session,
-            by=by or "upload",
-            paper=paper_info if isinstance(paper_info, dict) else None,
-            origin=origin_info if isinstance(origin_info, dict) else None,
-            text=text,
-            text_source=text_source,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    cap = inbox.ingest_upload(
+        _con(request),
+        data,
+        filename=file.filename,
+        mime=file.content_type,
+        title=title,
+        source_url=source_url,
+        domains=_split(domains),
+        tags=_split(tags),
+        session=session,
+        by=by or "upload",
+        paper=paper_info if isinstance(paper_info, dict) else None,
+        origin=origin_info if isinstance(origin_info, dict) else None,
+        text=text,
+        text_source=text_source,
+    )
     return _capture_out(cap, request)
 
 
@@ -373,22 +341,19 @@ class IngestUrl(BaseModel):
 def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
     """A page as the browser rendered it (the extension): archived and
     indexed through trafilatura at once."""
-    try:
-        cap = inbox.ingest_html(
-            _con(request),
-            req.html,
-            url=req.url,
-            title=req.title,
-            domains=req.domains,
-            tags=req.tags,
-            session=req.session,
-            mode=req.mode,
-            note=req.note,
-            video=req.video,
-            paper=req.paper,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    cap = inbox.ingest_html(
+        _con(request),
+        req.html,
+        url=req.url,
+        title=req.title,
+        domains=req.domains,
+        tags=req.tags,
+        session=req.session,
+        mode=req.mode,
+        note=req.note,
+        video=req.video,
+        paper=req.paper,
+    )
     return _capture_out(cap, request)
 
 

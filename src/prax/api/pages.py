@@ -127,8 +127,6 @@ def move_page(slug: str, req: MoveReq, request: Request) -> dict[str, Any]:
             note=req.note,
             dry_run=req.dry_run,
         )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -141,8 +139,6 @@ def rename_page(slug: str, req: RenameReq, request: Request) -> dict[str, Any]:
         return store.rename_page(
             _con(request), slug, req.slug, author=req.author, note=req.note
         )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -163,8 +159,6 @@ def split_page(slug: str, req: SplitReq, request: Request) -> dict[str, Any]:
             dry_run=req.dry_run,
             expected_text_hash=req.expected_text_hash,
         )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except (ValueError, PermissionError) as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -187,18 +181,13 @@ def page_parent(doc_id: int, req: ParentReq, request: Request) -> dict[str, Any]
     (``store.set_page_parent``); 409 for a cycle."""
     try:
         return store.set_page_parent(_con(request), doc_id, req.parent)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
 @router.get("/page/{slug}/revision/{revision}")
 def page_revision(slug: str, revision: int, request: Request) -> dict[str, Any]:
-    try:
-        text = store.page_revision_text(_con(request), slug, revision)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    text = store.page_revision_text(_con(request), slug, revision)
     return {"slug": slug, "revision": revision, "text": text}
 
 
@@ -233,30 +222,21 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
         job = _answer_new_blocks(con, written["slug"], req.text)
         written = {**written, "url": ui_url(request, int(written["doc_id"]))}
         return {**written, "job": job} if job is not None else written
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
 @router.post("/page/{slug}/append")
 def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
-    try:
-        appended = store.append_page(
-            _con(request),
-            slug,
-            req.section,
-            heading=req.heading,
-            author=req.author,
-            note=req.note,
-        )
-        return {**appended, "url": ui_url(request, int(appended["doc_id"]))}
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    appended = store.append_page(
+        _con(request),
+        slug,
+        req.section,
+        heading=req.heading,
+        author=req.author,
+        note=req.note,
+    )
+    return {**appended, "url": ui_url(request, int(appended["doc_id"]))}
 
 
 @router.put("/page/{slug}/section")
@@ -276,21 +256,14 @@ def put_section(slug: str, req: SectionReq, request: Request) -> dict[str, Any]:
             force=req.force,
         )
         return {**out, "url": ui_url(request, int(out["doc_id"]))}
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(409, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/project/{slug}/members")
 def add_member(slug: str, req: MemberReq, request: Request) -> dict[str, Any]:
     """``part_of`` edge from a document to a project page."""
-    try:
-        eid = store.add_to_project(_con(request), slug, req.doc_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    eid = store.add_to_project(_con(request), slug, req.doc_id)
     return {"edge_id": eid, "existing": eid is None}
 
 
@@ -347,12 +320,9 @@ def questions_list(request: Request) -> list[dict[str, Any]]:
 def questions_create(req: QuestionReq, request: Request) -> dict[str, Any]:
     """Keep an answer as a standing question: a page the door asks again
     when the library learns something (``schedule: questions``)."""
-    try:
-        return questions.create(
-            _con(request), req.result, slug=req.slug, options=req.options
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return questions.create(
+        _con(request), req.result, slug=req.slug, options=req.options
+    )
 
 
 @router.post("/questions/run")

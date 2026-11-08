@@ -52,26 +52,20 @@ def token_add(req: TokenReq, request: Request) -> dict[str, Any]:
     unknown = sorted(set(req.domains or []) - known)
     if unknown:
         raise HTTPException(400, f"unknown modules: {', '.join(unknown)}")
-    try:
-        secret = store.add_token(
-            _con(request),
-            req.name,
-            domains=req.domains,
-            personal=req.personal,
-            role=req.role,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    secret = store.add_token(
+        _con(request),
+        req.name,
+        domains=req.domains,
+        personal=req.personal,
+        role=req.role,
+    )
     return {"name": req.name, "secret": secret}
 
 
 @router.put("/tokens/{name}")
 def token_role(name: str, req: TokenRoleReq, request: Request) -> dict[str, Any]:
     """Change what a named token may do; its secret stays the same."""
-    try:
-        found = store.set_token_role(_con(request), name, req.role)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    found = store.set_token_role(_con(request), name, req.role)
     if not found:
         raise HTTPException(404, "no such token")
     return {"name": name, "role": req.role}
@@ -122,16 +116,13 @@ def documents_suspected(
     decided about, with their cues (``store.suspected_page``): the Review
     page's "personal?" list, without the referenced photos and recordings
     unless ``referenced``. A decision is ``PUT /doc/{id}/sensitivity``."""
-    try:
-        return store.suspected_page(
-            _con(request),
-            state=state,
-            offset=offset,
-            limit=limit,
-            referenced=referenced,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.suspected_page(
+        _con(request),
+        state=state,
+        offset=offset,
+        limit=limit,
+        referenced=referenced,
+    )
 
 
 @router.get("/media")
@@ -139,10 +130,7 @@ def media(request: Request, by: str = "folder", under: str = "") -> dict[str, An
     """The photos and recordings prax references, one level of a grouping
     (``store.media_groups``): a folder's folders, a year's months, or the
     events; with how many of each are suspected, open or personal."""
-    try:
-        got = store.media_groups(_con(request), by=by, under=under)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    got = store.media_groups(_con(request), by=by, under=under)
     return {**got, "counts": store.media_counts(_con(request))}
 
 
@@ -155,10 +143,7 @@ def media_pictures(
     limit: int = store.MEDIA_PAGE,
 ) -> dict[str, Any]:
     """One page of a group's photos and recordings, for the gallery."""
-    try:
-        return store.media_pictures(_con(request), by, key, offset=offset, limit=limit)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.media_pictures(_con(request), by, key, offset=offset, limit=limit)
 
 
 class MediaDecideReq(BaseModel):
@@ -171,10 +156,7 @@ class MediaDecideReq(BaseModel):
 def media_decide(req: MediaDecideReq, request: Request) -> dict[str, Any]:
     """A person's answer for a group (``store.decide_media``): released, or
     personal for good; what a person decided one by one stays."""
-    try:
-        return store.decide_media(_con(request), req.by, req.key, req.state)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.decide_media(_con(request), req.by, req.key, req.state)
 
 
 class MediaUndoReq(BaseModel):
@@ -197,10 +179,5 @@ def doc_sensitivity(
 ) -> dict[str, Any]:
     """Mark a document personal (hidden from the tokens that may not see
     it), or open it again."""
-    try:
-        was = store.set_sensitivity(_con(request), doc_id, req.state)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    was = store.set_sensitivity(_con(request), doc_id, req.state)
     return {"doc_id": doc_id, "state": req.state, "was": was}

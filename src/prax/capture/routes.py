@@ -25,6 +25,7 @@ from typing import Any
 
 from prax import models, store
 from prax.config import ConfigError
+from prax.errors import NotFound
 from prax.parsers.figures import UNCAPTIONED
 from prax.text import mimes
 
@@ -175,7 +176,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     ``{"kind": "promote"}``. Raises ``KeyError`` for no such document."""
     row = store.document_state(con, doc_id)
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = row["meta"]
     mime = row["mime"] or ""
     is_pdf = mime == "application/pdf"

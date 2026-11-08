@@ -23,6 +23,7 @@ from .base import (
     _INDEX_LOCK,
     _NOW,
     UNASSIGNED,
+    NotFound,
     Viewer,
     _indexes,
     _reading,
@@ -258,7 +259,7 @@ class Job:
         job.id = job_id
         row = con.execute("SELECT name FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if row is None:
-            raise KeyError(f"no job {job_id}")
+            raise NotFound(f"no job {job_id}")
         job.name = row["name"]
         return job
 
@@ -680,7 +681,7 @@ def finish_request(
         "SELECT state, tries FROM capture_requests WHERE id = ?", (request_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no capture request {request_id}")
+        raise NotFound(f"no capture request {request_id}")
     if row["state"] != "waiting":
         raise ValueError(f"capture request {request_id} is {row['state']}")
     if doc_id is not None:

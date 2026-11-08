@@ -96,10 +96,7 @@ def ingest_reference(req: ReferenceReq, request: Request) -> dict[str, Any]:
 def end_crawl(req: CrawlEnd, request: Request) -> dict[str, Any]:
     """A crawl that began at ``since`` (``/places/start``) is over: what it
     did not see under its root and prefix is gone."""
-    try:
-        return store.end_crawl(_con(request), req.root, req.since, req.prefix)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.end_crawl(_con(request), req.root, req.since, req.prefix)
 
 
 @router.get("/places")

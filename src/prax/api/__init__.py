@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from prax import config, store
 from prax.capture import inbox
+from prax.errors import NotFound
 from prax.host import schedule
 from prax.ml import embeddings
 from prax.wall import auth
@@ -215,6 +216,20 @@ def _say_auth() -> None:
 app = FastAPI(title="prax", version="0.0.1", lifespan=_lifespan)
 app.middleware("http")(auth.middleware)
 app.state.writes = 0
+
+
+@app.exception_handler(NotFound)
+async def _not_found(request: Request, exc: NotFound) -> JSONResponse:
+    """The store's "no such …", and the wall's "as if absent": 404 with
+    its message. A route that means another code catches it itself."""
+    return JSONResponse({"detail": str(exc)}, status_code=404)
+
+
+@app.exception_handler(ValueError)
+async def _refused(request: Request, exc: ValueError) -> JSONResponse:
+    """What the store refuses (a bad relation, an empty title, a cycle):
+    400 with its reason. A route that means 409 or 422 catches it itself."""
+    return JSONResponse({"detail": str(exc)}, status_code=400)
 
 
 SLOW_SECONDS = 2.0  # a request slower than this is logged with what else was on

@@ -34,7 +34,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ..base import _reading, _serialized, document_hidden, now, run_name
+from ..base import NotFound, _reading, _serialized, document_hidden, now, run_name
 from ..documents import mark_suspected
 from .edges import Edge, document_node, end_edge, link
 from .labels import PERSON, _relabel, add_label, merge_entities
@@ -195,7 +195,7 @@ def _person(
             (entity_id,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"no such entity: {entity_id}")
+            raise NotFound(f"no such entity: {entity_id}")
         if row["type"] not in person_types():
             raise ValueError(f"entity {entity_id} is a {row['type']}, not a person")
         return str(row["name"]), str(row["type"])
@@ -372,7 +372,7 @@ def unname_faces(
             )
         ]
         if not ids and not said_not:
-            raise KeyError(f"no live answers of run {run}")
+            raise NotFound(f"no live answers of run {run}")
         _faces(con, ids + said_not, gone=True)
         refusals = con.execute(
             "UPDATE face_refusals SET ended_at = ? WHERE run = ? AND ended_at IS NULL",
@@ -425,7 +425,7 @@ def _canonical_person(con: sqlite3.Connection, entity_id: int) -> sqlite3.Row:
         (entity_id,),
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     if row["type"] not in person_types():
         raise ValueError(f"entity {entity_id} is a {row['type']}, not a person")
     return row  # type: ignore[no-any-return]

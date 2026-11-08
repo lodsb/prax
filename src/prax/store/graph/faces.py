@@ -25,6 +25,7 @@ from typing import Any
 from prax.ml import matching
 
 from ..base import (
+    NotFound,
     _get_vectors,
     _reading,
     _serialized,
@@ -293,7 +294,7 @@ def _event_docs(
         (event_id,),
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such event: {event_id}")
+        raise NotFound(f"no such event: {event_id}")
     docs = frozenset(
         int(r[0])
         for r in con.execute(
@@ -415,7 +416,7 @@ def face_group(con: sqlite3.Connection, group_id: int) -> dict[str, Any]:
     or the viewer sees none of its faces."""
     faces = _group_faces(con, [group_id], hidden_documents(con))[group_id]
     if not faces:
-        raise KeyError(f"no such face group: {group_id}")
+        raise NotFound(f"no such face group: {group_id}")
     faces.sort(key=lambda f: f["verdict"] is not None)
     return {**_group_line(group_id, faces), "faces": faces}
 
@@ -601,7 +602,7 @@ def face_matches(
             "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (person,)
         ).fetchone()
         if canonical is None:
-            raise KeyError(f"no such entity: {person}")
+            raise NotFound(f"no such entity: {person}")
         rows = {int(canonical[0]): rows.get(int(canonical[0]), [])}
 
     def pictures(p: int) -> int:

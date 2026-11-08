@@ -10,6 +10,7 @@ from typing import Any
 from prax.text import blocks, markup, slugs
 
 from ..base import (
+    NotFound,
     _committing,
     _read_archive,
     _reading,
@@ -92,7 +93,7 @@ def _split_page(
         raise ValueError(f"author must be one of {PAGE_AUTHORS}")
     doc_id = page_id(con, slug)
     if doc_id is None or document_hidden(con, doc_id):
-        raise KeyError(f"no page {slug!r}")
+        raise NotFound(f"no page {slug!r}")
     row = con.execute(
         "SELECT p.slug, p.kind, d.title, d.text_hash FROM pages p"
         " JOIN documents d ON d.id = p.doc_id WHERE p.doc_id = ?",

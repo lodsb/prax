@@ -131,10 +131,7 @@ def work_now(req: NowReq) -> dict[str, Any]:
     and ``prax up`` gives it the card at its next look at the demand,
     unless an ask holds the card (``after_ask`` says so). The door
     supervises nothing; it says what is wanted, the supervisor acts."""
-    try:
-        return work.do_now(req.role, req.action)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return work.do_now(req.role, req.action)
 
 
 @router.get("/work/{step}")
@@ -143,16 +140,13 @@ def work_out(
 ) -> dict[str, Any]:
     """A leased batch of work: parse, titles, extract, embed, or the
     names of an entity type to resolve."""
-    try:
-        return work.hand_out(
-            _con(request),
-            step,
-            limit=limit,
-            scope=scope,
-            worker=_worker(request),
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return work.hand_out(
+        _con(request),
+        step,
+        limit=limit,
+        scope=scope,
+        worker=_worker(request),
+    )
 
 
 class WorkIn(BaseModel):
@@ -174,15 +168,12 @@ class WorkIn(BaseModel):
 @router.post("/work/{step}")
 def work_in(step: str, req: WorkIn, request: Request) -> dict[str, Any]:
     """The results of a batch, applied by the door."""
-    try:
-        return work.take_in(
-            _con(request),
-            step,
-            req.model_dump(exclude_none=True),
-            worker=_worker(request),
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return work.take_in(
+        _con(request),
+        step,
+        req.model_dump(exclude_none=True),
+        worker=_worker(request),
+    )
 
 
 @router.post("/vectors/merge")

@@ -63,20 +63,17 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
     src, src_type = _end(con, req.src, req.src_type, "src")
     dst, dst_type = _end(con, req.dst, req.dst_type, "dst")
     edge = store.Edge(src, src_type, req.rel, dst, dst_type)
-    try:
-        eid = store.link(
-            con,
-            edge,
-            confidence=req.confidence,
-            source_doc=req.source_doc,
-            evidence=req.evidence,
-            ontology_version=req.ontology_version,
-            producer=req.producer,
-            world_from=req.world_from,
-            world_to=req.world_to,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    eid = store.link(
+        con,
+        edge,
+        confidence=req.confidence,
+        source_doc=req.source_doc,
+        evidence=req.evidence,
+        ontology_version=req.ontology_version,
+        producer=req.producer,
+        world_from=req.world_from,
+        world_to=req.world_to,
+    )
     return {"edge_id": eid}
 
 
@@ -105,22 +102,19 @@ def traverse(
     ``page`` (a page's document id) and ``personal`` (hide, only) narrow
     the walk to the documents ``store.scope_documents`` names.
     """
-    try:
-        con = _con(request)
-        within = store.scope_documents(con, page=page, personal=personal or None)
-        return store.traverse_map(
-            _con(request),
-            entity,
-            hops,
-            limit,
-            type=type,
-            domain=domain or None,
-            as_of=as_of or None,
-            world_at=world_at or None,
-            within=within,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    con = _con(request)
+    within = store.scope_documents(con, page=page, personal=personal or None)
+    return store.traverse_map(
+        _con(request),
+        entity,
+        hops,
+        limit,
+        type=type,
+        domain=domain or None,
+        as_of=as_of or None,
+        world_at=world_at or None,
+        within=within,
+    )
 
 
 @router.get("/graph/changes")
@@ -142,22 +136,19 @@ def changes(
     that began and ended in it as their sources state; counts by relation
     and the newest facts of each side. Re-readings are left out unless
     ``rereadings``, a repair's corrections unless ``corrections``."""
-    try:
-        return store.changes(
-            _con(request),
-            since,
-            until or None,
-            world=world,
-            entity=entity or None,
-            rel=rel or None,
-            domain=domain or None,
-            derived=derived,
-            rereadings=rereadings,
-            corrections=corrections,
-            limit=limit,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.changes(
+        _con(request),
+        since,
+        until or None,
+        world=world,
+        entity=entity or None,
+        rel=rel or None,
+        domain=domain or None,
+        derived=derived,
+        rereadings=rereadings,
+        corrections=corrections,
+        limit=limit,
+    )
 
 
 @router.get("/graph/connect")
@@ -178,23 +169,20 @@ def connect(
     ``relations`` a comma-separated set a path may use; ``weak`` shows the
     paths past the line too; ``world_at`` walks the facts that hold in the
     world at that date, and the undated ones."""
-    try:
-        return store.connect_entities(
-            _con(request),
-            a,
-            b,
-            type_a=type_a or None,
-            type_b=type_b or None,
-            max_hops=max_hops,
-            relations=[r.strip() for r in relations.split(",") if r.strip()]
-            if relations
-            else None,
-            as_of=as_of or None,
-            world_at=world_at or None,
-            weak=weak,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.connect_entities(
+        _con(request),
+        a,
+        b,
+        type_a=type_a or None,
+        type_b=type_b or None,
+        max_hops=max_hops,
+        relations=[r.strip() for r in relations.split(",") if r.strip()]
+        if relations
+        else None,
+        as_of=as_of or None,
+        world_at=world_at or None,
+        weak=weak,
+    )
 
 
 @router.get("/edge/{edge_id}/why")
@@ -341,27 +329,24 @@ def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str
     if item is None:
         raise HTTPException(404, "no such review item")
     out: dict[str, Any] = {"ok": True}
-    try:
-        if req.resolution == "linked":
-            edge = store.Edge(
-                item["src"],
-                req.src_type or item["src_type"] or "",
-                req.rel or item["rel"],
-                item["dst"],
-                req.dst_type or item["dst_type"] or "",
-            )
-            out["edge_id"] = store.link(
-                con,
-                edge,
-                confidence=req.confidence,
-                source_doc=item["source_doc"],
-                evidence=item["evidence"],
-                producer="manual",
-                run=f"review-{review_id}",
-            )
-        store.resolve_review(con, review_id, req.resolution)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    if req.resolution == "linked":
+        edge = store.Edge(
+            item["src"],
+            req.src_type or item["src_type"] or "",
+            req.rel or item["rel"],
+            item["dst"],
+            req.dst_type or item["dst_type"] or "",
+        )
+        out["edge_id"] = store.link(
+            con,
+            edge,
+            confidence=req.confidence,
+            source_doc=item["source_doc"],
+            evidence=item["evidence"],
+            producer="manual",
+            run=f"review-{review_id}",
+        )
+    store.resolve_review(con, review_id, req.resolution)
     return out
 
 
@@ -389,18 +374,15 @@ def graph_overview(
     it to the documents ``store.scope_documents`` names; ``world_at`` keeps
     the facts that hold in the world at that date and the undated ones."""
     con = _con(request)
-    try:
-        within = store.scope_documents(con, page=page, personal=personal or None)
-        return store.hub_graph(
-            con,
-            limit=limit,
-            min_shared=min_shared,
-            domain=domain or None,
-            within=within,
-            world_at=world_at or None,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    within = store.scope_documents(con, page=page, personal=personal or None)
+    return store.hub_graph(
+        con,
+        limit=limit,
+        min_shared=min_shared,
+        domain=domain or None,
+        within=within,
+        world_at=world_at or None,
+    )
 
 
 class MarksReq(BaseModel):
@@ -416,12 +398,7 @@ def graph_marks(req: MarksReq, request: Request) -> dict[str, Any]:
     (``store.entity_marks``), so an expansion is sized and coloured as the
     overview's hubs are."""
     con = _con(request)
-    try:
-        within = store.scope_documents(
-            con, page=req.page, personal=req.personal or None
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    within = store.scope_documents(con, page=req.page, personal=req.personal or None)
     return {"marks": store.entity_marks(con, req.things, within=within)}
 
 
@@ -612,8 +589,6 @@ def graph_export(
     held = store.VIEWER.set(viewer) if viewer is not None else None
     try:
         body = "".join(graphio.export(con, seed))
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
     finally:
         if held is not None:
             store.VIEWER.reset(held)
@@ -648,10 +623,7 @@ async def graph_import(
 
     import anyio
 
-    try:
-        return await anyio.to_thread.run_sync(run)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return await anyio.to_thread.run_sync(run)
 
 
 @router.get("/graph/imports/likely")
@@ -724,15 +696,12 @@ def graph_events(
 ) -> dict[str, Any]:
     """Groups of photos taken close together, for a person to name as an
     event or set aside (``store.event_candidates_page``)."""
-    try:
-        return store.event_candidates_page(
-            _con(request),
-            state=state,
-            offset=max(0, offset),
-            limit=max(1, min(limit, 100)),
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.event_candidates_page(
+        _con(request),
+        state=state,
+        offset=max(0, offset),
+        limit=max(1, min(limit, 100)),
+    )
 
 
 @router.post("/graph/events/find")
@@ -752,23 +721,15 @@ def graph_event_decide(
 ) -> dict[str, Any]:
     """A person's answer: an event called ``name``, or not one
     (``store.decide_event``)."""
-    try:
-        return store.decide_event(
-            _con(request), candidate_id, event=req.event, name=req.name
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.decide_event(
+        _con(request), candidate_id, event=req.event, name=req.name
+    )
 
 
 @router.post("/graph/events/{candidate_id}/undo")
 def graph_event_undo(candidate_id: int, request: Request) -> dict[str, Any]:
     """A decision taken back: its facts ended, the group open again."""
-    try:
-        return store.undo_event(_con(request), candidate_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.undo_event(_con(request), candidate_id)
 
 
 @router.get("/graph/versions")
@@ -778,15 +739,12 @@ def graph_versions(
     """Pairs of documents that are probably versions of one work or one
     text twice, the most alike first, for a person to answer
     (``store.version_candidates``); answered ones with ``verdict``."""
-    try:
-        return store.version_candidates(
-            _con(request),
-            verdict=verdict or None,
-            offset=max(0, offset),
-            limit=max(1, min(limit, store.VERSIONS_PAGE)),
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.version_candidates(
+        _con(request),
+        verdict=verdict or None,
+        offset=max(0, offset),
+        limit=max(1, min(limit, store.VERSIONS_PAGE)),
+    )
 
 
 @router.post("/graph/versions/find")
@@ -805,31 +763,20 @@ def graph_version_decide(
 ) -> dict[str, Any]:
     """A person's answer: ``version``, ``copy`` or ``different``
     (``store.decide_version``)."""
-    try:
-        return store.decide_version(_con(request), candidate_id, req.verdict)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.decide_version(_con(request), candidate_id, req.verdict)
 
 
 @router.post("/graph/versions/{candidate_id}/undo")
 def graph_version_undo(candidate_id: int, request: Request) -> dict[str, Any]:
     """An answer taken back: its facts ended, a copy back, the pair open."""
-    try:
-        return store.undo_version(_con(request), candidate_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.undo_version(_con(request), candidate_id)
 
 
 @router.get("/graph/events/{candidate_id}/timeline")
 def graph_event_timeline(candidate_id: int, request: Request) -> dict[str, Any]:
     """A group's photos as its bursts, where a cut may go
     (``store.event_timeline``)."""
-    try:
-        return store.event_timeline(_con(request), candidate_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.event_timeline(_con(request), candidate_id)
 
 
 class EventCutReq(BaseModel):
@@ -842,24 +789,14 @@ def graph_event_split(
 ) -> dict[str, Any]:
     """A group split before the photos taken at ``at``, kept for every
     pass after (``store.split_event``)."""
-    try:
-        return store.split_event(_con(request), candidate_id, at=req.at)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.split_event(_con(request), candidate_id, at=req.at)
 
 
 @router.post("/graph/events/{candidate_id}/join")
 def graph_event_join(candidate_id: int, request: Request) -> dict[str, Any]:
     """A cut taken back: the group joins the one before it
     (``store.join_event``)."""
-    try:
-        return store.join_event(_con(request), candidate_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.join_event(_con(request), candidate_id)
 
 
 @router.get("/people")
@@ -873,12 +810,7 @@ def people(request: Request, q: str = "", limit: int = 50) -> list[dict[str, Any
 def person(entity_id: int, request: Request) -> dict[str, Any]:
     """A person's page: facts, documents, and what the pictures that depict
     them say (``store.person_page``)."""
-    try:
-        return store.person_page(_con(request), entity_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.person_page(_con(request), entity_id)
 
 
 @router.get("/pictures")
@@ -894,20 +826,15 @@ def pictures(
     """One page of a set of pictures, the gallery's (``store.picture_set``):
     a person's, an event's, an event candidate's or a place's. The
     administrator's, as the people and the events are."""
-    try:
-        return store.picture_set(
-            _con(request),
-            depicts=depicts,
-            event=event,
-            candidate=candidate,
-            place=place,
-            offset=offset,
-            limit=limit,
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.picture_set(
+        _con(request),
+        depicts=depicts,
+        event=event,
+        candidate=candidate,
+        place=place,
+        offset=offset,
+        limit=limit,
+    )
 
 
 class PersonRenameReq(BaseModel):
@@ -925,12 +852,7 @@ def person_rename(
     """A person called something else, the old name kept as what they are
     also known by (``store.rename_person``); ``POST /graph/unmerge`` with
     the run takes it back. Not a named token's route."""
-    try:
-        return store.rename_person(_con(request), entity_id, req.name)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.rename_person(_con(request), entity_id, req.name)
 
 
 @router.post("/people/{entity_id}/same")
@@ -938,9 +860,4 @@ def person_same(entity_id: int, req: PersonSameReq, request: Request) -> dict[st
     """Another entity is this person too, and folds into them
     (``store.merge_people``); ``POST /graph/unmerge`` with the run takes it
     back. Not a named token's route."""
-    try:
-        return store.merge_people(_con(request), req.other, entity_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.merge_people(_con(request), req.other, entity_id)

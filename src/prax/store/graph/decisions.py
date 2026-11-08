@@ -9,7 +9,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _NOW, _reading, _serialized, hidden_documents
+from ..base import _NOW, NotFound, _reading, _serialized, hidden_documents
 
 
 @_serialized
@@ -374,7 +374,7 @@ def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> 
         (resolution, review_id),
     )
     if cur.rowcount == 0:
-        raise KeyError(f"no such review item: {review_id}")
+        raise NotFound(f"no such review item: {review_id}")
     con.commit()
 
 

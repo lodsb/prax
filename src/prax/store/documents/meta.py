@@ -15,6 +15,7 @@ from ..base import (
     ASIDE_KINDS,
     DocumentMeta,
     MetaLike,
+    NotFound,
     _committing,
     _guards,
     _reading,
@@ -93,7 +94,7 @@ def get_meta(con: sqlite3.Connection, doc_id: int) -> DocumentMeta:
     """The document's ``meta`` JSON without touching the text artifact."""
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     return json.loads(row["meta"]) if row["meta"] else {}
 
 
@@ -130,7 +131,7 @@ def _set_meta(
         (json.dumps(meta), title, source_url, doc_id),
     )
     if cur.rowcount == 0:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     _refresh_document_field(con, doc_id)
 
 
@@ -335,7 +336,7 @@ def set_summary(
         raise ValueError("a summary cannot be empty")
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
     was = str(meta.get("summary") or "")
     code = keep_summary(meta, text, lang=lang)
@@ -385,7 +386,7 @@ def _retitle_document(
         "SELECT title, meta FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     old = row["title"] or ""
     if old == title:
         return None
@@ -731,7 +732,7 @@ def set_quality(
         "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     if row["text_hash"] != text_hash:
         return None  # a text that landed since: its own checks will run
     meta = json.loads(row["meta"] or "{}")
@@ -773,7 +774,7 @@ def set_sections(
         "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
     meta["sections"] = {
         "text_hash": row["text_hash"],
@@ -819,5 +820,5 @@ def set_mime(con: sqlite3.Connection, doc_id: int, mime: str) -> None:
     parser."""
     cur = con.execute("UPDATE documents SET mime = ? WHERE id = ?", (mime, doc_id))
     if cur.rowcount == 0:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     con.commit()

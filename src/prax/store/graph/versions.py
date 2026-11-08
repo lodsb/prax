@@ -48,7 +48,15 @@ from typing import Any
 
 from prax.text import arxiv, shingles
 
-from ..base import _ASIDE, _reading, _serialized, hidden_documents, now, run_name
+from ..base import (
+    _ASIDE,
+    NotFound,
+    _reading,
+    _serialized,
+    hidden_documents,
+    now,
+    run_name,
+)
 from ..documents import retire_document, unretire_document
 from ..retrieval import EXAMPLE_OF, in_order, work_versions, works_of
 from .edges import Edge, document_node, link, retire_run
@@ -311,7 +319,7 @@ def decide_version(
     ).fetchone()
     hidden = hidden_documents(con)
     if row is None or int(row["a"]) in hidden or int(row["b"]) in hidden:
-        raise KeyError(f"no such pair: {candidate_id}")
+        raise NotFound(f"no such pair: {candidate_id}")
     if row["verdict"]:
         raise ValueError(f"pair {candidate_id} is answered: {row['verdict']}")
     a, b = int(row["a"]), int(row["b"])
@@ -378,7 +386,7 @@ def undo_version(con: sqlite3.Connection, candidate_id: int) -> dict[str, Any]:
         "SELECT * FROM version_candidates WHERE id = ?", (candidate_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such pair: {candidate_id}")
+        raise NotFound(f"no such pair: {candidate_id}")
     ended = retire_run(con, run=row["run"]) if row["run"] else 0
     back = None
     if row["verdict"] == "copy":

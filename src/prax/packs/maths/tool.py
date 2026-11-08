@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from prax import config, store
+from prax.errors import NotFound
 
 RUNTIME = Path(__file__).with_name("runtime.py")
 TIMEOUT_S = 20.0
@@ -117,7 +118,7 @@ def formula_of(con: sqlite3.Connection, chunk_id: int) -> str:
     as absent)."""
     chunk = store.get_chunk(con, chunk_id)
     if chunk is None:
-        raise KeyError(f"no chunk {chunk_id}")
+        raise NotFound(f"no chunk {chunk_id}")
     data = chunk.get("data") or {}
     if chunk.get("kind") != "formula" or not data.get("latex"):
         raise ValueError(

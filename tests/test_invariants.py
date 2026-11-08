@@ -184,6 +184,7 @@ def test_the_mcp_server_is_a_thin_proxy() -> None:
 
 STORE_MAY_STAND_ON = (
     "prax.config",
+    "prax.errors",
     "prax.packs",  # the manifests: data (docs/packs.md)
     "prax.text",
     "prax.ml",

@@ -9,6 +9,7 @@ from typing import Any
 from prax.text import blocks, markup
 
 from ..base import (
+    NotFound,
     _committing,
     _read_archive,
     _serialized,
@@ -111,7 +112,7 @@ def _write_page(
     if existing is not None and document_hidden(con, int(existing["doc_id"])):
         # a restricted viewer writes to nothing it may not see: as if absent,
         # under the name it was asked by (not the one an old slug leads to)
-        raise KeyError(f"no page {asked!r}")
+        raise NotFound(f"no page {asked!r}")
     if expected_text_hash is not None and expected_text_hash != (
         existing["text_hash"] if existing is not None else ""
     ):
@@ -173,7 +174,7 @@ def _write_page(
     if under:
         above = page_id(con, under)
         if above is None:
-            raise KeyError(f"no page {under!r}")
+            raise NotFound(f"no page {under!r}")
         if above != doc_id:
             _set_page_parent(con, doc_id, above, by=author)
     return {
@@ -299,7 +300,7 @@ def _annotate(
         # one node per document, whatever links it (``document_node``)
         target_name, target_type = document_node(con, target)
     except KeyError:
-        raise KeyError(f"no such document to annotate: {target}") from None
+        raise NotFound(f"no such document to annotate: {target}") from None
     edge = Edge(*page, rel, target_name, target_type)
     if kind == "synthesis" and target_type != "page":
         _set_promote(con, target, by="page", reason=f"source of synthesis {slug}")
@@ -320,7 +321,7 @@ def _link_project(
         (slugify(part_of),),
     ).fetchone()
     if project is None:
-        raise KeyError(f"no project page {part_of!r}")
+        raise NotFound(f"no project page {part_of!r}")
     edge = Edge(*page, "part_of", project[0], "project")
     _page_link(con, edge, doc_id, slug, revision)
 
@@ -344,7 +345,7 @@ def _refuse_write(
         try:
             document_node(con, target)
         except KeyError:
-            raise KeyError(f"no such document to annotate: {target}") from None
+            raise NotFound(f"no such document to annotate: {target}") from None
     if part_of and (
         con.execute(
             "SELECT 1 FROM pages WHERE slug = ? AND kind = 'project'",
@@ -352,11 +353,11 @@ def _refuse_write(
         ).fetchone()
         is None
     ):
-        raise KeyError(f"no project page {part_of!r}")
+        raise NotFound(f"no project page {part_of!r}")
     if parent:
         above = page_id(con, parent)
         if above is None or document_hidden(con, above):
-            raise KeyError(f"no page {parent!r}")
+            raise NotFound(f"no page {parent!r}")
         if doc_id is not None and above != doc_id:
             _refuse_cycle(con, doc_id, above)
 
@@ -373,12 +374,12 @@ def _set_page_parent(
     if con.execute(
         "SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)
     ).fetchone() is None or document_hidden(con, doc_id):
-        raise KeyError(f"no such page: {doc_id}")
+        raise NotFound(f"no such page: {doc_id}")
     if parent is not None:
         if con.execute(
             "SELECT 1 FROM pages WHERE doc_id = ?", (parent,)
         ).fetchone() is None or document_hidden(con, parent):
-            raise KeyError(f"no such page: {parent}")
+            raise NotFound(f"no such page: {parent}")
         _refuse_cycle(con, doc_id, parent)
     meta = get_meta(con, doc_id)
     page = dict(meta.get("page") or {})
@@ -468,7 +469,7 @@ def fill_blocks(
     was filled."""
     page = get_page(con, slugify(slug))
     if page is None:
-        raise KeyError(f"no page {slug!r}")
+        raise NotFound(f"no page {slug!r}")
     text, report = blocks.fill(
         page["text"], fills, asked=asked, run=run, release=release
     )
@@ -512,7 +513,7 @@ def append_page(
     adds ``annotates`` edges to the documents the section rests on."""
     page = get_page(con, slugify(slug))
     if page is None:
-        raise KeyError(f"no page {slug!r}")
+        raise NotFound(f"no page {slug!r}")
     block = section.strip()
     if heading:
         block = f"## {heading}\n\n{block}"
@@ -567,7 +568,7 @@ def update_section(
     questions pass owns that block's interior (ValueError)."""
     page = get_page(con, slugify(slug))
     if page is None:
-        raise KeyError(f"no page {slug!r}")
+        raise NotFound(f"no page {slug!r}")
     old = page["text"]
     span = markup.section_span(old, heading)
     body = text.strip()
@@ -628,7 +629,7 @@ def add_to_project(
         (slugify(project_slug),),
     ).fetchone()
     if project is None:
-        raise KeyError(f"no project page {project_slug!r}")
+        raise NotFound(f"no project page {project_slug!r}")
     name, node_type = document_node(con, doc_id)
     is_page = node_type == "page"
     edge = Edge(name, node_type, "part_of", project["title"], "project")

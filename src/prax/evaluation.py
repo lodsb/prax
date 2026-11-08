@@ -28,6 +28,7 @@ from typing import Any
 import yaml
 
 from prax import config, store
+from prax.errors import NotFound
 from prax.importers import zotero
 from prax.ml import embeddings
 from prax.parsers import queue
@@ -127,7 +128,7 @@ class Resolver:
             ids.update(i for i, t in self.titles if rx.search(t))
         if not ids:
             wanted = query.expect or query.expect_title
-            raise KeyError(f"nothing resolves for {wanted} in this store")
+            raise NotFound(f"nothing resolves for {wanted} in this store")
         return ids
 
 

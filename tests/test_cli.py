@@ -223,9 +223,14 @@ def test_the_command_opens_no_database() -> None:
     assert "prax.store" not in loaded and "prax.api" not in loaded
     # the door's HTTP client, the names of the worker's steps (a module of
     # tuples, so that the --steps default is not a second list), and the
-    # packs' manifests those names read (data, docs/packs.md)
+    # packs' manifests those names read (data, docs/packs.md), and the
+    # errors a pack's lookup raises (a leaf: it imports nothing)
     packs = [m for m in loaded if m == "prax.packs" or m.startswith("prax.packs.")]
-    assert sorted(set(loaded) - set(packs)) == ["prax.client", "prax.steps"]
+    assert sorted(set(loaded) - set(packs)) == [
+        "prax.client",
+        "prax.errors",
+        "prax.steps",
+    ]
     assert "prax.packs.base" in packs
 
 

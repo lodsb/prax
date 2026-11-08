@@ -125,24 +125,21 @@ def search(
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
-    try:
-        hits = store.search(
-            con,
-            q,
-            limit,
-            kind=kind,
-            mode=mode,
-            rerank=rerank,
-            doctype=doctype,
-            domain=domain,
-            timing=timing,
-            published_since=published_since,
-            published_before=published_before,
-            include_stale=include_stale,
-            cite=brief,  # the agent's shape carries the passage's link
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    hits = store.search(
+        con,
+        q,
+        limit,
+        kind=kind,
+        mode=mode,
+        rerank=rerank,
+        doctype=doctype,
+        domain=domain,
+        timing=timing,
+        published_since=published_since,
+        published_before=published_before,
+        include_stale=include_stale,
+        cite=brief,  # the agent's shape carries the passage's link
+    )
     first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
     out: list[Any]
     if brief:
@@ -194,25 +191,22 @@ def documents(
     for), ``tag`` the documents carrying a tag (``project:synth``),
     ``genre`` and ``subject`` the documents labelled so (stage Z),
     ``since`` those added at that date or moment (UTC) or later."""
-    try:
-        return store.list_documents(
-            _con(request),
-            limit=limit,
-            offset=offset,
-            title=title,
-            source=source,
-            mime_prefix=mime,
-            retired=retired,
-            domain=domain or None,
-            tag=tag or None,
-            genre=genre or None,
-            subject=subject or None,
-            since=since or None,
-            published_since=published_since or None,
-            published_before=published_before or None,
-        )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.list_documents(
+        _con(request),
+        limit=limit,
+        offset=offset,
+        title=title,
+        source=source,
+        mime_prefix=mime,
+        retired=retired,
+        domain=domain or None,
+        tag=tag or None,
+        genre=genre or None,
+        subject=subject or None,
+        since=since or None,
+        published_since=published_since or None,
+        published_before=published_before or None,
+    )
 
 
 @router.get("/doc/{doc_id}/original")
@@ -272,10 +266,7 @@ def faces_page(
 ) -> dict[str, Any]:
     """Faces to look at with their crops, and their counts by score and
     size (``store.faces_page``). Not a named token's route."""
-    try:
-        return store.faces_page(_con(request), order=order, offset=offset, limit=limit)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.faces_page(_con(request), order=order, offset=offset, limit=limit)
 
 
 @router.get("/face/{face_id}/crop")
@@ -294,10 +285,7 @@ def face_crop(face_id: int, request: Request) -> FileResponse:
 @router.get("/face/{face_id}/similar")
 def face_similar(face_id: int, request: Request, k: int = 12) -> list[dict[str, Any]]:
     """The faces that look most like this one (``store.similar_faces``)."""
-    try:
-        return store.similar_faces(_con(request), face_id, k=max(1, min(k, 60)))
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.similar_faces(_con(request), face_id, k=max(1, min(k, 60)))
 
 
 @router.get("/faces/groups")
@@ -307,10 +295,7 @@ def face_groups(
     """The face groups with faces to name, each with its firmest open faces
     (``store.face_groups``, made by the facegroups pass); with ``event``,
     one event's pictures only. Not a named token's route."""
-    try:
-        return store.face_groups(_con(request), offset=offset, limit=limit, event=event)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.face_groups(_con(request), offset=offset, limit=limit, event=event)
 
 
 @router.get("/faces/matches")
@@ -320,12 +305,7 @@ def face_matches(
     """The open faces that are probably someone already named, by person
     (``store.face_matches``); with ``person``, that person's all. Not a
     named token's route."""
-    try:
-        return store.face_matches(
-            _con(request), offset=offset, limit=limit, person=person
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.face_matches(_con(request), offset=offset, limit=limit, person=person)
 
 
 class FaceNameReq(BaseModel):
@@ -355,40 +335,27 @@ class FaceUnnameReq(BaseModel):
 def face_name(req: FaceNameReq, request: Request) -> dict[str, Any]:
     """These faces are one person: each picture ``depicts`` them
     (``store.name_faces``). Not a named token's route."""
-    try:
-        return store.name_faces(
-            _con(request),
-            req.faces,
-            entity_id=req.entity_id,
-            name=req.name,
-            refused=req.refused,
-            matched=req.matched,
-        )
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.name_faces(
+        _con(request),
+        req.faces,
+        entity_id=req.entity_id,
+        name=req.name,
+        refused=req.refused,
+        matched=req.matched,
+    )
 
 
 @router.post("/faces/refuse")
 def face_refuse(req: FaceRefuseReq, request: Request) -> dict[str, Any]:
     """These faces are not this person: never offered as them again
     (``store.refuse_faces``). Not a named token's route."""
-    try:
-        return store.refuse_faces(_con(request), req.faces, entity_id=req.entity_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.refuse_faces(_con(request), req.faces, entity_id=req.entity_id)
 
 
 @router.post("/faces/judge")
 def face_judge(req: FaceJudgeReq, request: Request) -> dict[str, Any]:
     """These faces are no face, or nobody to name (``store.judge_faces``)."""
-    try:
-        return store.judge_faces(_con(request), req.faces, verdict=req.verdict)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.judge_faces(_con(request), req.faces, verdict=req.verdict)
 
 
 @router.post("/faces/unname")
@@ -397,21 +364,13 @@ def face_unname(req: FaceUnnameReq, request: Request) -> dict[str, Any]:
     (``store.unname_faces``)."""
     if (req.faces is None) == (req.run is None):
         raise HTTPException(400, "give faces or a run")
-    try:
-        return store.unname_faces(_con(request), req.faces, run=req.run)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.unname_faces(_con(request), req.faces, run=req.run)
 
 
 @router.get("/faces/groups/{group_id}")
 def face_group(group_id: int, request: Request) -> dict[str, Any]:
     """One face group with all its faces (``store.face_group``)."""
-    try:
-        return store.face_group(_con(request), group_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    return store.face_group(_con(request), group_id)
 
 
 def _photo_copy(request: Request, doc_id: int, which: str) -> FileResponse:

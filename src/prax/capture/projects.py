@@ -36,6 +36,7 @@ import sqlite3
 from typing import Any
 
 from prax import client, store
+from prax.errors import NotFound
 from prax.text import paths
 
 PLAN_SHOWN = 400  # plan rows returned; the counts are always whole
@@ -104,7 +105,7 @@ def _named_may(
     if (sensitivity and not viewer.personal) or any(
         v["doc_id"] in hidden for v in have.values()
     ):
-        raise KeyError(f"no such project: {name}")
+        raise NotFound(f"no such project: {name}")
     if dry_run:
         return
     if not held:

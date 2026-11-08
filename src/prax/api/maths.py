@@ -42,7 +42,3 @@ def maths(req: MathsReq, request: Request) -> dict[str, Any]:
         return tool.calculate(_con(request), body)
     except tool.MathsUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc

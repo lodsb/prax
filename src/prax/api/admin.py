@@ -31,20 +31,14 @@ def heal_findings(
 ) -> dict[str, Any]:
     """What is wrong with the store: each ailment, how many rows it finds
     and a few to look at. Reads only; `POST /heal` is what repairs."""
-    try:
-        return store.health(_con(request), only=_split(check), examples=examples)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.health(_con(request), only=_split(check), examples=examples)
 
 
 @router.post("/heal")
 def heal_apply(req: HealReq, request: Request) -> dict[str, Any]:
     """Repair what the named ailments find (every repairable one when none
     are named). Edges are invalidated, never deleted; the pass is a job."""
-    try:
-        return store.heal(_con(request), only=req.checks)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.heal(_con(request), only=req.checks)
 
 
 class MaintainReq(BaseModel):
@@ -82,10 +76,7 @@ def backup_start(req: BackupReq, request: Request) -> dict[str, Any]:
     for a disk too small for them). The copy runs on a thread of its own
     and is a job; poll ``GET /jobs/{id}`` for its progress and its last
     note."""
-    try:
-        return passes.start_backup(_con(request), req.dest, archive=req.archive)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return passes.start_backup(_con(request), req.dest, archive=req.archive)
 
 
 @router.get("/maintenance")

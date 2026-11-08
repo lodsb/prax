@@ -13,6 +13,7 @@ from prax.text import chunking
 from ..base import (
     _NOW,
     MetaLike,
+    NotFound,
     _read_archive,
     _reading,
     _serialized,
@@ -56,7 +57,7 @@ def retire_document(
     either with no current copy (``current_of``)."""
     meta = get_meta(con, doc_id)
     if duplicate_of is not None and get_meta(con, duplicate_of) is None:
-        raise KeyError(f"no such document: {duplicate_of}")
+        raise NotFound(f"no such document: {duplicate_of}")
     if duplicate_of is not None and doc_id in _replacements(con, duplicate_of):
         raise ValueError(
             f"document {duplicate_of} was retired into {doc_id}: unretire it first"

@@ -15,6 +15,7 @@ from prax.text import dates, mimes, quotes
 
 from ..base import (
     _NOW,
+    NotFound,
     _committing,
     _like_prefix,
     _read_archive,
@@ -370,7 +371,7 @@ def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
         (doc_id,),
     ).fetchone()
     if row is None or not row["title"] or document_hidden(con, doc_id):
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     title = str(row["title"])
     if not row["text_hash"] and (
         mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])
@@ -599,7 +600,7 @@ def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
         "SELECT canonical_id FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     return row["canonical_id"] or entity_id
 
 
@@ -624,7 +625,7 @@ def _invalidate_edge(
         (edge_id,),
     )
     if cur.rowcount == 0:
-        raise KeyError(f"no such currently valid edge: {edge_id}")
+        raise NotFound(f"no such currently valid edge: {edge_id}")
     if run is not None:
         con.execute(
             "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"

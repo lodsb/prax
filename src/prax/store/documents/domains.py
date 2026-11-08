@@ -12,6 +12,7 @@ from prax.graph import ontology
 
 from ..base import (
     MetaLike,
+    NotFound,
     _committing,
     _reading,
     _serialized,
@@ -39,7 +40,7 @@ def document_domains(con: sqlite3.Connection, doc_id: int) -> list[str] | None:
         (doc_id,),
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     return list(json.loads(row[0])) if row[0] else None
 
 
@@ -88,7 +89,7 @@ def set_domains(
     re-selects a document whose subset's version moved in its own time."""
     # a restricted viewer writes to nothing it may not see: as if absent
     if document_hidden(con, doc_id):
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = get_meta(con, doc_id)
     before = meta.get("domains")
     if not domains:  # an empty set is no set: every module
@@ -151,7 +152,7 @@ def request_extraction(
     (``extraction.apply``), history kept. Returns the stale record."""
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = json.loads(row["meta"]) if row["meta"] else {}
     gone = meta.pop("extraction", None)
     meta.pop("extraction_error", None)
@@ -524,7 +525,7 @@ def promote(
         is None
     )
     if missing or document_hidden(con, doc_id):  # hidden: as if absent
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     flag = _set_promote(con, doc_id, by=by, reason=reason)
     con.commit()
     return flag or get_meta(con, doc_id)["promote"]
@@ -736,7 +737,7 @@ def _set_sensitivity(
         "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
     decided: dict[str, Any] = {"state": state, "by": by, "at": now()}
     if run is not None:

@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from prax import parsers, store
+from prax.errors import NotFound
 from prax.parsers import figures
 
 MIN_CHARS = 200  # below this an extraction is "empty"
@@ -126,7 +127,7 @@ def parse_one(
     """
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     # a document may name its parser (a video capture: meta.parser), and
     # then only that one is tried: a wrong parse is worse than none
     extractor = extractor or doc["meta"].get("parser")
@@ -236,7 +237,7 @@ def apply_parse(
     is recorded under its stamp, ``meta.text_source`` stays the parser's."""
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     if error or text is None:
         _record(
             con, doc_id, {"extractor": stamp, "error": error or "no text"}, pages=pages

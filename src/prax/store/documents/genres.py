@@ -27,6 +27,7 @@ from typing import Any, Literal
 from prax.graph import ontology
 
 from ..base import (
+    NotFound,
     _read_archive,
     _reading,
     _serialized,
@@ -140,7 +141,7 @@ def set_genres(
     person's (ValueError). A person's labels over a model's keep the
     model's as ``meta.genres_model``."""
     if document_hidden(con, doc_id):
-        raise KeyError(f"no such document: {doc_id}")
+        raise NotFound(f"no such document: {doc_id}")
     meta = get_meta(con, doc_id)
     human = by == "human"
     if not human and meta.get("genres_by") == "human":

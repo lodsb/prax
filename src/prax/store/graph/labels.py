@@ -8,7 +8,7 @@ from typing import Any
 
 from prax.text import language
 
-from ..base import _NOW, _reading, _serialized, run_name
+from ..base import _NOW, NotFound, _reading, _serialized, run_name
 from ..documents import _refresh_document_field, _retitle_document
 from .edges import _entity_id, document_node
 
@@ -67,7 +67,7 @@ def merge_entities(
         )
     }
     if len(rows) != 2:
-        raise KeyError("no such entity")
+        raise NotFound("no such entity")
     if rows[duplicate_id]["type"] != rows[into_id]["type"] and not across_types:
         raise ValueError("entities of different types cannot be merged")
     survivor = rows[into_id]["canonical_id"] or into_id
@@ -455,7 +455,7 @@ def decide_pair(
         )
     }
     if len(rows) != 2:
-        raise KeyError("no such entity")
+        raise NotFound("no such entity")
     kinds = {rows[keep]["type"], rows[other]["type"]}
     etype = rows[keep]["type"] if len(kinds) == 1 else SPLIT
     run = None
@@ -510,7 +510,7 @@ def unmerge_entity(
         "SELECT id, type, canonical_id FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     survivor = row["canonical_id"]
     if survivor is None:
         raise ValueError("that entity is not merged into another")
@@ -664,7 +664,7 @@ def rename_entity(
         "SELECT name, type FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
-        raise KeyError(f"no such entity: {entity_id}")
+        raise NotFound(f"no such entity: {entity_id}")
     name = name.strip()
     if not name or name == row["name"]:
         return "unchanged"
