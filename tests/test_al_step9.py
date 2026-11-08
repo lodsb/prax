@@ -272,14 +272,13 @@ def test_a_repairs_corrections_are_counted_not_listed(con: Any) -> None:
     """G3: a day of ``changes`` was 2,609 facts, most of them part_of
     turned the right way round by a repair."""
     from prax import store
-    from prax.store.repair.common import _invalidate
 
     E = store.Edge
     learned = store.link(con, E("Paper A", "paper", "cites", "Paper B", "paper"))
     wrong = store.link(
         con, E("TU Munich", "organization", "part_of", "A chair", "organization")
     )
-    _invalidate(con, [wrong], run="heal:part_of-direction")
+    store.end_edges(con, [wrong], run="heal:part_of-direction")
     store.link(
         con,
         E("A chair", "organization", "part_of", "TU Munich", "organization"),

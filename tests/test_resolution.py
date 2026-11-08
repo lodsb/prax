@@ -304,29 +304,66 @@ def test_likely_pairs_are_the_close_names_a_block_at_a_time() -> None:
     assert resolution.likely_pairs(names[:1], emb) == []
 
 
-def test_invalidate_edge_with_successor(con: sqlite3.Connection) -> None:
+def test_correct_edge_ends_states_and_records_in_one_write(
+    con: sqlite3.Connection,
+) -> None:
+    """Correcting an edge is one act (structure review finding 4): the old
+    edge ended under the run, the new one stated from its document, and
+    which corrects which recorded, so ``restore_run`` undoes it whole."""
     doc = store.ingest_text(con, "evidence text", title="d")["doc_id"]
     old = store.link(
-        con, E("claim one", "claim", "supports", "claim two", "claim"), source_doc=doc
+        con,
+        E("claim one", "claim", "supports", "claim two", "claim"),
+        source_doc=doc,
+        evidence="first result",
+        world_from="2019",
     )
-    new = store.invalidate_edge(
+    new = store.correct_edge(
         con,
         old,
-        successor=E("claim one", "claim", "contradicts", "claim two", "claim"),
-        source_doc=doc,
+        E("claim one", "claim", "contradicts", "claim two", "claim"),
+        run="fix-1",
+        producer="test",
         evidence="later result",
     )
+    assert new is not None
     rows = store.traverse(con, "claim one", hops=1)
-    assert [r["edge_id"] for r in rows] == [new] and rows[0][
-        "evidence"
-    ] == "later result"
-    history = con.execute(
-        "SELECT id, valid_to IS NOT NULL AS ended FROM edges ORDER BY id"
-    ).fetchall()
-    assert [(r[0], r[1]) for r in history] == [(old, 1), (new, 0)]
+    assert [r["edge_id"] for r in rows] == [new]
+    assert rows[0]["evidence"] == "later result"
+    stated = con.execute(
+        "SELECT source_doc, world_from, run, confidence FROM edges WHERE id = ?", (new,)
+    ).fetchone()
+    assert tuple(stated) == (doc, "2019", "fix-1", "INFERRED")
+    assert store.corrections_of(con, old)["corrected_by"] == {
+        "edge_id": new,
+        "run": "fix-1",
+    }
+    # ended already: nothing to correct, and nothing written
+    assert (
+        store.correct_edge(
+            con, old, E("claim one", "claim", "refines", "claim two", "claim"), run="x"
+        )
+        is None
+    )
+    # a refused correction leaves the old edge as it was
+    with pytest.raises(ValueError):
+        store.correct_edge(
+            con,
+            new,
+            E("claim one", "claim", "authored_by", "claim two", "claim"),
+            run="y",
+        )
+    assert (
+        con.execute("SELECT valid_to FROM edges WHERE id = ?", (new,)).fetchone()[0]
+        is None
+    )
+    # the run undone: the correction ended, the old fact stated again
+    assert store.restore_run(con, "fix-1") == {"retired": 1, "restated": 1}
+    assert [r["rel"] for r in store.traverse(con, "claim one", hops=1)] == ["supports"]
     with pytest.raises(KeyError):
         store.invalidate_edge(con, old)  # already ended
-    assert store.invalidate_edge(con, new) is None
+    restated = store.traverse(con, "claim one", hops=1)[0]["edge_id"]
+    assert store.invalidate_edge(con, restated) is None
     assert store.traverse(con, "claim one", hops=1) == []
 
 

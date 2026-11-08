@@ -9967,3 +9967,39 @@ already done: `retitle` goes through `rename_entity`).
   beside the walk's `COLLATE NOCASE` one: making it NOCASE scans the
   entities, which the walk already does, and is a choice for
   stratification step 5.
+
+## 2026-11-08: one way to end an edge
+
+The third stage (`docs/eval/structure-review-2026-11-07.md`, finding 4).
+Part of it was done before: the page and project writes pass their run
+to `_invalidate_edge`, which records the ending, and `record_ending` was
+gone.
+
+- **`edges._end_edges(con, ids, *, run, corrected_by=None)`** is the one
+  place an edge is ended by id: the live ones, `UPDATE edges SET
+  valid_to`, and with a run the `edge_endings` rows. It does not commit.
+  `end_edge`, `end_edges` (a commit per `END_BATCH`, as before) and
+  `_invalidate_edge` (NotFound when the edge was not live) are on it;
+  three copies of the UPDATE and the endings insert are gone.
+- **`store.correct_edge(con, old_id, edge, *, run, producer,
+  confidence="INFERRED", evidence=None)`**: the new edge stated from the
+  old one's document, evidence and world dates, the old one ended under
+  the run with `corrected_by`, in one write. The two repairs that did it
+  as `_invalidate`, `link`, `record_correction` (three commits, a
+  failure between them leaving an ending that names no correction:
+  `part_of` turned round, an organization that is no venue) call it;
+  `record_correction` goes. `invalidate_edge`'s successor parameters,
+  which only a test used, go with it.
+- `repair.common._invalidate` (`len(end_edges(...))`) and `rules._end`
+  (`end_edges` under a second lock) are gone; their callers call
+  `end_edges`.
+- Left: the set-based endings stay one statement (`retire_run`,
+  `retire_reading`, `restore_run`'s own, `unmerge_run`'s), as the
+  review's check said. Still open: `_repair_entities` and `_repair_edges`
+  end without a run, so `restore_run` cannot undo them, and retiring a
+  document (`documents.library`) ends its edges unrecorded; each needs a
+  decision on what undoing it should mean.
+- `worlddates` links the dated fact first and then ends the undated one
+  with `corrected_by`: two commits, but a failure between leaves both
+  live, which the next pass sees as existing. Left as it is.
+

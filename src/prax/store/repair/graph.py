@@ -20,16 +20,16 @@ from ..graph import (
     Edge,
     _refresh_name,
     add_label,
+    correct_edge,
     document_node,
+    end_edges,
     entities_with_degree,
     entity_named_in,
     functional_breaches,
-    link,
     media_node_name,
     merge_entities,
     part_of_ancestry,
     part_of_suspects,
-    record_correction,
     rename_entity,
     set_aside_label,
     traverse_map,
@@ -38,7 +38,6 @@ from ..retrieval import term_documents
 from .common import (
     CAP,
     _entity_rows,
-    _invalidate,
     _live_edge_counts,
     _repair_entities,
     _with_edge_counts,
@@ -464,7 +463,7 @@ def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     done = 0
     for row in rows:
         if row["verdict"] == "misfit":
-            done += _invalidate(con, [int(row["id"])], run=HEAL_PRODUCER)
+            done += len(end_edges(con, [int(row["id"])], run=HEAL_PRODUCER))
             continue
         if row["verdict"] != "reversed":
             continue
@@ -475,25 +474,10 @@ def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
             onto.check_edge(turned.src_type, turned.rel, turned.dst_type)
         except ValueError:
             continue
-        old = con.execute(
-            "SELECT evidence, world_from, world_to FROM edges WHERE id = ?",
-            (row["id"],),
-        ).fetchone()
-        if not _invalidate(con, [int(row["id"])], run=HEAL_PRODUCER):
-            continue
-        new = link(
-            con,
-            turned,
-            confidence="INFERRED",
-            source_doc=row["source_doc"],
-            evidence=old["evidence"] if old else None,
-            producer=HEAL_PRODUCER,
-            run=HEAL_PRODUCER,
-            world_from=old["world_from"] if old else None,
-            world_to=old["world_to"] if old else None,
-        )
-        record_correction(con, int(row["id"]), HEAL_PRODUCER, int(new))
-        done += 1
+        if correct_edge(
+            con, int(row["id"]), turned, run=HEAL_PRODUCER, producer=HEAL_PRODUCER
+        ):
+            done += 1
     return done
 
 
@@ -661,22 +645,20 @@ def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
                     onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
                 except ValueError:
                     edge = None  # what it was meant to say does not fit: ended only
-            if not _invalidate(con, [int(e["id"])], run=NOT_VENUE_PRODUCER):
-                continue
             if edge is not None:
-                new = link(
-                    con,
-                    edge,
-                    confidence="INFERRED",
-                    source_doc=e["source_doc"],
-                    evidence=e["evidence"],
-                    producer=NOT_VENUE_PRODUCER,
-                    run=NOT_VENUE_PRODUCER,
-                    world_from=e["world_from"],
-                    world_to=e["world_to"],
+                fixed = (
+                    correct_edge(
+                        con,
+                        int(e["id"]),
+                        edge,
+                        run=NOT_VENUE_PRODUCER,
+                        producer=NOT_VENUE_PRODUCER,
+                    )
+                    is not None
                 )
-                record_correction(con, int(e["id"]), NOT_VENUE_PRODUCER, int(new))
-            done += 1
+            else:
+                fixed = bool(end_edges(con, [int(e["id"])], run=NOT_VENUE_PRODUCER))
+            done += fixed
     return done
 
 
@@ -1102,9 +1084,8 @@ def _repair_duplicate_facts(con: sqlite3.Connection, rows: list[dict[str, Any]])
     """End the later edges of each fact, the oldest kept: recorded under
     this repair's run (``edge_endings``), so ``restore_run`` states them
     again if it was wrong."""
-    return _invalidate(
-        con, [i for row in rows for i in row["later"]], run=DUPLICATES_PRODUCER
-    )
+    later = [i for row in rows for i in row["later"]]
+    return len(end_edges(con, later, run=DUPLICATES_PRODUCER))
 
 
 WIRE_LABELS_PRODUCER = "heal:wire-labels"

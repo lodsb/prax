@@ -86,15 +86,6 @@ def _entity_rows(
     )
 
 
-def _invalidate(
-    con: sqlite3.Connection, edge_ids: list[int], *, run: str | None = None
-) -> int:
-    """End edges; with ``run``, record each under it (``edge_endings``),
-    so ``store.restore_run`` can undo the repair that ended them. An edge
-    another pass ended first is not counted."""
-    return len(end_edges(con, edge_ids, run=run))
-
-
 def _edges_of_entities(con: sqlite3.Connection, ids: list[int]) -> list[int]:
     if not ids:
         return []
@@ -113,11 +104,11 @@ def _repair_entities(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int
     """End every live edge these entities carry. The entities themselves
     stay: an entity with no live edges is invisible, and its name is the
     record of what the extraction did."""
-    return _invalidate(con, _edges_of_entities(con, [r["id"] for r in rows]))
+    return len(end_edges(con, _edges_of_entities(con, [r["id"] for r in rows])))
 
 
 def _repair_edges(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
-    return _invalidate(con, [r["id"] for r in rows])
+    return len(end_edges(con, [r["id"] for r in rows]))
 
 
 def _repair_review(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:

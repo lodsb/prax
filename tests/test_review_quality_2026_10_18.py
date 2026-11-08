@@ -13,8 +13,6 @@ def test_1_a_repair_ends_its_edges_in_a_few_commits(con: Any) -> None:
     """Ending 1,711 duplicate facts committed twice an edge and held the
     write lock 11.4 s; a batch is one commit per ``END_BATCH`` edges, and
     every ending is still recorded for ``restore_run``."""
-    from prax.store.repair.common import _invalidate
-
     E = store.Edge
     ids = [
         store.link(con, E(f"Paper {n}", "paper", "cites", "Paper X", "paper"))
@@ -27,7 +25,7 @@ def test_1_a_repair_ends_its_edges_in_a_few_commits(con: Any) -> None:
         lambda sql: commits.append(sql) if sql.strip().upper() == "COMMIT" else None
     )
     try:
-        assert _invalidate(con, ids, run="heal:test") == 28
+        assert len(store.end_edges(con, ids, run="heal:test")) == 28
     finally:
         con.set_trace_callback(None)
     assert len(commits) == 1

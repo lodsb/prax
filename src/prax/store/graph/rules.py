@@ -341,11 +341,6 @@ def _sources_of(con: sqlite3.Connection, edge_ids: list[int]) -> dict[int, int |
 
 
 @_serialized
-def _end(con: sqlite3.Connection, edge_ids: list[int]) -> None:
-    end_edges(con, edge_ids)
-
-
-@_serialized
 def _renew(con: sqlite3.Connection, kept: dict[int, list[int]]) -> None:
     """A kept derivation's premises as the pass found them this time."""
     for eid, premises in kept.items():
@@ -415,7 +410,7 @@ def derive_rules(
             for k, ids in held.items()
             if k in plan and now_from.get(ids[0]) != sources.get(k)
         ]:
-            _end(con, held.pop(k))
+            end_edges(con, held.pop(k))
         # one edge stands for a pair; a second one a merge folded onto it
         # is ended with those that no longer follow
         have = {k: ids[0] for k, ids in held.items()}
@@ -440,7 +435,7 @@ def derive_rules(
             refused += got[1]
         gone = [eid for k, eid in have.items() if k not in plan] + doubled
         for i in range(0, len(gone), RULE_BATCH):
-            _end(con, gone[i : i + RULE_BATCH])
+            end_edges(con, gone[i : i + RULE_BATCH])
         kept = {eid: plan[k] for k, eid in have.items() if k in plan}
         kept_items = list(kept.items())
         for i in range(0, len(kept_items), RULE_BATCH):

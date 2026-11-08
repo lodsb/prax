@@ -47,7 +47,9 @@ and its item 5 is items 1 and 2 below.
    2026-11-08: `canonical_entity`, `alias_group`, `with_aliases`, one name
    lookup, `doc_node_ids`; still open: `senses` matches a name by case where
    the walk does not, and the page/project node split, finding 17); ending
-   and undoing edges (seven functions, four undos); the tried marks of the
+   and undoing edges (done 2026-11-08: `_end_edges` the one ending by id,
+   `correct_edge` one write; still open: the repairs that end without a
+   run, and a retired document's edges); the tried marks of the
    steps in one shape, with a migration. Then findings 8 to 56 by cost.
 1. (asked for by the clock from 2026-11-05) **AO's fixes, now the card
    runs.** The maths as text was read by marker on the night of

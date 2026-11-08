@@ -568,6 +568,38 @@ def document_edges_of(
     return [dict(r) for r in rows]
 
 
+def _end_edges(
+    con: sqlite3.Connection,
+    edge_ids: list[int],
+    *,
+    run: str | None,
+    corrected_by: int | None = None,
+) -> list[int]:
+    """End these edges where they are still live and, with ``run``, record
+    each ending (``edge_endings``, with the edge that corrects it where
+    there is one), so ``restore_run`` undoes the run whole. The one place
+    an edge is ended by id; does not commit. Returns the ids it ended."""
+    live = [
+        int(r[0])
+        for r in rows_in(
+            con,
+            "SELECT id FROM edges WHERE id IN ({ids}) AND valid_to IS NULL",
+            edge_ids,
+        )
+    ]
+    for i in range(0, len(live), END_BATCH):
+        part = live[i : i + END_BATCH]
+        marks = ",".join("?" * len(part))
+        con.execute(f"UPDATE edges SET valid_to = {_NOW} WHERE id IN ({marks})", part)
+    if run is not None:
+        con.executemany(
+            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at, corrected_by)"
+            f" VALUES (?, ?, {_NOW}, ?)",
+            [(e, run, corrected_by) for e in live],
+        )
+    return live
+
+
 @_serialized
 def end_edge(
     con: sqlite3.Connection,
@@ -576,22 +608,12 @@ def end_edge(
     run: str,
     corrected_by: int | None = None,
 ) -> bool:
-    """End a live edge for ``run`` and record it (``edge_endings``), with
-    the edge that corrects it where there is one, so ``restore_run``
-    undoes the run whole. False when the edge was not live."""
-    cur = con.execute(
-        f"UPDATE edges SET valid_to = {_NOW} WHERE id = ? AND valid_to IS NULL",
-        (edge_id,),
-    )
-    if cur.rowcount == 0:
-        return False
-    con.execute(
-        "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at, corrected_by)"
-        f" VALUES (?, ?, {_NOW}, ?)",
-        (edge_id, run, corrected_by),
-    )
+    """End a live edge for ``run`` and record it (``_end_edges``), with
+    the edge that corrects it where there is one. False when the edge was
+    not live."""
+    ended = _end_edges(con, [edge_id], run=run, corrected_by=corrected_by)
     con.commit()
-    return True
+    return bool(ended)
 
 
 # How many edges one commit of ``end_edges`` ends: a commit is an fsync,
@@ -610,28 +632,50 @@ def end_edges(
     another pass ended first is left out."""
     ended: list[int] = []
     for i in range(0, len(edge_ids), END_BATCH):
-        part = edge_ids[i : i + END_BATCH]
-        marks = ",".join("?" * len(part))
-        live = [
-            int(r[0])
-            for r in con.execute(
-                f"SELECT id FROM edges WHERE id IN ({marks}) AND valid_to IS NULL",
-                part,
-            )
-        ]
-        if not live:
-            continue
-        marks = ",".join("?" * len(live))
-        con.execute(f"UPDATE edges SET valid_to = {_NOW} WHERE id IN ({marks})", live)
-        if run is not None:
-            con.executemany(
-                "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
-                f" VALUES (?, ?, {_NOW})",
-                [(e, run) for e in live],
-            )
+        ended.extend(_end_edges(con, edge_ids[i : i + END_BATCH], run=run))
         con.commit()
-        ended.extend(live)
     return ended
+
+
+def _correct_edge(
+    con: sqlite3.Connection,
+    edge_id: int,
+    edge: Edge,
+    *,
+    run: str,
+    producer: str | None = None,
+    confidence: str = "INFERRED",
+    evidence: str | None = None,
+) -> int | None:
+    """End a live edge for ``run`` and state ``edge`` in its place, from
+    the old one's document, evidence (unless another is given) and world
+    dates, recording which corrects which (``edge_endings.corrected_by``,
+    migration 46; ``why`` shows it both ways). One write: a failure leaves
+    neither half. Returns the new edge's id, None when the old one was no
+    longer live; refuses (ValueError) what the ontology does not take."""
+    old = con.execute(
+        "SELECT source_doc, evidence, world_from, world_to FROM edges"
+        " WHERE id = ? AND valid_to IS NULL",
+        (edge_id,),
+    ).fetchone()
+    if old is None:
+        return None
+    new = _link(
+        con,
+        edge,
+        confidence=confidence,
+        source_doc=old["source_doc"],
+        evidence=evidence if evidence is not None else old["evidence"],
+        producer=producer,
+        run=run,
+        world_from=old["world_from"],
+        world_to=old["world_to"],
+    )
+    _end_edges(con, [edge_id], run=run, corrected_by=new)
+    return new
+
+
+correct_edge = _serialized(_committing(_correct_edge))
 
 
 @_reading
@@ -667,44 +711,16 @@ def alias_group(con: sqlite3.Connection, entity_id: int) -> tuple[int, list[int]
 
 
 def _invalidate_edge(
-    con: sqlite3.Connection,
-    edge_id: int,
-    *,
-    successor: Edge | None = None,
-    confidence: str = "EXTRACTED",
-    source_doc: int | None = None,
-    evidence: str | None = None,
-    producer: str | None = None,
-    run: str | None = None,
-) -> int | None:
-    """End an edge's validity now (``valid_to``), optionally inserting the
-    edge that supersedes it. The old edge stays as history (invariant 8).
-    With ``run``, the run that ended it is recorded (``edge_endings``) as
-    ``end_edges`` records it, so ``restore_run`` undoes a page's revision
-    or a project's sync whole. Returns the successor's id."""
-    cur = con.execute(
-        f"UPDATE edges SET valid_to = {_NOW} WHERE id = ? AND valid_to IS NULL",
-        (edge_id,),
-    )
-    if cur.rowcount == 0:
+    con: sqlite3.Connection, edge_id: int, *, run: str | None = None
+) -> None:
+    """End an edge's validity now (``valid_to``); the old edge stays as
+    history (invariant 8). With ``run``, the ending is recorded
+    (``_end_edges``), so ``restore_run`` undoes a page's revision or a
+    project's sync whole. NotFound when the edge was not live: a write
+    that means to end it says so (``end_edge`` answers False instead).
+    Correcting an edge is ``correct_edge``."""
+    if not _end_edges(con, [edge_id], run=run):
         raise NotFound(f"no such currently valid edge: {edge_id}")
-    if run is not None:
-        con.execute(
-            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
-            f" VALUES (?, ?, {_NOW})",
-            (edge_id, run),
-        )
-    if successor is None:
-        return None
-    return link(
-        con,
-        successor,
-        confidence=confidence,
-        source_doc=source_doc,
-        evidence=evidence,
-        producer=producer,
-        run=run,
-    )
 
 
 invalidate_edge = _serialized(_committing(_invalidate_edge))
@@ -784,19 +800,6 @@ def edge_hidden(con: sqlite3.Connection, edge_id: int) -> bool:
     if row[0] is not None and int(row[0]) in hidden:
         return True
     return bool(hidden_by_premise(con, [edge_id], hidden))
-
-
-@_serialized
-def record_correction(
-    con: sqlite3.Connection, edge_id: int, run: str, corrected_by: int
-) -> None:
-    """Note that the edge ``run`` ended is corrected by ``corrected_by``,
-    the edge the run wrote in its place (migration 46)."""
-    con.execute(
-        "UPDATE edge_endings SET corrected_by = ? WHERE edge_id = ? AND run = ?",
-        (corrected_by, edge_id, run),
-    )
-    con.commit()
 
 
 @_reading

@@ -51,7 +51,6 @@ from .common import (  # noqa: F401
     Ailment,
     _edges_of_entities,
     _entity_rows,
-    _invalidate,
     _live_edge_counts,
     _repair_edges,
     _repair_entities,
