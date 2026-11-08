@@ -10,7 +10,7 @@ from prax.text import language
 
 from ..base import _NOW, NotFound, _reading, _serialized, run_name
 from ..documents import _refresh_document_field, _retitle_document
-from .edges import _entity_id, document_node
+from .edges import _entity_id, canonical_entity, document_node
 
 PERSON = "human"  # who a decision on the review page is signed by
 SPLIT = "split-names"  # the type a pair of two unrelated types is filed under
@@ -267,13 +267,9 @@ def keep_printed(
         or said.casefold() == " ".join(name.split()).casefold()
     ):
         return 0
-    eid = _entity_id(con, name, etype)
-    row = con.execute(
-        "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (eid,)
-    ).fetchone()
     return add_label(
         con,
-        int(row[0]),
+        canonical_entity(con, _entity_id(con, name, etype)),
         said,
         lang=lang,
         kind="alt",

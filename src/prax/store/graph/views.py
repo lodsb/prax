@@ -14,9 +14,17 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import names
 
-from ..base import _guards, _reading, domain_clause, hidden_documents, live, rows_in
-from .edges import held_in_world, hidden_by_premise
-from .lookups import entity_named_in
+from ..base import (
+    NotFound,
+    _guards,
+    _reading,
+    domain_clause,
+    hidden_documents,
+    live,
+    rows_in,
+)
+from .edges import doc_node_ids, held_in_world, hidden_by_premise, with_aliases
+from .lookups import entity_answering, entity_named_in
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
 
@@ -263,14 +271,9 @@ def entity_marks(
     hidden = hidden_documents(con)
     out: list[dict[str, Any]] = []
     for name, etype in things[:MARKED]:
-        row = con.execute(
-            "SELECT COALESCE(canonical_id, id) FROM entities"
-            " WHERE name = ? AND type = ?",
-            (name, etype),
-        ).fetchone()
-        if row is None:
+        cid = entity_answering(con, name, etype)
+        if cid is None:
             continue
-        cid = int(row[0])
         docs = {
             int(r[0])
             for side in ("src", "dst")
@@ -316,14 +319,17 @@ def document_edges(
     own entity's first, at most ``limit``. The way from a document page
     into the graph (niggles.txt: "per document maybe a link into its
     subgraph")."""
+    try:
+        node = doc_node_ids(con, doc_id)
+    except NotFound:  # no title yet, so no node
+        node = []
     rows = con.execute(
         """
         SELECT x.id AS edge_id, s.name AS src, s.type AS src_type, x.rel,
                t.name AS dst, t.type AS dst_type, x.confidence, x.source_doc,
                x.evidence, x.producer, x.run, 1 AS hop,
-               (s0.name = d.title) AS own
+               (x.src IN (SELECT value FROM json_each(?))) AS own
         FROM edges x
-        JOIN documents d ON d.id = x.source_doc
         JOIN entities s0 ON s0.id = x.src
         JOIN entities t0 ON t0.id = x.dst
         JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
@@ -331,7 +337,7 @@ def document_edges(
         WHERE x.source_doc = ? AND x.valid_to IS NULL
         ORDER BY own DESC, x.id LIMIT ?
         """,
-        (doc_id, max(1, limit)),
+        (json.dumps(node), doc_id, max(1, limit)),
     ).fetchall()
     return [{k: v for k, v in dict(r).items() if k != "own"} for r in rows]
 
@@ -348,12 +354,7 @@ def _sides(con: sqlite3.Connection, ids: list[int]) -> dict[int, dict[str, Any]]
         ).fetchone()
         if row is None:
             continue
-        group = [eid] + [
-            int(r[0])
-            for r in con.execute(
-                "SELECT id FROM entities WHERE canonical_id = ?", (eid,)
-            )
-        ]
+        group = sorted(with_aliases(con, [eid]))
         marks = ",".join("?" * len(group))
         edges = sum(
             con.execute(

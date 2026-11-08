@@ -26,7 +26,7 @@ from typing import Any
 from prax.graph import ontology
 
 from ..base import VIEWER, NotFound, _reading, hidden_documents, store_state
-from .edges import hidden_by_premise
+from .edges import alias_group, hidden_by_premise
 from .events import RECORDED_AT
 
 PERSON_TYPE = "person"
@@ -43,24 +43,6 @@ def person_types() -> list[str]:
     """``person`` and every type under it (an author is a person)."""
     onto = ontology.current()
     return sorted(t for t in onto.types if onto.is_a(t, PERSON_TYPE))
-
-
-def _group(con: sqlite3.Connection, entity_id: int) -> tuple[int, list[int]]:
-    """The canonical entity and its alias group, or KeyError."""
-    row = con.execute(
-        "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (entity_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such entity: {entity_id}")
-    canon = int(row[0])
-    ids = [
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM entities WHERE id = ? OR canonical_id = ? ORDER BY id",
-            (canon, canon),
-        )
-    ]
-    return canon, ids
 
 
 def _own_facts(
@@ -176,7 +158,7 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
     Raises KeyError for an entity that is not there or that the viewer
     may not see (no visible fact speaks of it), and ValueError for one
     that is not a person."""
-    canon, ids = _group(con, entity_id)
+    canon, ids = alias_group(con, entity_id)
     row = con.execute(
         "SELECT id, name, type FROM entities WHERE id = ?", (canon,)
     ).fetchone()

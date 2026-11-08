@@ -37,6 +37,7 @@ from ..base import (
 )
 from ..documents import _checked_face, _put_meta, get_meta
 from ..retrieval import FACES_PAGE, face_index_path, face_model, match_settings
+from .edges import canonical_entity
 from .events import RECORDED_AT
 from .naming import LIVE_ANSWER, _carry_answers
 
@@ -598,12 +599,8 @@ def face_matches(
         if m.similarity >= line and m.margin >= margin:
             rows.setdefault(m.person, []).append(item)
     if person is not None:
-        canonical = con.execute(
-            "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (person,)
-        ).fetchone()
-        if canonical is None:
-            raise NotFound(f"no such entity: {person}")
-        rows = {int(canonical[0]): rows.get(int(canonical[0]), [])}
+        canon = canonical_entity(con, person)
+        rows = {canon: rows.get(canon, [])}
 
     def pictures(p: int) -> int:
         return len({doc for _, doc, _, _ in rows[p]})

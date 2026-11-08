@@ -98,9 +98,11 @@ from .edges import (  # noqa: F401
     _link,
     _said_openly,
     _subset_version_case,
+    alias_group,
     backfill_provenance,
     canonical_entity,
     corrections_of,
+    doc_node_ids,
     document_edges_of,
     document_node,
     edge_hidden,
@@ -124,6 +126,7 @@ from .edges import (  # noqa: F401
     retire_run,
     run_edges,
     select_for_extraction,
+    with_aliases,
 )
 from .events import (  # noqa: F401
     EVENT_BURST_HOURS,

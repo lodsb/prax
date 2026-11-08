@@ -388,6 +388,7 @@ from .graph import (  # noqa: F401
     _second_hop,
     add_foreign_labels,
     add_label,
+    alias_group,
     answered_names,
     apply_faces,
     apply_place,
@@ -412,6 +413,7 @@ from .graph import (  # noqa: F401
     derive_rules,
     described_devices,
     display_language,
+    doc_node_ids,
     document_context,
     document_edges,
     document_edges_of,
@@ -551,6 +553,7 @@ from .graph import (  # noqa: F401
     unname_faces,
     version_candidates,
     versions_of,
+    with_aliases,
 )
 from .jobs import (  # noqa: F401
     JOB_DEAD_SECONDS,

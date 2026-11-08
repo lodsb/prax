@@ -107,6 +107,48 @@ def test_merge_rules(con: sqlite3.Connection) -> None:
         store.merge_entities(con, 999, smith)
 
 
+def test_one_answer_to_which_entity(con: sqlite3.Connection) -> None:
+    """The canonical id, the alias group and the name lookup have one owner
+    each: any row of a group answers with the same survivor and the same
+    group, a read follows a folded name to it, and link keeps writing to
+    the row it names."""
+    _graph(con)
+    ids = {
+        str(r[0]): int(r[1])
+        for r in con.execute("SELECT name, id FROM entities WHERE type = 'author'")
+    }
+    smith, jos, iii = (
+        ids["Julius O. Smith"],
+        ids["J. O. Smith"],
+        ids["julius o smith iii"],
+    )
+    store.merge_entities(con, jos, smith)
+    store.merge_entities(con, iii, smith)
+    group = sorted([smith, jos, iii])
+    for row in group:
+        assert store.alias_group(con, row) == (smith, group)
+    assert store.with_aliases(con, [smith]) == set(group)
+    assert store.with_aliases(con, [jos]) == {jos}  # a fold holds nothing
+    with pytest.raises(store.NotFound):
+        store.alias_group(con, 999)
+    # a read follows the folded name to its survivor ...
+    assert store.entity_answering(con, "J. O. Smith", "author") == smith
+    assert store.entity_answering(con, "J. O. Smith", "concept") is None
+    # ... and a link written under it lands on the row it names
+    store.link(con, E("Paper E", "paper", "authored_by", "J. O. Smith", "author"))
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges e JOIN entities d ON d.id = e.dst"
+            " WHERE d.id = ? AND e.valid_to IS NULL",
+            (jos,),
+        ).fetchone()[0]
+        == 2
+    )
+    # a label only one unmerged entity carries answers for it
+    store.add_label(con, smith, "Smith, Julius")
+    assert store.entity_answering(con, "smith, julius", "author") == smith
+
+
 def test_concept_method_twins_merge_into_the_method(con: sqlite3.Connection) -> None:
     store.link(con, E("P", "paper", "about", "empirical mode decomposition", "concept"))
     store.link(con, E("Q", "paper", "uses", "Empirical Mode Decomposition", "method"))

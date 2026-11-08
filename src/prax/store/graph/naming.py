@@ -36,7 +36,7 @@ from typing import Any
 
 from ..base import NotFound, _reading, _serialized, document_hidden, now, run_name
 from ..documents import mark_suspected
-from .edges import Edge, document_node, end_edge, link
+from .edges import Edge, canonical_entity, document_node, end_edge, link
 from .labels import PERSON, _relabel, add_label, merge_entities
 from .people import DEPICTS, person_types
 
@@ -311,12 +311,7 @@ def refuse_faces(
     ``entity_id`` and how many ``faces`` were newly refused."""
     faces = sorted(_faces(con, face_ids))
     _person(con, entity_id, None)
-    person = int(
-        con.execute(
-            "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?",
-            (entity_id,),
-        ).fetchone()[0]
-    )
+    person = canonical_entity(con, entity_id)
     run = _run("match")
     written = _refuse(con, faces, person, by, run)
     con.commit()

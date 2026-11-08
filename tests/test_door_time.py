@@ -151,7 +151,7 @@ def test_a_documents_links_are_found_through_its_aliases(
         _id(con, "Elsewhere", "paper"),
         across_types=True,
     )
-    got = context._linked_documents(con, "Notes", limit=10)
+    got = context._linked_documents(con, store.doc_node_ids(con, doc), limit=10)
     assert sorted((x["rel"], x["title"]) for x in got["out"]) == [
         ("links_to", "Other"),
         ("supersedes", "Older"),

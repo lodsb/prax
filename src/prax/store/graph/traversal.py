@@ -24,6 +24,7 @@ from .edges import (
     held_at,
     held_in_world,
     hidden_by_premise,
+    with_aliases,
 )
 
 MAX_HOPS = 2
@@ -247,12 +248,7 @@ def senses(con: sqlite3.Connection, name: str) -> list[dict[str, Any]]:
         # its edges read once, each end through its own index: an OR of the
         # two, asked again for the domains, was 200-400 ms in front of every
         # walk of a well-connected name
-        group = [
-            int(r[0])
-            for r in con.execute(
-                "SELECT id FROM entities WHERE id = ? OR canonical_id = ?", (cid, cid)
-            )
-        ]
+        group = sorted(with_aliases(con, [cid]))
         marks = ",".join("?" * len(group))
         edges = {
             int(r[0]): r[1]
@@ -742,14 +738,7 @@ def _entity_ids(con: sqlite3.Connection, name: str) -> list[int]:
             sorted(ids),
         )
     }
-    marks = ",".join("?" * len(canon))
-    ids |= canon | {
-        int(r[0])
-        for r in con.execute(
-            f"SELECT id FROM entities WHERE canonical_id IN ({marks})", sorted(canon)
-        )
-    }
-    return sorted(ids)
+    return sorted(ids | with_aliases(con, canon))
 
 
 # a world date meets a period when their spans meet: "2026" meets

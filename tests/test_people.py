@@ -195,3 +195,38 @@ def test_the_people_list_and_the_routes(
     place = _entity(con, "Aldmouth", "place")
     assert client.get(f"/people/{place}").status_code == 400
     assert client.get("/people/999999").status_code == 404
+
+
+def test_a_picture_page_shows_what_its_node_says(con: sqlite3.Connection) -> None:
+    """A picture's node is its file and number, not its title, so its page
+    finds its facts through ``doc_node_ids`` (structure review finding 28):
+    a match on the title found none of them."""
+    picture = _picture(con, 7, "2019-05-03T10:00:00")
+    _depicts(con, picture, "Ada Quill")
+    node = store.doc_node_ids(con, picture)
+    assert node == [_entity(con, store.document_node(con, picture)[0], "document")]
+    ctx = store.document_context(con, picture)
+    assert ctx is not None
+    assert [(e["rel"], e["name"]) for e in ctx["entities"]] == [
+        ("depicts", "Ada Quill")
+    ]
+    edges = store.document_edges(con, picture)
+    assert edges and edges[0]["rel"] == "depicts"
+
+
+def test_a_recipe_page_lists_its_citations(con: sqlite3.Connection) -> None:
+    """Citations were looked up on a ``paper`` node only, so a recipe's or a
+    datasheet's were empty."""
+    cake = int(store.ingest_text(con, "apple cake " * 40, title="Apple cake")["doc_id"])
+    tart = int(store.ingest_text(con, "apple tart " * 40, title="Apple tart")["doc_id"])
+    store.link(
+        con,
+        Edge("Apple cake", "recipe", "cites", "Apple tart", "recipe"),
+        source_doc=cake,
+    )
+    ctx = store.document_context(con, cake)
+    assert ctx is not None
+    assert [c["doc_id"] for c in ctx["cites"]] == [tart]
+    back = store.document_context(con, tart)
+    assert back is not None
+    assert [c["doc_id"] for c in back["cited_by"]] == [cake]

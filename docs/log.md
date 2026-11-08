@@ -9926,3 +9926,44 @@ Step 3 of the structure review's order, its first concept (findings 8,
 
 29 files, 344 lines in and 253 out (the docstrings and two tests are
 most of the difference); 1,762 passing, 4 skipped, UI 89.
+
+## 2026-11-08: one owner of which entity a name means
+
+The second stage of the structure review's "one owner per concept"
+(`docs/eval/structure-review-2026-11-07.md`, findings 3, 28, 29; 7 was
+already done: `retitle` goes through `rename_entity`).
+
+- **`store.canonical_entity(con, id)`** (it existed, only a test called
+  it) replaces six inline `SELECT COALESCE(canonical_id, id) FROM
+  entities WHERE id = ?` (faces, imports, labels, naming, people,
+  pictures), each with its own miss.
+- **`store.alias_group(con, id) -> (canon, ids)`** and
+  **`store.with_aliases(con, ids)`** (the rows folded into these, through
+  `rows_in`) replace three private group helpers of three shapes
+  (`imports._group`, `people._group`, `pictures._aliases` and
+  `_with_aliases`) and the inline groups of `_said_openly`, `senses`,
+  `_entity_ids` and the review page's `_sides`.
+- **`edges._named(con, name, type, follow=)`** is the one name lookup:
+  the entity called that, else the one unmerged entity of the type
+  carrying it as a label. `_entity_id` (what `link` writes to: the row,
+  `follow=False`) and `entity_answering` (a read: its survivor) held the
+  same fifteen lines. The graph view's marks (`views`, the hubs) asked
+  without the label fallback and now call `entity_answering`, so a
+  renamed entity is found there too.
+- **`store.doc_node_ids(con, doc_id)`**: the entities that are a
+  document, by `document_node`'s name, of any document type, unmerged,
+  with their folds (one of that name merged into another thing is that
+  thing's, as `_linked_documents` already held). The document page (`document_context`:
+  its own facts, cites, cited by, notes, members, linked documents) and
+  `document_edges` ask by these ids instead of `entity.name =
+  documents.title`. Two things this fixes: a text-less picture's node is
+  its file and number, so its page showed none of its `depicts`,
+  `taken_in` or `recorded_at`; and citations were looked up on a `paper`
+  node only, so a recipe's or a datasheet's were empty. A concept that
+  shares a document's title is no longer counted as the document.
+- Left as they were: the set-based title joins (`document_facts` over
+  many documents, `paths`' briefing pages, `pages.tree`, whose page and
+  project nodes are finding 17), and `senses`' case-sensitive name match
+  beside the walk's `COLLATE NOCASE` one: making it NOCASE scans the
+  entities, which the walk already does, and is a choice for
+  stratification step 5.

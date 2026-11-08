@@ -34,7 +34,7 @@ from typing import Any
 
 from ..base import _NOW, NotFound, _reading, _serialized, run_name
 from .decisions import queue_review
-from .edges import Edge, end_edges, link
+from .edges import Edge, canonical_entity, end_edges, link, with_aliases
 from .labels import add_label
 from .lookups import entities_by_gid, entity_answering
 
@@ -135,23 +135,14 @@ def settle_foreign(
     return Landing(gid, state, None, name, etype)
 
 
-def _group(con: sqlite3.Connection, entity_id: int) -> list[int]:
-    """An entity and the rows folded into it."""
-    return [entity_id] + [
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM entities WHERE canonical_id = ?", (entity_id,)
-        )
-    ]
-
-
 def _live_twin(
     con: sqlite3.Connection, ends: tuple[int, int], rel: str, doc: int | None
 ) -> int | None:
     """A live edge here that states the claim already: the same relation
     between the two ends (or rows folded into them) for that document,
     whoever wrote it. The claim is the edge's global id (``edge_gid``)."""
-    src, dst = _group(con, ends[0]), _group(con, ends[1])
+    src = sorted(with_aliases(con, [ends[0]]))
+    dst = sorted(with_aliases(con, [ends[1]]))
     row = con.execute(
         f"SELECT id FROM edges WHERE src IN ({','.join('?' * len(src))})"
         f" AND dst IN ({','.join('?' * len(dst))}) AND rel = ?"
@@ -421,17 +412,9 @@ def decide_foreign(
     ours: int | None = None
     if verdict == "same":
         ours = entity_id or row["candidate_id"]
-        if (
-            ours is None
-            or con.execute("SELECT 1 FROM entities WHERE id = ?", (ours,)).fetchone()
-            is None
-        ):
-            raise NotFound(f"no such entity: {ours}")
-        ours = int(
-            con.execute(
-                "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (ours,)
-            ).fetchone()[0]
-        )
+        if ours is None:
+            raise NotFound("no such entity: None")
+        ours = canonical_entity(con, ours)
     elif verdict == "new":
         name = str(row["name"])
         if entity_answering(con, name, row["type"]) is not None:

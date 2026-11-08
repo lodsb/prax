@@ -9,6 +9,7 @@ import sqlite3
 from typing import Any
 
 from ..base import _reading, hidden_documents, meta_of, rows_in
+from .edges import _named
 
 
 @_reading
@@ -79,19 +80,7 @@ def entity_answering(con: sqlite3.Connection, name: str, etype: str) -> int | No
     """The canonical entity of this type that answers to ``name`` (its own
     name, or a label only one entity of the type carries), or None. The
     lookup ``store.link`` makes, without making one."""
-    row = con.execute(
-        "SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ? AND type = ?",
-        (name, etype),
-    ).fetchone()
-    if row is not None:
-        return int(row[0])
-    known = con.execute(
-        "SELECT DISTINCT e.id FROM entity_labels l JOIN entities e"
-        " ON e.id = l.entity_id WHERE l.label = ? COLLATE NOCASE"
-        " AND e.type = ? AND e.canonical_id IS NULL LIMIT 2",
-        (name, etype),
-    ).fetchall()
-    return int(known[0][0]) if len(known) == 1 else None
+    return _named(con, name, etype, follow=True)
 
 
 @_reading

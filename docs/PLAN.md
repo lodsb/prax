@@ -43,7 +43,10 @@ and its item 5 is items 1 and 2 below.
    test, the dead code. Then one owner
    for each concept, a stage each: a document's meta (done 2026-11-08:
    `store.update_meta`, `_put_meta` with its columns, `meta_of`); the entity a
-   name means, its canonical id and alias group, a document's node; ending
+   name means, its canonical id and alias group, a document's node (done
+   2026-11-08: `canonical_entity`, `alias_group`, `with_aliases`, one name
+   lookup, `doc_node_ids`; still open: `senses` matches a name by case where
+   the walk does not, and the page/project node split, finding 17); ending
    and undoing edges (seven functions, four undos); the tried marks of the
    steps in one shape, with a migration. Then findings 8 to 56 by cost.
 1. (asked for by the clock from 2026-11-05) **AO's fixes, now the card

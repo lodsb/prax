@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -146,13 +147,7 @@ def _said_openly(
 ) -> bool:
     """Whether a live edge of the entity (or of its aliases) comes from a
     document the viewer may see, or from none."""
-    group = [
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM entities WHERE id = ? OR canonical_id = ?",
-            (entity_id, entity_id),
-        )
-    ]
+    group = sorted(with_aliases(con, [entity_id]))
     marks = ",".join("?" * len(group))
     for end in ("src", "dst"):
         for (doc,) in con.execute(
@@ -163,6 +158,29 @@ def _said_openly(
             if doc is None or doc not in hidden:
                 return True
     return False
+
+
+def _named(
+    con: sqlite3.Connection, name: str, etype: str, *, follow: bool
+) -> int | None:
+    """The entity of this type that answers to ``name``, or None: the one
+    called that, else the one unmerged entity carrying it as a label (two
+    of one type sharing a label is a question, not an answer). The one
+    called that is itself when not ``follow``: ``store.link`` writes an
+    edge to the row it names, and a read follows it to its survivor."""
+    row = con.execute(
+        "SELECT id, canonical_id FROM entities WHERE name = ? AND type = ?",
+        (name, etype),
+    ).fetchone()
+    if row is not None:
+        return int((follow and row["canonical_id"]) or row["id"])
+    known = con.execute(
+        "SELECT DISTINCT e.id FROM entity_labels l JOIN entities e"
+        " ON e.id = l.entity_id WHERE l.label = ? COLLATE NOCASE"
+        " AND e.type = ? AND e.canonical_id IS NULL LIMIT 2",
+        (name, etype),
+    ).fetchall()
+    return int(known[0]["id"]) if len(known) == 1 else None
 
 
 @dataclass
@@ -185,19 +203,9 @@ def _entity_id(con: sqlite3.Connection, name: str, etype: str) -> int:
     entities of one type sharing a label is a question, and a question is
     not resolved by picking the lower id.
     """
-    row = con.execute(
-        "SELECT id FROM entities WHERE name = ? AND type = ?", (name, etype)
-    ).fetchone()
-    if row is not None:
-        return int(row["id"])
-    known = con.execute(
-        "SELECT DISTINCT e.id FROM entity_labels l JOIN entities e"
-        " ON e.id = l.entity_id WHERE l.label = ? COLLATE NOCASE"
-        " AND e.type = ? AND e.canonical_id IS NULL LIMIT 2",
-        (name, etype),
-    ).fetchall()
-    if len(known) == 1:
-        return int(known[0]["id"])
+    known = _named(con, name, etype, follow=False)
+    if known is not None:
+        return known
     con.execute(
         "INSERT OR IGNORE INTO entities (name, type) VALUES (?,?)", (name, etype)
     )
@@ -354,6 +362,46 @@ def media_node_name(title: str, doc_id: int) -> str:
     return f"{title} (#{doc_id})"
 
 
+def _node_name(con: sqlite3.Connection, doc_id: int) -> tuple[str, bool, sqlite3.Row]:
+    """A document's node name (``document_node``), whether it is a
+    picture's or a recording's, and its row; NotFound as there."""
+    row = con.execute(
+        "SELECT title, mime, text_hash, json_extract(meta, '$.domains') AS domains"
+        " FROM documents WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
+    if row is None or not row["title"] or document_hidden(con, doc_id):
+        raise NotFound(f"no such document: {doc_id}")
+    title = str(row["title"])
+    if not row["text_hash"] and (
+        mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])
+    ):
+        return media_node_name(title, doc_id), True, row
+    return title, False, row
+
+
+def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
+    """The entities that are this document in the graph: those called by
+    its node name (``document_node``) as a document of any type (a reading
+    and an importer may name it a ``paper`` and a ``datasheet``, and a
+    ``concept`` of the same name is another thing), unmerged, with every
+    row folded into them. One of that name merged into another thing is
+    that thing's. What its own edges start from and its citations end at;
+    empty when the graph has no node for it yet, NotFound as
+    ``document_node``."""
+    name, _, _ = _node_name(con, doc_id)
+    onto = ontology.current()
+    canon = {
+        int(r[0])
+        for r in con.execute(
+            "SELECT id, type FROM entities WHERE name = ? AND canonical_id IS NULL",
+            (name,),
+        )
+        if r[1] in onto.entity_types and onto.is_a(str(r[1]), "document")
+    }
+    return sorted(with_aliases(con, canon))
+
+
 def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     """A library document as a node of the graph, ``(name, type)``: its
     title, and the type its entity already has (a page is a ``page``; else
@@ -366,19 +414,9 @@ def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     either place (``media_node_name``). A
     document that does not exist, has no title or is hidden from this
     viewer is a KeyError, as if absent (the wall)."""
-
-    row = con.execute(
-        "SELECT title, mime, text_hash, json_extract(meta, '$.domains') AS domains"
-        " FROM documents WHERE id = ?",
-        (doc_id,),
-    ).fetchone()
-    if row is None or not row["title"] or document_hidden(con, doc_id):
-        raise NotFound(f"no such document: {doc_id}")
-    title = str(row["title"])
-    if not row["text_hash"] and (
-        mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])
-    ):
-        return media_node_name(title, doc_id), "document"
+    title, media, row = _node_name(con, doc_id)
+    if media:
+        return title, "document"
     if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)).fetchone():
         return title, "page"
     onto = ontology.current()
@@ -598,12 +636,34 @@ def end_edges(
 
 @_reading
 def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
+    """The entity this one is folded into, or itself; NotFound when there
+    is none. A merge points every row at the survivor (``merge_entities``
+    flattens), so one step is the whole way."""
     row = con.execute(
         "SELECT canonical_id FROM entities WHERE id = ?", (entity_id,)
     ).fetchone()
     if row is None:
         raise NotFound(f"no such entity: {entity_id}")
-    return row["canonical_id"] or entity_id
+    return int(row["canonical_id"] or entity_id)
+
+
+def with_aliases(con: sqlite3.Connection, ids: Iterable[int]) -> set[int]:
+    """These entities and every row folded into them: an edge names the
+    row it was written to, so a read of an entity's edges reads these."""
+    ids = {int(i) for i in ids}
+    return ids | {
+        int(r[0])
+        for r in rows_in(
+            con, "SELECT id FROM entities WHERE canonical_id IN ({ids})", sorted(ids)
+        )
+    }
+
+
+def alias_group(con: sqlite3.Connection, entity_id: int) -> tuple[int, list[int]]:
+    """The canonical entity of ``entity_id`` and its group (itself and
+    the rows folded into it, by id); NotFound when there is none."""
+    canon = canonical_entity(con, entity_id)
+    return canon, sorted(with_aliases(con, [canon]))
 
 
 def _invalidate_edge(

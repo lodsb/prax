@@ -16,6 +16,7 @@ import sqlite3
 from typing import Any
 
 from ..base import NotFound, _reading, hidden_documents, live
+from .edges import alias_group, with_aliases
 from .events import RECORDED_AT
 from .people import DEPICTS
 
@@ -24,38 +25,6 @@ PICTURES_PAGE = 20
 PICTURES_PAGE_MAX = 100
 PLACE_DEPTH = 4  # a town in its region in its country, and one more
 _TAKEN = "json_extract(d.meta, '$.taken.date')"
-
-
-def _aliases(con: sqlite3.Connection, entity_id: int) -> tuple[int, str, list[int]]:
-    """The canonical entity, its name and its alias group, or KeyError."""
-    row = con.execute(
-        "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (entity_id,)
-    ).fetchone()
-    if row is None:
-        raise NotFound(f"no such entity: {entity_id}")
-    canon = int(row[0])
-    name = con.execute("SELECT name FROM entities WHERE id = ?", (canon,)).fetchone()
-    ids = [
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM entities WHERE id = ? OR canonical_id = ?", (canon, canon)
-        )
-    ]
-    return canon, str(name[0]), ids
-
-
-def _with_aliases(con: sqlite3.Connection, canon: set[int]) -> set[int]:
-    """The canonical entities and every row folded into them: an edge names
-    the row it was written to."""
-    marks = json.dumps(sorted(canon))
-    return canon | {
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM entities WHERE canonical_id IN"
-            " (SELECT value FROM json_each(?))",
-            (marks,),
-        )
-    }
 
 
 def _within(con: sqlite3.Connection, canon: int) -> list[int]:
@@ -70,13 +39,13 @@ def _within(con: sqlite3.Connection, canon: int) -> list[int]:
             " JOIN entities x ON x.id = e.src"
             " WHERE e.rel = 'located_in' AND e.valid_to IS NULL"
             " AND e.dst IN (SELECT value FROM json_each(?))",
-            (json.dumps(sorted(_with_aliases(con, frontier))),),
+            (json.dumps(sorted(with_aliases(con, frontier))),),
         )
         frontier = {int(r[0]) for r in rows} - seen
         if not frontier:
             break
         seen |= frontier
-    return sorted(_with_aliases(con, seen))
+    return sorted(with_aliases(con, seen))
 
 
 def _by_edge(rel: str, ends: list[int]) -> tuple[str, list[Any]]:
@@ -131,7 +100,12 @@ def picture_set(
         )
         args: list[Any] = [ident]
     else:
-        ident, name, ids = _aliases(con, int(key))
+        ident, ids = alias_group(con, int(key))
+        name = str(
+            con.execute("SELECT name FROM entities WHERE id = ?", (ident,)).fetchone()[
+                0
+            ]
+        )
         if kind == "place":
             ids = _within(con, ident)
         rel = {"depicts": DEPICTS, "event": RECORDED_AT, "place": "taken_in"}[kind]

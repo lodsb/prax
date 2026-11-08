@@ -4,13 +4,23 @@ similar documents) and the documents its title's entities reach."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _guards, _reading, _scrubbed, hidden_documents, meta_of, rows_in
+from ..base import (
+    NotFound,
+    _guards,
+    _reading,
+    _scrubbed,
+    hidden_documents,
+    meta_of,
+    rows_in,
+)
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
+from .edges import doc_node_ids
 
 
 def _doc_ids_by_title(con: sqlite3.Connection, titles: list[str]) -> dict[str, int]:
@@ -104,19 +114,26 @@ def document_context(
         return None
     title = doc["title"] or ""
     meta = meta_of(doc["meta"])
+    # the entities that are this document, of whatever document type: a
+    # picture's node is its file and number, a recipe is no paper
+    try:
+        node = doc_node_ids(con, doc_id)
+    except NotFound:  # no title yet, so no node
+        node = []
+    at_node = ",".join("?" * len(node))
 
     # the document's own edges, by the entity they point at
     entities: list[dict[str, Any]] = []
     author_ids: list[int] = []
     entity_ids: list[int] = []
     for r in con.execute(
-        """
+        f"""
         SELECT x.rel, x.confidence, t.id AS tid, t.name, t.type FROM edges x
-        JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst
-        WHERE x.source_doc = ? AND x.valid_to IS NULL AND s.name = ?
+        JOIN entities t ON t.id = x.dst
+        WHERE x.source_doc = ? AND x.valid_to IS NULL AND x.src IN ({at_node})
         ORDER BY t.type, t.name
         """,
-        (doc_id, title),
+        (doc_id, *node),
     ):
         if r["rel"] == "authored_by":
             author_ids.append(r["tid"])
@@ -139,15 +156,14 @@ def document_context(
     # and a printed id's edges are EXTRACTED, a title match INFERRED
     # (the score in its evidence), a tie between twins AMBIGUOUS
     cites_rows = con.execute(
-        """
+        f"""
         SELECT t.name, min(CASE x.confidence WHEN 'EXTRACTED' THEN 0
                            WHEN 'INFERRED' THEN 1 ELSE 2 END) AS rank
-        FROM edges x
-        JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst
-        WHERE x.rel = 'cites' AND x.valid_to IS NULL AND s.name = ? AND s.type = 'paper'
+        FROM edges x JOIN entities t ON t.id = x.dst
+        WHERE x.rel = 'cites' AND x.valid_to IS NULL AND x.src IN ({at_node})
         GROUP BY t.name ORDER BY t.name
         """,
-        (title,),
+        node,
     ).fetchall()
     cited_titles = [r["name"] for r in cites_rows]
     in_library = _doc_ids_by_title(con, cited_titles) if cited_titles else {}
@@ -169,18 +185,16 @@ def document_context(
             "confidence": _CONFIDENCE_BY_RANK[r["rank"]],
         }
         for r in con.execute(
-            """
+            f"""
             SELECT x.source_doc AS doc_id, d.title,
                    min(CASE x.confidence WHEN 'EXTRACTED' THEN 0
                        WHEN 'INFERRED' THEN 1 ELSE 2 END) AS rank
-            FROM edges x
-            JOIN entities t ON t.id = x.dst JOIN documents d ON d.id = x.source_doc
-            WHERE x.rel = 'cites' AND x.valid_to IS NULL AND t.name = ?
-              AND t.type = 'paper'
+            FROM edges x JOIN documents d ON d.id = x.source_doc
+            WHERE x.rel = 'cites' AND x.valid_to IS NULL AND x.dst IN ({at_node})
               AND x.source_doc != ?
             GROUP BY x.source_doc, d.title ORDER BY d.title
             """,
-            (title, doc_id),
+            (*node, doc_id),
         )
     ]
 
@@ -256,15 +270,15 @@ def document_context(
     notes = [
         dict(r)
         for r in con.execute(
-            """
+            f"""
             SELECT DISTINCT x.source_doc AS doc_id, d.title, p.slug, p.kind
-            FROM edges x JOIN entities t ON t.id = x.dst
+            FROM edges x
             JOIN documents d ON d.id = x.source_doc JOIN pages p ON p.doc_id = d.id
-            WHERE x.rel = 'annotates' AND x.valid_to IS NULL AND t.name = ?
+            WHERE x.rel = 'annotates' AND x.valid_to IS NULL AND x.dst IN ({at_node})
               AND x.source_doc != ?
             ORDER BY d.title
             """,
-            (title, doc_id),
+            (*node, doc_id),
         )
     ]
     members: list[dict[str, Any]] = []
@@ -275,17 +289,16 @@ def document_context(
         members = [
             dict(r)
             for r in con.execute(
-                """
+                f"""
                 SELECT DISTINCT s.name AS title, s.type,
                        (SELECT id FROM documents WHERE title = s.name
                         ORDER BY id LIMIT 1)
                            AS doc_id
                 FROM edges x JOIN entities s ON s.id = x.src
-                JOIN entities t ON t.id = x.dst
-                WHERE x.rel = 'part_of' AND x.valid_to IS NULL AND t.name = ?
+                WHERE x.rel = 'part_of' AND x.valid_to IS NULL AND x.dst IN ({at_node})
                 ORDER BY s.name
                 """,
-                (title,),
+                node,
             )
         ]
     return {
@@ -300,7 +313,7 @@ def document_context(
         "entities": entities,
         "cites": cites,
         "cited_by": cited_by,
-        "linked": _linked_documents(con, title, limit=limit),
+        "linked": _linked_documents(con, node, limit=limit),
         "similar": _similar_documents(con, doc_id, limit=limit, domain=domain),
         "shared": shared,
         "same_authors": same_authors,
@@ -314,7 +327,7 @@ def document_context(
 
 
 def _linked_documents(
-    con: sqlite3.Connection, title: str, *, limit: int
+    con: sqlite3.Connection, node: list[int], *, limit: int
 ) -> dict[str, list[dict[str, Any]]]:
     """A document's edges to and from other documents (``links_to``,
     ``supersedes``, ``invalidates``, ``part_of``…; ``cites`` has its own
@@ -323,38 +336,36 @@ def _linked_documents(
     evidence. At most ``limit`` a side."""
     onto = ontology.current()
     out: dict[str, list[dict[str, Any]]] = {"out": [], "in": []}
-    # the entities that are the title, and their aliases, first: then the
-    # live edges at either end through their indexes. Joining every live
-    # edge to its entities to keep the title's took 383 ms a document
-    # page, most of a context (2026-10-18)
+    # the live edges at either end of the document's node, through their
+    # indexes. Joining every live edge to its entities to keep the
+    # title's took 383 ms a document page, most of a context (2026-10-18)
     rows = con.execute(
         """
-        WITH named(id) AS (
-            SELECT id FROM entities WHERE name = ? AND canonical_id IS NULL),
-        ends(id) AS (
-            SELECT id FROM named
-             UNION SELECT id FROM entities WHERE canonical_id IN named),
+        WITH ends(id) AS (SELECT value FROM json_each(?)),
         touching(id) AS (
             SELECT id FROM edges WHERE valid_to IS NULL AND src IN ends
              UNION SELECT id FROM edges WHERE valid_to IS NULL AND dst IN ends)
-        SELECT x.rel, x.evidence, x.source_doc, s.name AS src, s.type AS src_type,
-               t.name AS dst, t.type AS dst_type
+        SELECT x.rel, x.evidence, x.source_doc, s.id AS sid, s.name AS src,
+               s.type AS src_type, t.id AS tid, t.name AS dst, t.type AS dst_type
         FROM edges x JOIN entities s0 ON s0.id = x.src
         JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
         JOIN entities t0 ON t0.id = x.dst
         JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
-        WHERE x.id IN touching AND x.rel != 'cites' AND (s.name = ? OR t.name = ?)
+        WHERE x.id IN touching AND x.rel != 'cites'
         ORDER BY x.rel, x.id
         """,
-        (title, title, title),
+        (json.dumps(node),),
     ).fetchall()
+    mine = set(node)
     seen: set[tuple[str, str, str]] = set()
     for r in rows:
-        side = "out" if r["src"] == title else "in"
-        name, etype = (
-            (r["dst"], r["dst_type"]) if side == "out" else (r["src"], r["src_type"])
+        side = "out" if r["sid"] in mine else "in"
+        other, name, etype = (
+            (r["tid"], r["dst"], r["dst_type"])
+            if side == "out"
+            else (r["sid"], r["src"], r["src_type"])
         )
-        if name == title or etype not in onto.entity_types:
+        if other in mine or etype not in onto.entity_types:
             continue
         if not onto.is_a(etype, "document") or len(out[side]) >= limit:
             continue
