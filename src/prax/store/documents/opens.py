@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Any
 
-from ..base import VIEWER, _reading, _scrubbed, _serialized
+from ..base import VIEWER, _reading, _scrubbed, _serialized, rows_in
 
 OPEN_EVERY = 1800.0  # seconds: one opening a document, viewer and way in
 OPEN_VIAS = ("web", "agent", "api")
@@ -64,20 +64,19 @@ def document_opens(
     timestamp, or ever), by way in, and when last: ``{doc_id: {count,
     web, agent, api, last}}``; a document never opened is left out."""
     out: dict[int, dict[str, Any]] = {}
-    for start in range(0, len(doc_ids), 500):
-        part = doc_ids[start : start + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT doc_id, via, count(*) AS n, max(opened_at) AS last"
-            f" FROM document_opens WHERE doc_id IN ({marks})"
-            f" AND opened_at >= ? GROUP BY doc_id, via",
-            (*part, since or ""),
-        ):
-            seen = out.setdefault(
-                int(r["doc_id"]),
-                {"count": 0, **dict.fromkeys(OPEN_VIAS, 0), "last": ""},
-            )
-            seen[r["via"]] = int(r["n"])
-            seen["count"] += int(r["n"])
-            seen["last"] = max(seen["last"], str(r["last"]))
+    for r in rows_in(
+        con,
+        "SELECT doc_id, via, count(*) AS n, max(opened_at) AS last"
+        " FROM document_opens WHERE doc_id IN ({ids})"
+        " AND opened_at >= ? GROUP BY doc_id, via",
+        doc_ids,
+        after=(since or "",),
+    ):
+        seen = out.setdefault(
+            int(r["doc_id"]),
+            {"count": 0, **dict.fromkeys(OPEN_VIAS, 0), "last": ""},
+        )
+        seen[r["via"]] = int(r["n"])
+        seen["count"] += int(r["n"])
+        seen["last"] = max(seen["last"], str(r["last"]))
     return out

@@ -18,6 +18,7 @@ from ..base import (
     _index_path,
     _knn,
     domain_clause,
+    rows_in,
 )
 from ..documents import DOCTYPES, _chunk_shape, find_chunk
 from .query import (
@@ -207,30 +208,28 @@ def _vec_search(
     distance = dict(found)
     ids = list(distance)
     out: list[dict[str, Any]] = []
-    for i in range(0, len(ids), 500):
-        part = ids[i : i + 500]
-        marks = ",".join("?" * len(part))
-        kind_clause = "AND c.kind = ?" if kind is not None else _ASIDE
-        args: tuple[Any, ...] = (*part, kind) if kind is not None else tuple(part)
-        rows = con.execute(
-            f"""
-            SELECT c.id AS chunk_id, c.doc_id, d.title, c.kind, c.locator,
-                   c.heading, c.data, substr(c.text, 1, 160) AS head
-            FROM chunks c JOIN documents d ON d.id = c.doc_id
-            WHERE c.id IN ({marks}) {kind_clause}
-            """,
-            args,
-        ).fetchall()
-        for r in rows:
-            hit = {
-                "chunk_id": r["chunk_id"],
-                "doc_id": r["doc_id"],
-                "title": r["title"],
-                "snippet": r["head"],
-                "score": distance[r["chunk_id"]],
-            }
-            hit.update(_chunk_shape(r))
-            out.append(hit)
+    kind_clause = "AND c.kind = ?" if kind is not None else _ASIDE
+    rows = rows_in(
+        con,
+        f"""
+        SELECT c.id AS chunk_id, c.doc_id, d.title, c.kind, c.locator,
+               c.heading, c.data, substr(c.text, 1, 160) AS head
+        FROM chunks c JOIN documents d ON d.id = c.doc_id
+        WHERE c.id IN ({{ids}}) {kind_clause}
+        """,
+        ids,
+        after=(kind,) if kind is not None else (),
+    )
+    for r in rows:
+        hit = {
+            "chunk_id": r["chunk_id"],
+            "doc_id": r["doc_id"],
+            "title": r["title"],
+            "snippet": r["head"],
+            "score": distance[r["chunk_id"]],
+        }
+        hit.update(_chunk_shape(r))
+        out.append(hit)
     out.sort(key=lambda h: h["score"])
     return out[:limit]
 

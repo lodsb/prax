@@ -21,7 +21,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -328,6 +328,45 @@ def mark_ids(con: sqlite3.Connection, kind: str, last: int) -> None:
         " ON CONFLICT (name) DO UPDATE SET last = max(last, excluded.last)",
         (kind, last),
     )
+
+
+# ids bound in one query: under the 999 variables an older SQLite allows,
+# which a distribution's build may still have (3.32 raised it to 32,766)
+ID_BATCH = 500
+
+
+def marks(n: int) -> str:
+    """``n`` placeholders, for an ``IN (…)`` list of ``n`` values."""
+    return ",".join("?" * n)
+
+
+def rows_in(
+    con: sqlite3.Connection,
+    sql: str,
+    ids: Iterable[Any],
+    *,
+    before: Sequence[Any] = (),
+    after: Sequence[Any] = (),
+    size: int = ID_BATCH,
+) -> list[sqlite3.Row]:
+    """The rows ``sql`` selects for every value of ``ids``, asked ``size``
+    at a time. ``sql`` holds ``{ids}`` where the list's placeholders go,
+    once or more (each binds the batch again, in turn), and ``before`` and
+    ``after`` are the parameters on either side of them. The rows come
+    batch by batch, so an ``ORDER BY`` or a ``LIMIT`` holds within a batch
+    only. No ids, no rows and no query."""
+    ids = list(ids)
+    times = sql.count("{ids}")
+    rows: list[sqlite3.Row] = []
+    for start in range(0, len(ids), size):
+        part = ids[start : start + size]
+        rows.extend(
+            con.execute(
+                sql.replace("{ids}", marks(len(part))),
+                (*before, *(part * times), *after),
+            )
+        )
+    return rows
 
 
 def run_name(kind: str, *after: object, unique: bool = False, sep: str = "-") -> str:

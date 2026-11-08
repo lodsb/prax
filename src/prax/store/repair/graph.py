@@ -15,7 +15,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import glyphs, language, names
 
-from ..base import _serialized, hidden_documents, run_name
+from ..base import _serialized, hidden_documents, rows_in, run_name
 from ..graph import (
     Edge,
     _refresh_name,
@@ -607,24 +607,21 @@ def _not_venues(con: sqlite3.Connection) -> list[dict[str, Any]]:
     ).fetchall()
     counts = {int(r["id"]): int(r["edges"]) for r in rows}
     out: list[dict[str, Any]] = []
-    for i in range(0, len(counts), 500):
-        part = sorted(counts)[i : i + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT id, name, type FROM entities WHERE id IN ({marks})", part
-        ):
-            if r["type"] != "venue":
-                continue
-            kind = venues.not_a_venue(str(r["name"]))
-            if kind:
-                out.append(
-                    {
-                        "id": int(r["id"]),
-                        "name": r["name"],
-                        "is": kind,
-                        "edges": counts[int(r["id"])],
-                    }
-                )
+    for r in rows_in(
+        con, "SELECT id, name, type FROM entities WHERE id IN ({ids})", sorted(counts)
+    ):
+        if r["type"] != "venue":
+            continue
+        kind = venues.not_a_venue(str(r["name"]))
+        if kind:
+            out.append(
+                {
+                    "id": int(r["id"]),
+                    "name": r["name"],
+                    "is": kind,
+                    "edges": counts[int(r["id"])],
+                }
+            )
     out.sort(key=lambda x: (-x["edges"], x["name"]))
     return out[:CAP]
 

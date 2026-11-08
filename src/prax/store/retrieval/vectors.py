@@ -31,6 +31,7 @@ from ..base import (
     _open_index,
     _reading,
     _serialized,
+    marks,
     vectors_available,
 )
 from .knobs import knobs
@@ -466,8 +467,7 @@ def reconcile_unsaved(con: sqlite3.Connection, model: str) -> dict[str, int]:
         for i in range(0, len(lost), 500):
             part = lost[i : i + 500]
             con.execute(
-                f"DELETE FROM {table} WHERE {key} IN ({','.join('?' * len(part))})",
-                part,
+                f"DELETE FROM {table} WHERE {key} IN ({marks(len(part))})", part
             )
         con.commit()
         out["checked"] += len(ids)
@@ -614,8 +614,9 @@ COMPACT_REBUILD = 0.1  # the share of removed slots past which the graph is buil
 def _forget_embeddings(con: sqlite3.Connection, chunk_ids: list[int]) -> None:
     for i in range(0, len(chunk_ids), 500):
         part = chunk_ids[i : i + 500]
-        marks = ",".join("?" * len(part))
-        con.execute(f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks})", part)
+        con.execute(
+            f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks(len(part))})", part
+        )
     con.commit()
 
 

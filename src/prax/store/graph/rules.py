@@ -35,7 +35,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _NOW, _reading, _scrubbed, _serialized, personal_sql
+from ..base import _NOW, _reading, _scrubbed, _serialized, personal_sql, rows_in
 from .edges import Edge, end_edges, link
 
 RULE_CAP = 20_000  # derivations a relation at most
@@ -265,14 +265,10 @@ def _rule_edges(con: sqlite3.Connection, run: str) -> dict[Pair, list[int]]:
 @_reading
 def _names(con: sqlite3.Connection, ids: set[int]) -> dict[int, tuple[str, str]]:
     out: dict[int, tuple[str, str]] = {}
-    items = sorted(ids)
-    for i in range(0, len(items), 500):
-        part = items[i : i + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT id, name, type FROM entities WHERE id IN ({marks})", part
-        ):
-            out[int(r[0])] = (str(r[1]), str(r[2]))
+    for r in rows_in(
+        con, "SELECT id, name, type FROM entities WHERE id IN ({ids})", sorted(ids)
+    ):
+        out[int(r[0])] = (str(r[1]), str(r[2]))
     return out
 
 
@@ -280,16 +276,14 @@ def _names(con: sqlite3.Connection, ids: set[int]) -> dict[int, tuple[str, str]]
 def _fact_lines(con: sqlite3.Connection, ids: list[int]) -> dict[int, str]:
     """``A rel B`` for each premise, for a derived edge's evidence."""
     out: dict[int, str] = {}
-    for i in range(0, len(ids), 500):
-        part = ids[i : i + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT e.id, s.name, e.rel, t.name FROM edges e"
-            f" JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
-            f" WHERE e.id IN ({marks})",
-            part,
-        ):
-            out[int(r[0])] = f"{r[1]} {r[2]} {r[3]}"
+    for r in rows_in(
+        con,
+        "SELECT e.id, s.name, e.rel, t.name FROM edges e"
+        " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+        " WHERE e.id IN ({ids})",
+        ids,
+    ):
+        out[int(r[0])] = f"{r[1]} {r[2]} {r[3]}"
     return out
 
 
@@ -339,14 +333,10 @@ def _write(
 def _sources_of(con: sqlite3.Connection, edge_ids: list[int]) -> dict[int, int | None]:
     """Each edge's document, or None."""
     out: dict[int, int | None] = {}
-    for i in range(0, len(edge_ids), 500):
-        part = edge_ids[i : i + 500]
-        for r in con.execute(
-            "SELECT id, source_doc FROM edges WHERE id IN"
-            f" ({','.join('?' * len(part))})",
-            part,
-        ):
-            out[int(r[0])] = None if r[1] is None else int(r[1])
+    for r in rows_in(
+        con, "SELECT id, source_doc FROM edges WHERE id IN ({ids})", edge_ids
+    ):
+        out[int(r[0])] = None if r[1] is None else int(r[1])
     return out
 
 

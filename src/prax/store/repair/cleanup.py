@@ -12,7 +12,7 @@ from typing import Any
 
 from prax.text import clutter
 
-from ..base import NotFound, _reading, _serialized, run_name
+from ..base import NotFound, _reading, _serialized, rows_in, run_name
 from ..documents import (
     _put_meta,
     get_meta,
@@ -97,20 +97,24 @@ def cleanup_preview(
     sample with where each came from."""
     picked = cleanup_set(con, rule, folder=folder)
     ids = [i for i, _ in picked]
-    edges = personal = 0
-    for start in range(0, len(ids), 500):
-        part = ids[start : start + 500]
-        marks = ",".join("?" * len(part))
-        edges += con.execute(
+    edges = sum(
+        r[0]
+        for r in rows_in(
+            con,
             "SELECT count(*) FROM edges WHERE valid_to IS NULL"
-            f" AND source_doc IN ({marks})",
-            part,
-        ).fetchone()[0]
-        personal += con.execute(
+            " AND source_doc IN ({ids})",
+            ids,
+        )
+    )
+    personal = sum(
+        r[0]
+        for r in rows_in(
+            con,
             "SELECT count(*) FROM documents WHERE sensitivity IS NOT NULL"
-            f" AND id IN ({marks})",
-            part,
-        ).fetchone()[0]
+            " AND id IN ({ids})",
+            ids,
+        )
+    )
     step = max(1, len(picked) // max(1, limit))
     sample = picked[::step][:limit]
     items = []

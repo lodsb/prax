@@ -10,7 +10,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _guards, _reading, _scrubbed, hidden_documents
+from ..base import _guards, _reading, _scrubbed, hidden_documents, rows_in
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
 
 
@@ -18,14 +18,12 @@ def _doc_ids_by_title(con: sqlite3.Connection, titles: list[str]) -> dict[str, i
     """Each title to the first document of that title (its lowest id), a
     batch at a time; ``idx_documents_title`` (migration 68) serves it."""
     out: dict[str, int] = {}
-    for i in range(0, len(titles), 400):
-        part = titles[i : i + 400]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT id, title FROM documents WHERE title IN ({marks}) ORDER BY id",
-            part,
-        ):
-            out.setdefault(r["title"], r["id"])
+    for r in rows_in(
+        con,
+        "SELECT id, title FROM documents WHERE title IN ({ids}) ORDER BY id",
+        titles,
+    ):
+        out.setdefault(r["title"], r["id"])
     return out
 
 

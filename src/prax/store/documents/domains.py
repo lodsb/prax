@@ -22,6 +22,7 @@ from ..base import (
     hidden_documents,
     now,
     personal_sql,
+    rows_in,
 )
 from .meta import _put_meta, get_meta, set_meta
 
@@ -47,13 +48,10 @@ def document_domains(con: sqlite3.Connection, doc_id: int) -> list[str] | None:
 def domains_of(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, list[str]]:
     """The domain sets of these documents in one read, for a list that
     shows them (a search's hits): a document of every module is absent."""
-    ids = sorted({int(i) for i in doc_ids})
-    if not ids:
-        return {}
-    rows = con.execute(
-        "SELECT id, json_extract(meta, '$.domains') FROM documents"
-        f" WHERE id IN ({','.join('?' * len(ids))})",
-        ids,
+    rows = rows_in(
+        con,
+        "SELECT id, json_extract(meta, '$.domains') FROM documents WHERE id IN ({ids})",
+        sorted({int(i) for i in doc_ids}),
     )
     return {int(r[0]): list(json.loads(r[1])) for r in rows if r[1]}
 

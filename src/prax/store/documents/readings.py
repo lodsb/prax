@@ -20,6 +20,7 @@ from ..base import (
     _serialized,
     archive_path,
     now,
+    rows_in,
 )
 from .meta import DOCTYPES, _put_meta, get_meta, set_meta
 from .places import original_file
@@ -199,18 +200,16 @@ def page_counts(
     ``count_pages`` writes the count once."""
     out: dict[int, int] = {}
     todo: list[tuple[int, str]] = []
-    for start in range(0, len(ids), 500):
-        part = ids[start : start + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            "SELECT id, hash, json_extract(meta, '$.pages') AS pages FROM documents"
-            f" WHERE id IN ({marks})",
-            tuple(part),
-        ):
-            if r["pages"]:
-                out[r["id"]] = int(r["pages"])
-            else:
-                todo.append((r["id"], r["hash"]))
+    for r in rows_in(
+        con,
+        "SELECT id, hash, json_extract(meta, '$.pages') AS pages FROM documents"
+        " WHERE id IN ({ids})",
+        ids,
+    ):
+        if r["pages"]:
+            out[r["id"]] = int(r["pages"])
+        else:
+            todo.append((r["id"], r["hash"]))
     if not todo or not open_files:
         return out
     try:
@@ -478,19 +477,17 @@ def finding_fixes(
     if check is not None:
         sql += " AND json_extract(f.value, '$.check') = ?"
         args.append(check)
-    parts: list[list[int] | None] = [None]
-    if ids is not None:
-        parts = [[int(x) for x in ids[i : i + 500]] for i in range(0, len(ids), 500)]
-    out: list[tuple[int, str, dict[str, Any]]] = []
-    for part in parts:
-        where = ""
-        if part is not None:
-            where = f" AND d.id IN ({','.join('?' * len(part))})"
-        out.extend(
-            (int(r[0]), str(r[1]), json.loads(r[2]))
-            for r in con.execute(sql + where + " ORDER BY d.id", (*args, *(part or [])))
+    rows = (
+        con.execute(sql + " ORDER BY d.id", args)
+        if ids is None
+        else rows_in(
+            con,
+            sql + " AND d.id IN ({ids}) ORDER BY d.id",
+            [int(x) for x in ids],
+            before=args,
         )
-    return out
+    )
+    return [(int(r[0]), str(r[1]), json.loads(r[2])) for r in rows]
 
 
 def _numbered_steps(con: sqlite3.Connection, ids: list[int]) -> set[int]:

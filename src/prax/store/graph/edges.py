@@ -24,6 +24,7 @@ from ..base import (
     document_hidden,
     domain_clause,
     hidden_documents,
+    rows_in,
 )
 
 # the second hop is reached through exactly one)
@@ -698,16 +699,14 @@ def hidden_by_premise(
     if not hidden or not edge_ids:
         return set()
     out: set[int] = set()
-    for i in range(0, len(edge_ids), 500):
-        part = edge_ids[i : i + 500]
-        marks = ",".join("?" * len(part))
-        for eid, doc in con.execute(
-            "SELECT p.edge_id, e.source_doc FROM edge_premises p"
-            f" JOIN edges e ON e.id = p.premise_id WHERE p.edge_id IN ({marks})",
-            part,
-        ):
-            if doc is not None and int(doc) in hidden:
-                out.add(int(eid))
+    for eid, doc in rows_in(
+        con,
+        "SELECT p.edge_id, e.source_doc FROM edge_premises p"
+        " JOIN edges e ON e.id = p.premise_id WHERE p.edge_id IN ({ids})",
+        edge_ids,
+    ):
+        if doc is not None and int(doc) in hidden:
+            out.add(int(eid))
     return out
 
 

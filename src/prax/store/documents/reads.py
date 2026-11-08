@@ -28,6 +28,7 @@ from ..base import (
     _reading,
     domain_clause,
     hidden_documents,
+    rows_in,
 )
 from .readings import _CURRENT_QUALITY
 
@@ -709,12 +710,7 @@ def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, st
     hidden = hidden_documents(con)
     doc_ids = [d for d in doc_ids if d not in hidden]
     ids = list(dict.fromkeys(int(i) for i in doc_ids))
-    if not ids:
-        return {}
-    marks = ",".join("?" * len(ids))
-    rows = con.execute(
-        f"SELECT id, title FROM documents WHERE id IN ({marks})", ids
-    ).fetchall()
+    rows = rows_in(con, "SELECT id, title FROM documents WHERE id IN ({ids})", ids)
     return {r["id"]: r["title"] or "" for r in rows}
 
 
@@ -935,12 +931,13 @@ def title_rows(
         f"SELECT id, title, text_hash, {keys} FROM documents"
         " WHERE coalesce(json_extract(meta, '$.retired'), 0) IN (0, '')"
     )
-    args: tuple[Any, ...] = ()
-    if ids is not None:
-        sql += f" AND id IN ({','.join('?' * len(ids))})"
-        args = tuple(ids)
+    rows = (
+        con.execute(sql + " ORDER BY id")
+        if ids is None
+        else rows_in(con, sql + " AND id IN ({ids}) ORDER BY id", sorted(set(ids)))
+    )
     out = []
-    for r in con.execute(sql + " ORDER BY id", args):
+    for r in rows:
         meta = {}
         for k in TITLE_KEYS:
             v = r[k]

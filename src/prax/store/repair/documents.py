@@ -13,7 +13,7 @@ from typing import Any
 from prax.text import glyphs
 
 from .. import documents as docs
-from ..base import _ASIDE, _read_archive, now
+from ..base import _ASIDE, _read_archive, now, rows_in
 from ..documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -405,18 +405,10 @@ def _uncounted_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
     the worker recorded one. ``thin-texts`` cannot weigh them."""
 
     ids = docs.uncounted_pages(con)  # all of them: the repair counts them all
-    out: list[Any] = []
-    for start in range(0, len(ids), 500):
-        part = ids[start : start + 500]
-        marks = ",".join("?" * len(part))
-        out.extend(
-            {"id": r["id"], "title": r["title"]}
-            for r in con.execute(
-                f"SELECT id, title FROM documents WHERE id IN ({marks}) ORDER BY id",
-                tuple(part),
-            )
-        )
-    return out
+    rows = rows_in(con, "SELECT id, title FROM documents WHERE id IN ({ids})", ids)
+    return sorted(
+        ({"id": r["id"], "title": r["title"]} for r in rows), key=lambda r: r["id"]
+    )
 
 
 def _repair_uncounted_pages(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
@@ -488,13 +480,8 @@ def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
         return []
     titles = {}
     ids = [o["id"] for o in rows]
-    for start in range(0, len(ids), 500):
-        part = ids[start : start + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT id, title FROM documents WHERE id IN ({marks})", tuple(part)
-        ):
-            titles[r["id"]] = r["title"]
+    for r in rows_in(con, "SELECT id, title FROM documents WHERE id IN ({ids})", ids):
+        titles[r["id"]] = r["title"]
     return [{**o, "title": titles.get(o["id"])} for o in rows]
 
 

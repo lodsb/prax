@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..base import rows_in
 from ..graph import (
     end_edges,
     resolve_review,
@@ -49,17 +50,15 @@ def _live_edge_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]
     queries per batch: a correlated count with `src = ? OR dst = ?` cannot
     use either edge index and turns a check into a table scan per entity."""
     counts: dict[int, int] = {}
-    for start in range(0, len(ids), 500):
-        batch = ids[start : start + 500]
-        marks = ",".join("?" * len(batch))
-        for side in ("src", "dst"):
-            for entity_id, n in con.execute(
-                f"SELECT {side}, count(*) FROM edges"
-                f" WHERE valid_to IS NULL AND {side} IN ({marks})"
-                f" GROUP BY {side}",
-                batch,
-            ):
-                counts[entity_id] = counts.get(entity_id, 0) + n
+    for side in ("src", "dst"):
+        for entity_id, n in rows_in(
+            con,
+            f"SELECT {side}, count(*) FROM edges"
+            f" WHERE valid_to IS NULL AND {side} IN ({{ids}})"
+            f" GROUP BY {side}",
+            ids,
+        ):
+            counts[entity_id] = counts.get(entity_id, 0) + n
     return counts
 
 

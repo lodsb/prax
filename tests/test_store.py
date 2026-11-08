@@ -791,3 +791,27 @@ def test_an_exited_process_is_not_alive() -> None:
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.wait()
     assert not store._pid_alive(child.pid)
+
+
+def test_rows_in_asks_a_batch_at_a_time(con: sqlite3.Connection) -> None:
+    """One helper for an id list in SQL (structure review finding 31): the
+    list bound ``size`` at a time, each ``{ids}`` the batch again, the
+    parameters before and after it kept in place."""
+    from prax.store import base
+
+    ids = [
+        int(store.ingest_text(con, f"text number {i} " * 30, title=f"T{i}")["doc_id"])
+        for i in range(5)
+    ]
+    rows = base.rows_in(
+        con,
+        "SELECT id FROM documents WHERE title LIKE ? AND id IN ({ids})"
+        " AND (id IN ({ids}) OR id = ?)",
+        [*ids, 999_999],
+        before=("T%",),
+        after=(-1,),
+        size=2,
+    )
+    assert sorted(r["id"] for r in rows) == ids
+    assert base.rows_in(con, "SELECT 1 WHERE 1 IN ({ids})", []) == []
+    assert base.marks(3) == "?,?,?"

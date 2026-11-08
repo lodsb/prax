@@ -14,7 +14,7 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import names
 
-from ..base import _guards, _reading, domain_clause, hidden_documents
+from ..base import _guards, _reading, domain_clause, hidden_documents, rows_in
 from .edges import held_in_world, hidden_by_premise
 from .lookups import entity_named_in
 
@@ -592,15 +592,12 @@ def subgraph_edges(
     out: list[dict[str, Any]] = []
     live = "" if history else " AND x.valid_to IS NULL"
     for column, ids in (("x.source_doc", doc_ids), ("x.id", edge_ids)):
-        for start in range(0, len(ids or []), 500):
-            part = (ids or [])[start : start + 500]
-            marks = ",".join("?" * len(part))
-            out.extend(
-                dict(r)
-                for r in con.execute(
-                    _SUBGRAPH_EDGE + f" WHERE {column} IN ({marks})" + live, part
-                )
+        out.extend(
+            dict(r)
+            for r in rows_in(
+                con, _SUBGRAPH_EDGE + f" WHERE {column} IN ({{ids}})" + live, ids or []
             )
+        )
     hidden = hidden_documents(con)
     seen: dict[int, dict[str, Any]] = {
         int(e["id"]): e for e in out if e["source_doc"] not in hidden

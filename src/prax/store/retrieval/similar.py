@@ -17,6 +17,7 @@ from ..base import (
     _knn,
     _reading,
     _scrubbed,
+    rows_in,
 )
 from ..documents.reads import NOT_A_PAGE
 from .fusion import (
@@ -102,19 +103,16 @@ def _similar_documents(
             )
             keys = [int(k) for k, _ in found]
             order: list[int] = []
-            for i in range(0, len(keys), 500):
-                part = keys[i : i + 500]
-                marks = ",".join("?" * len(part))
-                by_chunk = {
-                    r["id"]: r["doc_id"]
-                    for r in con.execute(
-                        f"SELECT id, doc_id FROM chunks WHERE id IN ({marks})", part
-                    )
-                }
-                for k in part:
-                    d = by_chunk.get(k)
-                    if d is not None and d != doc_id and d not in order:
-                        order.append(d)
+            by_chunk = {
+                r["id"]: r["doc_id"]
+                for r in rows_in(
+                    con, "SELECT id, doc_id FROM chunks WHERE id IN ({ids})", keys
+                )
+            }
+            for k in keys:
+                d = by_chunk.get(k)
+                if d is not None and d != doc_id and d not in order:
+                    order.append(d)
             lists.append(order[:depth])
     if not lists:
         return []
