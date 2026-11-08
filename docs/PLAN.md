@@ -52,7 +52,8 @@ and its item 5 is items 1 and 2 below.
    run, and a retired document's edges); the tried marks of the
    steps in one shape (done 2026-11-08: `store.step_tried`, the four keys
    kept, so no migration; the retry on a new text was the bug fix of
-   2026-11-07). Then findings 8 to 56 by cost.
+   2026-11-07). The rest, by cost: "The structure review of 2026-11-07:
+   what is left" below (2026-11-08).
 1. (asked for by the clock from 2026-11-05) **AO's fixes, now the card
    runs.** The maths as text was read by marker on the night of
    2026-11-03: 529 papers, and the formulas after them. The rest is
@@ -257,6 +258,135 @@ The user asked on 2026-10-28 for every one to be fixed.
       pictures again writes only the names and the stamps) Pictures placed
       before 2026-10-28 have no names in other languages until they are
       placed again.
+
+### The structure review of 2026-11-07: what is left
+
+`docs/eval/structure-review-2026-11-07.md`, numbered there. Done on
+2026-11-07 and -08: 1, 3, 4, 7, 8, 13, 19, 22, 26 to 29, 31 to 35, 37,
+38, 41, 52, 56, and 46 (the store asks `host.process._alive`). The
+same-day bug fixes closed the wrong part of 2, 5, 6, 18, 21 and 39; what
+is listed for them below is the structure that is left. Ranked by cost,
+the ones that are wrong now first. Sizes are the review's, checked
+against the code on 2026-11-08.
+
+**Wrong now, an hour or two each.**
+
+- [ ] 30. `connect` answers from the path index as it was before a merge:
+      `paths._stamp` reads the edges' maxima only, and `merge_entities`
+      writes no edge. The paths take `graph_stamp`, which counts merges
+      (some 25 ms, read only after `PATH_REFRESH`; measure on the board).
+      Test: merge, then connect.
+- [ ] 15. `assign_domains` assigns domains to retired documents, which
+      `domains_dry_run` (the Admin page's preview) leaves out. One
+      `_matched(con, rules, *, force, ids)` with the one WHERE under
+      both; `commit=False` (test-only) goes.
+- [ ] 25. An ask block ignores the `tokens` and `backend` options a
+      standing question honours, and both keep a `domain` that `ask`
+      never receives, so the fingerprint and the answer search different
+      sets. `_reask` and `_remember` under `create`, `refresh` and
+      `refresh_blocks`; `domain` passed to `ask` or dropped.
+- [ ] 44 and 54 (one finding, found twice). Boolean settings are parsed at
+      eight sites with opposite readings of an unknown word (inbox, pdf
+      and extraction: on only for yes-words; pipeline and web: on unless
+      a no-word). `config.flag(dotted, env, default)`, one vocabulary,
+      a `ConfigError` on anything else.
+- [ ] (left by 5853c60) `senses` matches a name by case where the walk
+      does not.
+
+**Mechanical, an hour each.**
+
+- [ ] 42. Union-find written four times: one `DisjointSet` in
+      `ml.clusters`.
+- [ ] 53. Run names and "N ago" cutoffs by hand, some in local time:
+      `run_name` everywhere, `base.ago(seconds)`, `process._now` on
+      `base.now`.
+- [ ] 36. "A label sure enough" four times with four constants equal to
+      0.5: `labels(meta, field, *, at_least=LABEL_P)`; a rule's own `p`
+      stays a parameter.
+- [ ] 49. Callers write the markup format by hand while its emitters are
+      test-only: `markup.doc_link`, `read_by`, `figure_ref`, `HEADING`,
+      and a new `figure_line_of`.
+- [ ] 47. 37 list routes take a limit, 12 clamp it by hand:
+      `Annotated[int, Query(ge=1, le=N)]` aliases in `api/_base.py`.
+- [ ] 21 (the rest). Four one-line "is this model free" wrappers become
+      `pipeline.free(step)`; the spend policy is one
+      `paid_refusal(step, spec, spend, *, spend_allowed)`.
+- [ ] 18 (the rest). Fresh ids are shared since 2026-11-07
+      (`first_fresh_id`); carrying an old group's id to its successor is
+      still written three times: a pure `carry_ids` in `ml.clusters`.
+
+**Half a day to a day each.**
+
+- [ ] 39. "May this viewer see this edge" at about 15 sites, the
+      premise rule at four: `visible_edges(con, rows)` in `graph.edges`,
+      with a wall test per graph read. Whether any single-check site reads
+      derived edges goes to the next safety review (`connect` does not:
+      its index leaves rule edges out).
+- [ ] 12 with 30. Seven hand-built memo caches: one `StampMemo(stamp,
+      kept)` in `base`. The path index keeps building under its lock
+      (the 150 MB peak).
+- [ ] 10. A document's domain set decoded in seven places with two
+      rules for an empty set: all through `decode_domains`, and
+      `domain_sets(con)` under `domain_clause` and the counters.
+- [ ] 24. "Not a real name" judged in four places with three
+      reference-number patterns: `ontology.not_a_name` reading a
+      `not_names:` lexicon section.
+- [ ] 51. ONNX sessions built five ways; the serving reranker skips the
+      memory settings (invariant 7): `ml/onnx.session(path, section=)`.
+- [ ] 50. A prompt fitted to the context three ways, one parsing
+      llama-server's error text: `models.ContextTooLong` raised by the
+      runtime, caught by extraction and ask.
+- [ ] 48. The P(yes) judge written three times: one `Judge` in
+      `graph.calibration` with Platt and the thread pool.
+- [ ] 45. The bulk reading selection listed four times: a nested
+      `ReadingSelection` model the CLI sends too.
+- [ ] 43. A step's facts in seven registries that disagree for pack
+      steps: `SERVER_READINGS`, `models.STEPS` and `CORE_STEPS` derived.
+- [ ] 6 (the rest). Readings under a marked line written twice (figures,
+      formulas); both are carried since 2026-11-07: one
+      `parsers/readings` core with an anchor per kind.
+- [ ] 40 and 55. `maintain.py` holds the citation matcher and the
+      schema.org fact builder; `store/jobs.py` holds jobs, tokens,
+      spending, extension requests and index views. Each concept to its
+      own part, re-exports unchanged.
+
+**A stage each.**
+
+- [ ] 5 (the rest). Claude called four ways; the cost reaches the ledger
+      since 2026-11-07. `ClaudeRuntime.chat` with `schema`, `images`,
+      `cache_system` and `effort`; the extractor, the adjudicator and the
+      vision reading each one call.
+- [ ] 9. The vector index family written three times; only the chunk
+      index is compacted: one `IndexFile` per kind, `compact_vectors`
+      and `merge_vectors` over all three.
+- [ ] 11 with 14. "Which documents" built by four selectors; a search's
+      domain, doctype, published span and aside pages filtered after
+      ranking with a guessed over-fetch each: one `DocumentFilter`, the
+      search's filters inside the legs as `senses` already are. Measured
+      with `eval_retrieval.py` before and after.
+- [ ] 16. "State these facts for this document" per producer, two
+      strategies (diff-and-keep, end-and-restate): one
+      `sync_facts(con, doc_id, producer, run, facts)` returning added,
+      kept and ended.
+- [ ] 20. A door job registered in five places: one `DoorJob`
+      registry in `api/passes.py`, every job thread through `run_as_job`.
+- [ ] 23. The supervisor's role state as four parallel sets changed at
+      22 sites: one `RoleState` with an enum and its transitions.
+- [ ] 2 (the rest), with the decision it needs. `retire_document` ends
+      a document's edges with a raw UPDATE and no record, and the repairs
+      `_repair_entities` and `_repair_edges` end without a run. Undoing
+      a retire would state the edges again under new ids (`restore_run`),
+      which review items, premises and annotations holding the old ids
+      would see; what an undo of each should mean is the user's call.
+      The "before" values of a document decision (sensitivity, domains)
+      in one run-record helper.
+- [ ] 17. A document's node: `document_node` one way, titles the other,
+      pages naming themselves "page" or "project". `document_node`
+      decides pages too, and `node_document(name, type)` is the reverse,
+      best backed by an `entities.doc_id` column (a migration).
+- [ ] 1 (the rest). One done-or-tried stamp per step for every kind of
+      due query, in place of the meta keys: a migration and the meta-path
+      indexes rebuilt.
 
 ## Stages
 
