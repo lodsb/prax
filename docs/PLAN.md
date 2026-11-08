@@ -37,12 +37,10 @@ and its item 5 is items 1 and 2 below.
 ### Next, in order
 
 0. (the user's word, 2026-11-07) **The structure review's cleanups,
-   before more is built on the store.** First the mechanical ones: one
-   exception handler for the store's KeyError and ValueError (about 140
-   hand-written mappings in `api/`), one helper for lists of ids in SQL
-   (about 115 `IN` lists and 30 loops of 500), one live-document filter
-   (75 copies of the SQL), the store's re-export lists (1,934 lines, 79
-   private names nothing outside reaches), the dead code. Then one owner
+   before more is built on the store.** The mechanical ones are done
+   (2026-11-08, the log): `NotFound` and the door's two handlers,
+   `base.rows_in`, `base.live`, the store's surface pruned and held by a
+   test, the dead code. Then one owner
    for each concept, a stage each: a document's meta (read and written by
    hand at about 70 places, some across two transactions); the entity a
    name means, its canonical id and alias group, a document's node; ending

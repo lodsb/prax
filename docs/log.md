@@ -9846,3 +9846,48 @@ before (a retitled document whose live facts start at a node of an old
 title) 596 documents became 57. The 228 the ailment still lists are
 the three kinds it leaves for a person: 89 shared old titles, 134
 nodes with facts from several documents, and the aliases.
+
+## 2026-11-08: the structure review's mechanical cleanups
+
+Four stages, each green before the next (plan item 0, the review of
+2026-11-07).
+
+- **The store's errors in one place** (findings 22, 33). `prax.errors.NotFound`
+  is a `KeyError` whose message has no quotes, raised by the 80 "no
+  such" sites in the store and in the capture, the parsers, the packs and
+  the importers, and re-exported as `store.NotFound`. The door answers it
+  404 and a `ValueError` 400 through two exception handlers, so 77 route
+  try blocks and 16 handler clauses went (a script did it, and left every
+  handler that meant 409, 422 or another error). A plain `KeyError` is a
+  bug now and a 500; before, every route turned one into "not found",
+  which an agent then trusts. A miss through the MCP proxy reads `no such
+  document`, checked on the live door.
+- **One helper for a list of ids** (31, 37, 38). `base.rows_in` asks a
+  SELECT 500 ids at a time with `{ids}` where the placeholders go,
+  `base.marks` writes them. 25 read loops became calls, and three reads
+  that took a caller's whole list unbatched batch too. The loops that
+  bound how long a write holds the lock stay. It saves no lines (290 in,
+  288 out): the gain is one batching path instead of 25.
+- **One spelling of a live document** (34, 52). `base.live(alias)` and
+  `LIVE` replace 77 hand-written `json_extract(meta, '$.retired') IS
+  NULL` in 25 modules, converted by token so each string stays the same
+  SQL. `title_rows`' `coalesce` form, which no index served on every
+  titles hand-out, uses it, and `is_retired` tests the key's presence as
+  the SQL does. A test holds the spelling and that the planner takes one
+  of the two partial indexes on it.
+- **The store's surface** (13, 35, 41, 56). The 98 private names
+  `store/__init__` re-exported that nothing outside the store reaches
+  are gone (the package `__init__`s keep theirs). The review's star
+  imports were not done: without `__all__` a star import brings the
+  submodules into `store`'s namespace, and an `__all__` a part is the
+  same list again. Instead five part helpers with public names became
+  private, and a test fails on the next public name a part defines that
+  neither its package nor `store` lists, which was the cost the lists
+  had. Dead code gone: `restamp_ontology`, `base._doc_index`,
+  `record_ending`, `roles.is_served`, the `sections_tried` clause of
+  `sections_needed` (the key is never written); `genres._sure` no longer
+  takes the write lock inside a read. The test-only probes and
+  `backfill_provenance` stay.
+
+The four together: 42 files, 575 lines out and 495 in, five tests added,
+1,760 passing.
