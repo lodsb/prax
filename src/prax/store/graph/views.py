@@ -23,7 +23,7 @@ from ..base import (
     live,
     rows_in,
 )
-from .edges import doc_node_ids, held_in_world, hidden_by_premise, with_aliases
+from .edges import doc_node_ids, held_in_world, visible_edges, with_aliases
 from .lookups import entity_answering, entity_named_in
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
@@ -599,14 +599,9 @@ def subgraph_edges(
                 con, _SUBGRAPH_EDGE + f" WHERE {column} IN ({{ids}})" + live, ids or []
             )
         )
-    hidden = hidden_documents(con)
-    seen: dict[int, dict[str, Any]] = {
-        int(e["id"]): e for e in out if e["source_doc"] not in hidden
-    }
-    for eid in hidden_by_premise(con, list(seen), hidden):
-        seen.pop(eid)
+    # an edge both of its document and asked for by id comes once
     return sorted(
-        seen.values(),
+        visible_edges(con, {int(e["id"]): e for e in out}.values()),
         key=lambda e: (
             e["source_hash"] or "",
             e["src_type"],

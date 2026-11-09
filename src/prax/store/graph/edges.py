@@ -9,7 +9,7 @@ import re
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from prax.graph import ontology
 from prax.text import dates, mimes, quotes
@@ -23,6 +23,7 @@ from ..base import (
     _read_archive,
     _reading,
     _serialized,
+    doc_visible,
     document_hidden,
     domain_clause,
     hidden_documents,
@@ -129,7 +130,7 @@ def _open_label(
         (entity_id,),
     ):
         label, doc, owner = str(r[0]), r[1], int(r[2])
-        if q not in label.lower() or (doc is not None and doc in hidden):
+        if q not in label.lower() or not doc_visible(doc, hidden):
             continue
         for end in ("src", "dst"):
             for (src_doc,) in con.execute(
@@ -137,7 +138,7 @@ def _open_label(
                 f" AND valid_to IS NULL AND {_ASSERTED}",
                 (owner,),
             ):
-                if src_doc is None or src_doc not in hidden:
+                if doc_visible(src_doc, hidden):
                     return label
     return None
 
@@ -155,7 +156,7 @@ def _said_openly(
             f" AND valid_to IS NULL AND {_ASSERTED}",
             group,
         ):
-            if doc is None or doc not in hidden:
+            if doc_visible(doc, hidden):
                 return True
     return False
 
@@ -787,19 +788,45 @@ def hidden_by_premise(
     return out
 
 
+EdgeRow = TypeVar("EdgeRow", bound=dict[str, Any])
+
+
+def visible_edges(
+    con: sqlite3.Connection,
+    rows: Iterable[EdgeRow],
+    hidden: frozenset[int] | None = None,
+    *,
+    doc: str = "source_doc",
+    edge: str = "id",
+) -> list[EdgeRow]:
+    """Of these edge rows, the ones the viewer may see: its document is
+    visible (``doc_visible``) and, for a derived edge, every premise's is
+    (``hidden_by_premise``). A row that carries ``producer`` is asked about
+    its premises only when a rule wrote it; one that does not, always.
+    Until 2026-11-09 a walk, a person's facts, a subgraph and ``why`` each
+    wrote the two checks themselves (structure review finding 39)."""
+    hidden = hidden_documents(con) if hidden is None else hidden
+    out = list(rows)
+    if not hidden:
+        return out
+    out = [r for r in out if doc_visible(r[doc], hidden)]
+    derived = [
+        int(r[edge])
+        for r in out
+        if str(r.get("producer", "rule:") or "").startswith("rule:")
+    ]
+    veiled = hidden_by_premise(con, derived, hidden)
+    return [r for r in out if int(r[edge]) not in veiled] if veiled else out
+
+
 @_reading
 def edge_hidden(con: sqlite3.Connection, edge_id: int) -> bool:
     """Whether the viewer may not see this edge: there is none, its
     document is hidden, or it is derived from a premise that is."""
-    hidden = hidden_documents(con)
     row = con.execute(
-        "SELECT source_doc FROM edges WHERE id = ?", (edge_id,)
+        "SELECT id, source_doc FROM edges WHERE id = ?", (edge_id,)
     ).fetchone()
-    if row is None:
-        return True
-    if row[0] is not None and int(row[0]) in hidden:
-        return True
-    return bool(hidden_by_premise(con, [edge_id], hidden))
+    return row is None or not visible_edges(con, [dict(row)])
 
 
 @_reading

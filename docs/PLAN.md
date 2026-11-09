@@ -318,7 +318,7 @@ against the code on 2026-11-08.
 
 **Half a day to a day each.**
 
-- [ ] 39. "May this viewer see this edge" at about 15 sites, the
+- [x] 39 (2026-11-09, the log). "May this viewer see this edge" at about 15 sites, the
       premise rule at four: `visible_edges(con, rows)` in `graph.edges`,
       with a wall test per graph read. Whether any single-check site reads
       derived edges goes to the next safety review (`connect` does not:

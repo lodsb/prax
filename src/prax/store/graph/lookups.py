@@ -8,7 +8,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from ..base import _reading, hidden_documents, meta_of, rows_in
+from ..base import _reading, doc_visible, hidden_documents, meta_of, rows_in
 from .edges import _named
 
 
@@ -31,7 +31,7 @@ def labels_of_entities(
                 " AND l.label != e.name AND l.was = 0 ORDER BY l.label, l.lang",
                 (name, etype),
             )
-            if r["source_doc"] is None or int(r["source_doc"]) not in hidden
+            if doc_visible(r["source_doc"], hidden)
         ]
         if rows:
             out[(name, etype)] = [

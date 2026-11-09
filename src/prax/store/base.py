@@ -22,6 +22,7 @@ import sqlite3
 import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Set as AbstractSet
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -707,6 +708,14 @@ def store_state(con: sqlite3.Connection) -> tuple[Any, ...]:
         int(con.execute("PRAGMA data_version").fetchone()[0]),
         con.total_changes,
     )
+
+
+def doc_visible(doc: Any, hidden: AbstractSet[int]) -> bool:
+    """Whether what a row says is the viewer's to see by its document: it
+    has none (a person's fact, a rule's), or one not ``hidden``. The one
+    test of a fact's or a name's ``source_doc``; ``visible_edges`` adds
+    the premises of a derived edge (structure review finding 39)."""
+    return doc is None or int(doc) not in hidden
 
 
 def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:

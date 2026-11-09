@@ -125,6 +125,7 @@ from .edges import (  # noqa: F401
     retire_run,
     run_edges,
     select_for_extraction,
+    visible_edges,
     with_aliases,
 )
 from .events import (  # noqa: F401

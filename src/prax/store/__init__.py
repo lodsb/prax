@@ -74,6 +74,7 @@ from .base import (  # noqa: F401
     chunk_hidden,
     connect,
     decode_domains,
+    doc_visible,
     document_hidden,
     domain_clause,
     door_written,
@@ -554,6 +555,7 @@ from .graph import (  # noqa: F401
     unname_faces,
     version_candidates,
     versions_of,
+    visible_edges,
     with_aliases,
 )
 from .jobs import (  # noqa: F401

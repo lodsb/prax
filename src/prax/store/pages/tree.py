@@ -9,6 +9,7 @@ from typing import Any, Final
 from ..base import (
     _read_archive,
     _reading,
+    doc_visible,
     document_hidden,
     hidden_documents,
     personal_sql,
@@ -83,8 +84,7 @@ def _seen_project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Ro
     return [
         r
         for r in _project_edges(con, doc_id)
-        if int(r["doc_id"]) not in hidden
-        and (r["source_doc"] is None or int(r["source_doc"]) not in hidden)
+        if int(r["doc_id"]) not in hidden and doc_visible(r["source_doc"], hidden)
     ]
 
 
@@ -120,7 +120,7 @@ def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
                 (title,),
             )
             # a fact a hidden document states is hidden with it, as in a walk
-            if r["source_doc"] is None or int(r["source_doc"]) not in hidden
+            if doc_visible(r["source_doc"], hidden)
         }.values()
     )
     first = _doc_ids_by_title(con, [str(r["name"]) for r in rows])

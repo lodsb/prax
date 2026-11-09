@@ -635,3 +635,34 @@ def test_a_derived_fact_does_not_name_an_entity_its_premises_hide(
         assert store.find_entities(con, "Ardenia") == []
     finally:
         store.VIEWER.reset(token)
+
+
+def test_one_test_says_which_edges_a_viewer_sees(con: sqlite3.Connection) -> None:
+    """Structure review 2026-11-07, finding 39: each read wrote its own
+    document check, and four of them the premise rule as well."""
+    for a, b in (("Aldmouth", "Lower Vale"), ("Lower Vale", "Ardenia")):
+        doc = int(store.ingest_text(con, f"{a} lies in {b}. " * 20, title=a)["doc_id"])
+        store.set_domains(con, doc, ["research"])
+        store.link(
+            con, store.Edge(a, "place", "located_in", b, "place"), source_doc=doc
+        )
+    store.derive_rules(con)
+    rows = [
+        dict(r)
+        for r in con.execute(
+            "SELECT id, source_doc, producer FROM edges WHERE valid_to IS NULL"
+        )
+    ]
+    derived = [r for r in rows if str(r["producer"]).startswith("rule:")]
+    assert len(rows) == 3 and len(derived) == 1 and derived[0]["source_doc"] is None
+    assert store.visible_edges(con, rows) == rows  # the administrator
+    token = store.VIEWER.set(store.Viewer("cook", domains=frozenset({"kitchen"})))
+    try:
+        assert store.visible_edges(con, rows) == []
+        # without its producer a row is asked about its premises all the same
+        bare = [{"id": r["id"], "source_doc": r["source_doc"]} for r in derived]
+        assert store.visible_edges(con, bare) == []
+        assert store.edge_hidden(con, int(derived[0]["id"]))
+    finally:
+        store.VIEWER.reset(token)
+    assert store.doc_visible(None, frozenset({1})) and not store.doc_visible(1, {1})

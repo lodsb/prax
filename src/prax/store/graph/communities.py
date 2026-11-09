@@ -14,6 +14,7 @@ from prax.ml.clusters import carry_ids
 from ..base import (
     _reading,
     _serialized,
+    doc_visible,
     first_fresh_id,
     hidden_documents,
     live,
@@ -280,7 +281,7 @@ def region_map(con: sqlite3.Connection, *, limit: int = 40) -> dict[str, Any]:
         """,
         (*sorted(shown), *sorted(shown)),
     ):
-        if doc is not None and doc in hidden:
+        if not doc_visible(doc, hidden):
             continue
         crossing[(min(ra, rb), max(ra, rb))] += 1
     return {

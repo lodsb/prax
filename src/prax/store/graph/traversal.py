@@ -13,7 +13,7 @@ from prax import config
 from prax.graph import ontology
 from prax.text import dates
 
-from ..base import VIEWER, _reading, domain_clause, hidden_documents, now
+from ..base import VIEWER, _reading, doc_visible, domain_clause, hidden_documents, now
 from .communities import community_of
 from .edges import (
     _ASSERTED,
@@ -23,7 +23,7 @@ from .edges import (
     document_node,
     held_at,
     held_in_world,
-    hidden_by_premise,
+    visible_edges,
     with_aliases,
 )
 
@@ -260,7 +260,7 @@ def senses(con: sqlite3.Connection, name: str) -> list[dict[str, Any]]:
             )
         }
         # what a hidden document says is not there for this viewer
-        edges = {k: d for k, d in edges.items() if d not in hidden}
+        edges = {k: d for k, d in edges.items() if doc_visible(d, hidden)}
         docs = sorted({d for d in edges.values() if d is not None})
         domains = [
             str(r[0])
@@ -585,23 +585,16 @@ def _walk(
         (json.dumps(start_ids), *held_args, hops, *held_args, hops, *held_args),
     ).fetchall()
     hidden = hidden_documents(con)
-    seen = [
-        _world_said(dict(r))
-        for r in rows
-        if r["source_doc"] not in hidden
-        and (within is None or r["source_doc"] in within)
-    ]
-    veiled = hidden_by_premise(
+    seen = visible_edges(
         con,
-        [
-            int(r["edge_id"])
-            for r in seen
-            if str(r.get("producer") or "").startswith("rule:")
-        ],
+        (
+            _world_said(dict(r))
+            for r in rows
+            if within is None or r["source_doc"] in within
+        ),
         hidden,
+        edge="edge_id",
     )
-    if veiled:
-        seen = [r for r in seen if int(r["edge_id"]) not in veiled]
     shaped, neighbours_left = _second_hop(seen)
     near = [r for r in shaped if int(r["hop"]) < 2]
     far = [r for r in shaped if int(r["hop"]) >= 2]
@@ -658,7 +651,7 @@ def _mark_disputed(
         f" WHERE c.ended_at IS NULL AND c.edge_b IN ({marks})",
         ids + ids,
     ):
-        if doc is None or int(doc) not in hidden:
+        if doc_visible(doc, hidden):
             counts[int(mine)] = counts.get(int(mine), 0) + 1
     for r in rows:
         n = counts.get(int(r.get("edge_id") or 0))
@@ -712,7 +705,7 @@ def _visible_ids(
     keep = set(ids)
     seen: set[int] = set()
     for src, dst, doc in rows:
-        if doc is None or int(doc) not in hidden:
+        if doc_visible(doc, hidden):
             seen.update(x for x in (int(src), int(dst)) if x in keep)
     return [i for i in ids if i in seen]
 

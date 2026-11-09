@@ -25,8 +25,15 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import VIEWER, NotFound, _reading, hidden_documents, store_state
-from .edges import alias_group, hidden_by_premise
+from ..base import (
+    VIEWER,
+    NotFound,
+    _reading,
+    doc_visible,
+    hidden_documents,
+    store_state,
+)
+from .edges import alias_group, visible_edges
 from .events import RECORDED_AT
 
 PERSON_TYPE = "person"
@@ -66,14 +73,7 @@ def _own_facts(
                 (group,),
             )
         ]
-    seen = [r for r in rows if r["doc"] is None or int(r["doc"]) not in hidden]
-    derived = [
-        int(r["edge_id"])
-        for r in seen
-        if str(r.get("producer") or "").startswith("rule:")
-    ]
-    veiled = hidden_by_premise(con, derived, hidden) if derived else set()
-    return [r for r in seen if int(r["edge_id"]) not in veiled]
+    return visible_edges(con, rows, hidden, doc="doc", edge="edge_id")
 
 
 def _photos_part(
@@ -220,7 +220,7 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
         " ORDER BY label",
         (json.dumps(ids), name),
     ):
-        if r["source_doc"] is None or int(r["source_doc"]) not in hidden:
+        if doc_visible(r["source_doc"], hidden):
             labels.setdefault(
                 (r["label"], r["lang"] or ""), {"label": r["label"], "lang": r["lang"]}
             )
@@ -293,7 +293,7 @@ def _people(con: sqlite3.Connection, q: str, limit: int) -> list[dict[str, Any]]
             f" WHERE c.type IN ({marks}){where} GROUP BY 1, 2, 3",
             (DEPICTS, *types, *args),
         ):
-            if r["source_doc"] is not None and int(r["source_doc"]) in hidden:
+            if not doc_visible(r["source_doc"], hidden):
                 continue
             if not r["shown"]:
                 counts[int(r["cid"])] += int(r["n"])

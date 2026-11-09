@@ -10252,3 +10252,33 @@ model's kind.
   the vision step is … (paid); --spend runs it").
 - Test: which steps may spend, and the refusal with and without
   `--spend`.
+
+## 2026-11-09: which edges a viewer sees, said once
+
+Finding 39 of the structure review. "May this viewer see what this row
+says" was written at about fifteen sites as `doc is None or int(doc)
+not in hidden`, or its negation. Three of them dropped the guards
+(harmless while `None` is never in the set). The wall's second rule,
+that a derived edge is hidden when one of its premises is
+(`hidden_by_premise`), was applied by four of them, each in its own
+words.
+
+- `store.doc_visible(doc, hidden)` is the one test of a row's
+  `source_doc`. It is used for a label, for an asserted edge, for a
+  conflict's other edge, for a region's crossing count, for a project's
+  `part_of` and for a path's hop.
+- `store.visible_edges(con, rows, hidden=None, *, doc=, edge=)` is the
+  test of an edge row: its document, then the premises of a derived one.
+  A row that carries `producer` is asked about its premises only when a
+  rule wrote it. A row that does not carry it is always asked. The
+  walk (`_walk`), a person's facts, `subgraph_edges` and `edge_hidden`
+  use it. With no hidden document (the administrator) it costs nothing.
+- The sites that keep `doc_visible` alone read asserted edges only
+  (`_ASSERTED`, `edge_conflicts`, the path index, which leaves rule edges
+  out), labels, or document ids. The domain count of a walk's
+  neighbourhood reads rule edges too, but only their documents. Whether
+  any other read shows a derived edge goes to the next safety review, as
+  the plan said.
+- Test: three edges, one derived from two research documents. The
+  administrator sees all three; a kitchen token sees none, also from a
+  row without its producer, and `edge_hidden` agrees.

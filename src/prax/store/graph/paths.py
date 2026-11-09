@@ -15,7 +15,7 @@ import threading
 import time
 from typing import Any
 
-from ..base import _reading, hidden_documents
+from ..base import _reading, doc_visible, hidden_documents
 from .edges import held_at, held_in_world
 from .traversal import _choose
 from .views import _graph_stamp
@@ -188,9 +188,7 @@ def connect_entities(
     for p in shown:
         hops = []
         for f in p.facts:
-            behind = [
-                (e, d) for e, d in index.edges_of(f) if d is None or d not in hidden
-            ]
+            behind = [(e, d) for e, d in index.edges_of(f) if doc_visible(d, hidden)]
             eid, doc = behind[0]
             ev = con.execute(
                 "SELECT evidence, world_from, world_to FROM edges WHERE id = ?", (eid,)
