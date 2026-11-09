@@ -346,7 +346,7 @@ against the code on 2026-11-08.
 - [x] 6 (the rest; 2026-11-09, the log: `parsers.annotate`). Readings under a marked line written twice (figures,
       formulas); both are carried since 2026-11-07: one
       `parsers/readings` core with an anchor per kind.
-- [ ] 40 and 55. `maintain.py` holds the citation matcher and the
+- [x] 40 and 55 (2026-11-09, the log; spending and requests stay in jobs). `maintain.py` holds the citation matcher and the
       schema.org fact builder; `store/jobs.py` holds jobs, tokens,
       spending, extension requests and index views. Each concept to its
       own part, re-exports unchanged.

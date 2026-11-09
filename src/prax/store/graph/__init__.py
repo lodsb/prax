@@ -31,8 +31,17 @@ ORDER = (
     "versions",
     "pictures",
     "imports",
+    "citations",
+    "schemaorg",
 )
 
+from .citations import (  # noqa: F401
+    CANDIDATES,
+    REFERENCES_PRODUCER,
+    bibliographies,
+    link_references,
+    resolve_references,
+)
 from .communities import (  # noqa: F401
     CARRY,
     FRESH,
@@ -286,6 +295,7 @@ from .rules import (  # noqa: F401
     part_of_suspects,
     same_answers,
 )
+from .schemaorg import MARKUP_PRODUCER, Fact, markup_facts  # noqa: F401
 from .traversal import (  # noqa: F401
     CHANGES_SHOWN,
     EDGES,

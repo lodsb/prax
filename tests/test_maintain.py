@@ -246,3 +246,24 @@ def test_resolved_review_items_are_kept_a_month(con: sqlite3.Connection) -> None
     assert out["forgotten"] == 1
     left = {r[0] for r in con.execute("SELECT id FROM review_queue")}
     assert left == {ids[1], ids[2]}
+
+
+def test_a_reference_list_is_found_by_the_chunkers_own_headings(
+    con: sqlite3.Connection,
+) -> None:
+    """Structure review 2026-11-07, finding 40: the matcher kept a list of
+    headings of its own beside the chunker's, without "literature" at the
+    end of one or a section number in front, so a list the chunker cut
+    into reference chunks was not read for what it cites."""
+    entry = "- [1] M. Holters, “Antiderivative antialiasing,” 2018.\n"
+    ids = [
+        store.ingest_text(
+            con,
+            "# Introduction\n\n"
+            + "We build on earlier work. " * 40
+            + f"\n\n# {heading}\n\n{entry}",
+            title=f"A paper under {heading}",
+        )["doc_id"]
+        for heading in ("Cited Literature", "7. References", "Acknowledgements")
+    ]
+    assert sorted(store.bibliographies(con)) == ids[:2]

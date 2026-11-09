@@ -10573,3 +10573,41 @@ reading, and formulas reached into `chunking`'s private `_READ_BY` and
 - Test: `place` with and without `again`, `nearby` leaving out readings
   of both kinds, and no private `_read_by` or `carry_readings` left in
   either pass.
+
+## 2026-11-09: the citation matcher, the markup facts and the tokens, each in its place
+
+Findings 40 and 55 of the structure review. `store.maintain` (1,478
+lines) held, beside the passes, the matcher that links a document's
+reference list to the library (some 270 lines) and the builder of the
+facts a page's schema.org markup states. `store.jobs` held the named
+tokens and the viewers they make, which the wall decides by, in a module
+whose docstring said nothing read its rows to decide anything.
+
+- `store.graph.citations` is the matcher (`bibliographies`,
+  `resolve_references`, `link_references`, `REFERENCES_PRODUCER`,
+  `CANDIDATES`), last in the graph's `ORDER`. It writes `cites` edges, so
+  it is a graph part. It reports its progress to a `_Progress` protocol,
+  since `store.Job` lives in a later module than the graph.
+- `store.graph.schemaorg` is `markup_facts` and `Fact`. Its producer
+  constant is `MARKUP_PRODUCER` now: `store.MARKUP` is already the repair
+  pass's pattern for tags in a name.
+- The tokens section (`add_token` through `named_viewer`) is at the end of
+  `store.base`, beside `Viewer` and the wall's filters (base 1,209 to
+  some 1,360 lines). The store keeps its ten modules. Every name is
+  re-exported by `store` as before.
+- `store.jobs` keeps the jobs, the spending on paid models and the
+  extension's capture requests; its docstring says so. Moving spending
+  and the requests would make new store modules for a few dozen lines
+  each.
+- The one change of behaviour: the matcher kept its own list of
+  reference headings beside the chunker's (`text.references`). It read
+  "literatur" as a start or an end, so "Literature" passed, but a heading
+  ending in "literature" ("Cited Literature") was a reference list to the
+  chunker and not to the matcher. `bibliographies` now asks
+  `references.is_bibliography_heading`, which also strips a section
+  number. The next `references` pass reads such documents for what they
+  cite.
+- `maintain.py` is 1,124 lines. CLAUDE.md names the two graph parts.
+- Test: a list under "Cited Literature" or "7. References" is found and
+  one under "Acknowledgements" is not; the move is held by the
+  invariants' tests of the parts' order and re-exports.

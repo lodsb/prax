@@ -39,7 +39,7 @@ def test_a_tokens_last_use_is_kept_once_an_hour(
     ).json()
     before = client.get("/tokens", headers=_as(ADMIN)).json()["tokens"][0]
     assert before["name"] == "laptop" and before["last_used"] is None
-    store.jobs._token_used.clear()
+    store.base._token_used.clear()
     assert (
         client.get(
             "/search", params={"q": "x"}, headers=_as(made["secret"])
@@ -51,7 +51,7 @@ def test_a_tokens_last_use_is_kept_once_an_hour(
     # within the hour a use writes nothing
     con = store.thread_connection()
     assert store.note_token_use(con, "laptop") is False
-    monkeypatch.setattr(store.jobs, "TOKEN_USE_EVERY", 0.0)
+    monkeypatch.setattr(store.base, "TOKEN_USE_EVERY", 0.0)
     assert store.note_token_use(con, "laptop") is True
 
 

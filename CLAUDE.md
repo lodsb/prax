@@ -74,7 +74,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
-   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures, imports), `retrieval` (knobs, compounds, query, legs,
+   context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures, imports, citations, schemaorg), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces), `pages` (texts, tree, reads, writes,
    moves, splits, projects) and `repair` (common, graph, documents, cleanup, ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
