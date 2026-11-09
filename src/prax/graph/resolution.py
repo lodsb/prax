@@ -609,7 +609,7 @@ class LocalAdjudicator:
 
     base_url: str
     model: str
-    platt: tuple[float, float] | None = None  # (a, b); raw P(yes) without
+    platt: Any = None  # the fit, [a, b] or {a, b} (Platt.of); raw P(yes) without
     settle: float = SETTLE
     slots: int = 2
     probabilities: list[float | None] = field(default_factory=list)
@@ -624,23 +624,18 @@ class LocalAdjudicator:
 
         prompt = local_prompt(c.type, c.keep_name, c.drop_name)
         try:
-            top = models.top_logprobs(
+            raw = calibration.p_yes(
                 self.base_url, self.model, [{"role": "user", "content": prompt}]
             )
         except (models.ServerNotReady, RuntimeError, OSError, ValueError):
             return None  # no answer: the pair is left, and asked again
-        raw = None if top is None else calibration.yes_probability(top)
-        if raw is None:
-            return None
-        if self.platt is None:
-            return raw
-        return calibration.Platt(*self.platt)(raw)
+        platt = calibration.Platt.of(self.platt)
+        return raw if raw is None or platt is None else platt(raw)
 
     def decide(self, candidates: list[Candidate]) -> list[bool | None]:
-        from concurrent.futures import ThreadPoolExecutor
+        from prax.graph import calibration
 
-        with ThreadPoolExecutor(max_workers=max(1, self.slots)) as pool:
-            self.probabilities = list(pool.map(self.probability, candidates))
+        self.probabilities = calibration.each(self.probability, candidates, self.slots)
         return [self.settled(p) for p in self.probabilities]
 
     def settled(self, p: float | None) -> bool | None:

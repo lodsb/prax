@@ -413,13 +413,11 @@ def supported(runtime: Any, sentence: str, claim: str) -> float | None:
     served model that gives them, or gives none."""
     from prax.graph import calibration
 
-    base_url = getattr(runtime, "base_url", None)
-    model = getattr(runtime, "model", None)
-    if not base_url or not model:
+    served = models.served(runtime)
+    if served is None:
         return None
     prompt = f"{JUDGE}\n\nPassage: {sentence}\n\nFact: {claim}"
-    top = models.top_logprobs(base_url, model, [{"role": "user", "content": prompt}])
-    return None if top is None else calibration.yes_probability(top)
+    return calibration.p_yes(*served, [{"role": "user", "content": prompt}])
 
 
 # ------------------------------------------------------------- the door's half

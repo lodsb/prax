@@ -43,10 +43,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from prax import models
 from prax.graph import calibration
 from prax.graph.ontology import Facet
 
@@ -116,7 +114,7 @@ def ask(base_url: str, model: str, document: str, q: str) -> float | None:
     """P(yes) for one question about one document, or None when the
     answer gave nothing to read. A server that is down or loading raises
     ``models.ServerNotReady``: the step defers the rest of its batch."""
-    top = models.top_logprobs(
+    return calibration.p_yes(
         base_url,
         model,
         [
@@ -125,7 +123,6 @@ def ask(base_url: str, model: str, document: str, q: str) -> float | None:
         ],
         cache_prompt=True,
     )
-    return None if top is None else calibration.yes_probability(top)
 
 
 def probabilities(
@@ -144,14 +141,14 @@ def probabilities(
 
     def run(labels: Iterable[str]) -> dict[str, float]:
         labels = list(labels)
-        with ThreadPoolExecutor(max_workers=max(1, slots)) as pool:
-            got = pool.map(
-                lambda x: ask(
-                    base_url, model, document, question(facet, x, said[x], about=about)
-                ),
-                labels,
-            )
-            return {x: p for x, p in zip(labels, got, strict=True) if p is not None}
+        got = calibration.each(
+            lambda x: ask(
+                base_url, model, document, question(facet, x, said[x], about=about)
+            ),
+            labels,
+            slots,
+        )
+        return {x: p for x, p in zip(labels, got, strict=True) if p is not None}
 
     out = run(lv.name for lv in facet.levels)
     under = [
@@ -167,18 +164,8 @@ def calibrated(
     """A raw P(yes) through the facet's Platt map for its kind (``"genres
     levels"``, ``"subjects labels"``, …); raw where the file has none."""
     kind = "levels" if facet.level_of(label) == label else "labels"
-    m = (platt or {}).get(f"{name} {kind}")
-    if not m:
-        return p
-    a, b = (
-        (float(m[0]), float(m[1]))
-        if isinstance(m, list | tuple)
-        else (
-            float(m["a"]),
-            float(m["b"]),
-        )
-    )
-    return calibration.Platt(a, b)(p)
+    fit = calibration.Platt.of((platt or {}).get(f"{name} {kind}"))
+    return p if fit is None else fit(p)
 
 
 def label(
@@ -203,15 +190,13 @@ def label(
     ):
         proposed = facet.implied(listed(runtime, document, facet, about=about))
         said = _descriptions(facet)
-        with ThreadPoolExecutor(max_workers=max(1, slots)) as pool:
-            raw = list(
-                pool.map(
-                    lambda x, f=facet, a=about, d=said: ask(
-                        base_url, model, document, question(f, x, d[x], about=a)
-                    ),
-                    proposed,
-                )
-            )
+
+        def one(
+            x: str, f: Facet = facet, a: bool = about, d: dict[str, str] = said
+        ) -> float | None:
+            return ask(base_url, model, document, question(f, x, d[x], about=a))
+
+        raw = calibration.each(one, proposed, slots)
         out[key] = {
             x: round(q, 3)
             for x, p in zip(proposed, raw, strict=True)

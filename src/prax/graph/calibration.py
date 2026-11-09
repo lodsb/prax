@@ -19,8 +19,13 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Any, TypeVar
+
+T = TypeVar("T")
+R = TypeVar("R")
 
 EPS = 1e-6
 
@@ -105,6 +110,40 @@ class Platt:
     def __call__(self, p: float) -> float:
         z = self.a * _logit(p) + self.b
         return 1.0 / (1.0 + math.exp(-z)) if z > -700 else 0.0
+
+    @classmethod
+    def of(cls, setting: Any) -> Platt | None:
+        """The fit a setting holds, ``[a, b]`` or ``{a: …, b: …}`` as
+        ``fit_platt`` reports it; None for an empty one. Until 2026-11-09
+        the adjudicator read only the second and the genres step both
+        (structure review finding 48)."""
+        if not setting:
+            return None
+        if isinstance(setting, Mapping):
+            return cls(float(setting["a"]), float(setting["b"]))
+        a, b = setting
+        return cls(float(a), float(b))
+
+
+def p_yes(
+    base_url: str, model: str, messages: list[dict[str, str]], **kw: Any
+) -> float | None:
+    """A served model's P(yes) for a question, read from the alternatives
+    of its first token (``yes_probability``); None when the answer gave
+    nothing to read. A server that is down raises ``models.ServerNotReady``,
+    and what to do then is the caller's: the genres step defers its batch,
+    the adjudicator leaves the pair."""
+    from prax import models
+
+    top = models.top_logprobs(base_url, model, messages, **kw)
+    return None if top is None else yes_probability(top)
+
+
+def each(ask: Callable[[T], R], items: Iterable[T], slots: int) -> list[R]:
+    """``ask`` over the items, ``slots`` at a time: the server's parallel
+    slots, each question one short request."""
+    with ThreadPoolExecutor(max_workers=max(1, slots)) as pool:
+        return list(pool.map(ask, items))
 
 
 def _log_loss(a: float, b: float, x: Sequence[float], t: Sequence[float]) -> float:

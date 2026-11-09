@@ -546,6 +546,15 @@ def _data_url(data: bytes, media_type: str) -> str:
     return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
 
 
+def served(runtime: Any) -> tuple[str, str] | None:
+    """(the server's URL, the model's name) of a served runtime, for a
+    question asked of the server itself (``top_logprobs``); None for a
+    runtime that is not one, or none."""
+    base_url = getattr(runtime, "base_url", None)
+    model = getattr(runtime, "model", None)
+    return (str(base_url), str(model)) if base_url and model else None
+
+
 def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
     """One POST; replaced in tests."""
     headers = {"Content-Type": "application/json"}

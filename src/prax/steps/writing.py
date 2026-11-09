@@ -653,9 +653,8 @@ def do_genres(
     not answering defers the rest of the batch."""
     if genres_method() == "small":
         return do_small_genres(items, log_=log_)
-    base_url = getattr(runtime, "base_url", None)
-    model = getattr(runtime, "model", None)
-    if runtime is None or not base_url or not model:
+    served = models.served(runtime)
+    if runtime is None or served is None:
         # this worker's configuration, not the document: defer, never mark
         # it tried (a worker without prax.yaml once marked 174 so)
         why = "no genres model" if runtime is None else "wants a local model"
@@ -670,8 +669,7 @@ def do_genres(
         try:
             got = genres.label(
                 runtime,
-                base_url,
-                model,
+                *served,
                 it["view"],
                 G,
                 S,

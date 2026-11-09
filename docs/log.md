@@ -10465,3 +10465,31 @@ The runtime that met the error raised a plain `RuntimeError`.
 - Test: a 400 with the message becomes `ContextTooLong` with both
   numbers, another 400 does not; the extraction and ask tests raise the
   type.
+
+## 2026-11-09: one judge chain, one reading of a fit
+
+Finding 48 of the structure review. Three judges ask a served model a
+yes-or-no question and read P(yes) from the first token's alternatives:
+the adjudicator (`resolution.LocalAdjudicator`), the genres step
+(`writing.genres.ask`) and the world-dates judge (`worlddates.supported`).
+Each wrote the chain from `models.top_logprobs` to
+`calibration.yes_probability`, two of them a thread pool over the
+server's slots, and two steps dug the server's URL and model out of a
+runtime with `getattr`. A stored Platt fit was read in two shapes: the
+genres step took `[a, b]` or `{a, b}`, the adjudicate step only `{a, b}`,
+so `[a, b]` under `steps.adjudicate.platt` was a `TypeError`.
+
+- `calibration.p_yes(base_url, model, messages)` is the chain,
+  `calibration.Platt.of(setting)` reads a fit in either shape (None for
+  none), and `calibration.each(ask, items, slots)` is the pool.
+  `models.served(runtime)` is the URL and model of a served runtime, or
+  None.
+- No `Judge` class, as the review's own check advised: each judge keeps
+  its error policy. The adjudicator returns None for a pair it could not
+  ask, so the pair is asked again. The genres step lets
+  `ServerNotReady` through, so its batch is deferred. The world-dates
+  judge says None for a runtime that is not served.
+- The calibrated numbers do not move: the same `Platt` of the same raw
+  P(yes), and the existing tests of each judge pass unchanged.
+- Test: `Platt.of` reads both shapes, an adjudicator given `[a, b]`
+  calibrates as with `{a, b}`, `p_yes` reads the top tokens.

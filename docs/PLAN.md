@@ -337,7 +337,7 @@ against the code on 2026-11-08.
 - [x] 50 (2026-11-09, the log). A prompt fitted to the context three ways, one parsing
       llama-server's error text: `models.ContextTooLong` raised by the
       runtime, caught by extraction and ask.
-- [ ] 48. The P(yes) judge written three times: one `Judge` in
+- [x] 48 (2026-11-09, the log; no `Judge` class, see there). The P(yes) judge written three times: one `Judge` in
       `graph.calibration` with Platt and the thread pool.
 - [ ] 45. The bulk reading selection listed four times: a nested
       `ReadingSelection` model the CLI sends too.

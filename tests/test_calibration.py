@@ -67,3 +67,32 @@ def test_the_split_is_seeded_and_covers_everything() -> None:
     a, b = cal.split(10)
     assert sorted(a + b) == list(range(10)) and not set(a) & set(b)
     assert cal.split(10) == (a, b)
+
+
+def test_one_judge_chain_and_one_reading_of_a_fit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Structure review 2026-11-07, finding 48: the adjudicator, the
+    genres step and the world-dates judge each wrote the chain from the
+    top tokens to a calibrated P(yes), and the adjudicator read a stored
+    fit only as {a, b}: the [a, b] the genres step accepts was a TypeError."""
+    from prax import models
+    from prax.graph import resolution
+
+    assert cal.Platt.of(None) is None and cal.Platt.of({}) is None
+    assert cal.Platt.of([2, -1]) == cal.Platt.of({"a": 2, "b": -1}) == cal.Platt(2, -1)
+
+    monkeypatch.setattr(
+        models, "top_logprobs", lambda *a, **k: [("yes", -0.1), ("no", -2.4)]
+    )
+    raw = cal.p_yes("http://x/v1", "q", [{"role": "user", "content": "?"}])
+    assert raw == pytest.approx(cal.yes_probability([("yes", -0.1), ("no", -2.4)]))
+    pair = resolution.Candidate(1, 2, "a", "b", "tool", "likely", 0.9)
+    for fit in ([2.0, -1.0], {"a": 2.0, "b": -1.0}):
+        judge = resolution.LocalAdjudicator(
+            base_url="http://x/v1", model="q", platt=fit
+        )
+        assert judge.probability(pair) == pytest.approx(cal.Platt(2.0, -1.0)(raw))
+    assert cal.each(lambda x: x * 2, [1, 2, 3], slots=2) == [2, 4, 6]
+    assert models.served(None) is None
+    assert models.served(models.StubRuntime()) is None

@@ -334,11 +334,10 @@ def do_adjudicate(
         judge: Any = resolution.ClaudeAdjudicator(model=spec.model or spec.name)
     elif spec.kind == "openai" and spec.base_url:
         opts = models.settings("adjudicate")
-        platt = opts.get("platt") or None
         judge = resolution.LocalAdjudicator(
             base_url=spec.base_url,
             model=spec.model or spec.name,
-            platt=(float(platt["a"]), float(platt["b"])) if platt else None,
+            platt=opts.get("platt") or None,
             settle=float(opts.get("settle") or resolution.SETTLE),
             slots=int(opts.get("slots") or 2),
         )
