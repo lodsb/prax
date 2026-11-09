@@ -77,7 +77,7 @@ def stamp() -> str:
 def _session() -> Any:
     import hashlib
 
-    from prax.ml import fetch
+    from prax.ml import fetch, sessions
 
     path = fetch.model_file(REPO, FILE, revision=REVISION)
     data = path.read_bytes()
@@ -85,7 +85,6 @@ def _session() -> Any:
         path.unlink(missing_ok=True)  # fetched again next time
         raise RuntimeError(f"{path} is not the YuNet file prax was measured with")
     import onnx
-    import onnxruntime as ort
 
     model = onnx.load_from_string(data)
     dims = model.graph.input[0].type.tensor_type.shape.dim
@@ -93,11 +92,7 @@ def _session() -> Any:
     for out in model.graph.output:
         out.type.tensor_type.shape.dim[1].dim_param = "anchors"
     del model.graph.value_info[:]  # the shapes inferred for 640 x 640
-    opts = ort.SessionOptions()
-    opts.log_severity_level = 3
-    return ort.InferenceSession(
-        model.SerializeToString(), opts, providers=["CPUExecutionProvider"]
-    )
+    return sessions.session(model.SerializeToString())[0]
 
 
 def _nms(boxes: Any, scores: Any, threshold: float) -> list[int]:
@@ -289,18 +284,14 @@ def _recognizer(name: str | None = None) -> Any:
 def _recognizer_session(name: str) -> Any:
     import hashlib
 
-    from prax.ml import fetch
+    from prax.ml import fetch, sessions
 
     spec = RECOGNIZERS[name]
     path = fetch.model_file(spec.repo, spec.file, revision=spec.revision)
     if hashlib.sha256(path.read_bytes()).hexdigest() != spec.sha256:
         path.unlink(missing_ok=True)  # fetched again next time
         raise RuntimeError(f"{path} is not the {name} file prax was measured with")
-    import onnxruntime as ort
-
-    opts = ort.SessionOptions()
-    opts.log_severity_level = 3
-    return ort.InferenceSession(str(path), opts, providers=["CPUExecutionProvider"])
+    return sessions.session(str(path))[0]
 
 
 def similarity_transform(src: Any, dst: Any) -> Any:

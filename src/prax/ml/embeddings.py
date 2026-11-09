@@ -24,6 +24,8 @@ brackets overrides it for one run):
   had the card.
 * ``threads`` [``PRAX_EMBED_THREADS``]: intra-op threads for the CPU
   provider.
+* ``arena`` [``PRAX_EMBED_ARENA``]: what onnxruntime does with the CPU
+  memory a batch needed (``prax.ml.sessions.ARENAS``).
 
 Every vector is L2-normalized, so cosine similarity is a dot product. The
 model name is what the store records per vector; changing the model means
@@ -42,7 +44,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from prax import config
-from prax.ml import fetch
+from prax.ml import fetch, sessions
 
 
 @dataclass(frozen=True)
@@ -101,28 +103,6 @@ def _normalize(x: np.ndarray) -> np.ndarray:
 
 # ------------------------------------------------------------------- onnx
 
-# What ONNX Runtime does with the CPU memory a batch needed
-# (``embeddings.arena``): ``keep`` it for the next batch (its default, and
-# prax's until 2026-09-30), ``shrink`` it back after every batch, or
-# ``off``, no arena at all. Measured on 2,000 chunks of the library,
-# three runs each (docs/log.md, 2026-09-30): keep 24.0 chunks/s and 2.3 GB
-# held by the process for good; shrink 22.0 chunks/s and 30 MB held; off
-# 17.6 chunks/s and 50 MB. A query takes 3 ms in all three. The door and
-# the worker each kept their 2.3 GB, idle, for days.
-ARENAS = ("shrink", "keep", "off")
-ARENA = "shrink"
-
-
-def arena_options(ort: Any, mode: str) -> tuple[bool, Any]:
-    """(whether the session has a CPU arena, the run options a batch runs
-    with) for an ``embeddings.arena`` mode."""
-    if mode not in ARENAS:
-        raise ValueError(f"embeddings.arena is one of {ARENAS}, not {mode!r}")
-    run = ort.RunOptions()
-    if mode == "shrink":
-        run.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
-    return mode != "off", run
-
 
 @dataclass
 class OnnxEmbedder:
@@ -147,32 +127,15 @@ class OnnxEmbedder:
     def _resolve(self) -> None:
         if self._session is not None:
             return
-        ort = importlib.import_module("onnxruntime")
         tokenizers = importlib.import_module("tokenizers")
-        available = ort.get_available_providers()
-        providers = (
-            self.providers
-            or config.words("embeddings.providers", "PRAX_EMBED_PROVIDERS")
-            or (
-                ["DmlExecutionProvider", "CPUExecutionProvider"]
-                if "DmlExecutionProvider" in available
-                else ["CPUExecutionProvider"]
-            )
-        )
+        providers = sessions.providers_for("embeddings", self.providers)
         variant = (
             self.variant or config.setting("embeddings.variant", "PRAX_EMBED_VARIANT")
         ) or "int8"
         path = str(fetch.model_file(self.spec.repo, self.spec.files[variant]))
-        opts = ort.SessionOptions()
-        opts.log_severity_level = 3
-        threads = self.threads or config.whole(
-            "embeddings.threads", "PRAX_EMBED_THREADS", 0
+        self._session, self._run_options = sessions.session(
+            path, "embeddings", providers=providers, threads=self.threads
         )
-        if threads:
-            opts.intra_op_num_threads = threads
-        mode = str(config.setting("embeddings.arena", "PRAX_EMBED_ARENA", ARENA))
-        opts.enable_cpu_mem_arena, self._run_options = arena_options(ort, mode)
-        self._session = ort.InferenceSession(path, opts, providers=providers)
         self._inputs = {i.name for i in self._session.get_inputs()}
         tok = tokenizers.Tokenizer.from_file(
             str(fetch.model_file(self.spec.repo, self.spec.tokenizer))

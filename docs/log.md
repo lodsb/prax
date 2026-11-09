@@ -10400,3 +10400,43 @@ it like "[12]".
   `prax heal` is run by hand, so nothing is ended until someone repairs,
   and `restore_run` undoes a repair whole.
 - Test: `test_heal` lists and repairs a "Smith et al. [12]" beside "[12]".
+
+## 2026-11-09: one way to build an ONNX session
+
+Finding 51 of the structure review. Five places built an ONNX Runtime
+session by hand: the embedder, the reranker, the genre labeller, and the
+face finder and recogniser. Only the embedder and the labeller applied
+the arena mode and the thread count. The reranker, the one of the five
+that runs inside a search request on the board, applied neither, so it
+kept onnxruntime's default arena (`keep`).
+
+- `prax.ml.sessions` is the one builder. `session(model, section=None, *,
+  providers=, threads=)` returns the session and the run options every
+  `session.run` passes. With a section (`embeddings`, `rerank`) it reads
+  that section's `providers`, `threads` and `arena` and their `PRAX_*`
+  variables. Without one it is the CPU and onnxruntime's own arena, the
+  face models' case. `providers_for(section)` is the provider choice
+  (the setting, else DirectML where offered, else the CPU), which the
+  reranker needs before the session to pick its variant. `ARENAS`,
+  `ARENA` and `arena_options` move here from `embeddings`.
+- Named `sessions`, not `onnx` as the review proposed: `faces.py`
+  imports the `onnx` package itself.
+- New settings: `rerank.threads` (`PRAX_RERANK_THREADS`) and
+  `rerank.arena` (`PRAX_RERANK_ARENA`, default `shrink`). The labeller
+  keeps the embedder's arena and now its threads as well, on the CPU.
+- Measured on this desktop's CPU, ms-marco-MiniLM-L-6-v2 int8, 30 hits
+  of about 1,500 characters (`rerank.depth`), 20 searches, each mode in a
+  fresh process, three rounds (`scratchpad/bench_rerank.py`):
+
+  | arena | after the searches | peak | rerank, median |
+  |---|---|---|---|
+  | keep (before) | 338–344 MB | 338–344 MB | 179–181 ms |
+  | shrink (now) | 120–121 MB | 238 MB | 198–201 ms |
+  | off | 117–120 MB | 228–230 MB | 207–212 ms |
+
+  `shrink` gives back some 220 MB a process kept for good, for about 20
+  ms a rerank. The board is still to be measured. Rerank is off on this
+  host, so no running process changes.
+- Test: a reranker's session gets its section's threads and arena, one
+  without a section stays on the CPU, and no module of `prax.ml` but
+  `sessions` calls `InferenceSession(`.

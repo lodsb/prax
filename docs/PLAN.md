@@ -332,7 +332,7 @@ against the code on 2026-11-08.
 - [x] 24 (2026-11-09, the log; the heal pass lists the "Surname [N]" entities too, the owner's word). "Not a real name" judged in four places with three
       reference-number patterns: `ontology.not_a_name` reading a
       `not_names:` lexicon section.
-- [ ] 51. ONNX sessions built five ways; the serving reranker skips the
+- [x] 51 (2026-11-09, the log). ONNX sessions built five ways; the serving reranker skips the
       memory settings (invariant 7): `ml/onnx.session(path, section=)`.
 - [ ] 50. A prompt fitted to the context three ways, one parsing
       llama-server's error text: `models.ContextTooLong` raised by the

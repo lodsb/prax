@@ -550,6 +550,10 @@ Settings:
   and keeps the store's vectors from one variant.
 - `PRAX_EMBED_PROVIDERS`: DirectML first when the runtime offers it.
 - `PRAX_EMBED_THREADS`.
+- `PRAX_EMBED_ARENA`: `shrink` by default; `keep` held 2.3 GB for good
+  (2026-09-30). The reranker reads its own, `PRAX_RERANK_ARENA`, also
+  `shrink`: `keep` held 340 MB after a search against 120, at 180 ms a
+  rerank against 200 (2026-11-09).
 - `PRAX_VEC_DTYPE`: `f16` by default; `i8` halves the file at recall
   0.93.
 - `PRAX_VEC_EF`: the search expansion, default 64.

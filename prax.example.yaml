@@ -109,6 +109,8 @@ steps:
 #   door_providers: [CPUExecutionProvider]  # [PRAX_DOOR_EMBED_PROVIDERS] the door's one query at a
 #                              #   time: 3 ms on the CPU, seconds on a card the worker's model has
 #   threads: 0                 # [PRAX_EMBED_THREADS] 0: onnxruntime decides
+#   arena: shrink              # [PRAX_EMBED_ARENA] shrink, keep or off: what
+#                              #   onnxruntime does with a batch's memory after it
 
 # vectors:
 #   dtype: f16                 # [PRAX_VEC_DTYPE] f16 (recall .98) or i8 (.93,
@@ -122,6 +124,9 @@ steps:
 #   model: "0"                 # [PRAX_RERANK] off; a cross-encoder name, or `stub`
 #   variant: int8              # [PRAX_RERANK_VARIANT]
 #   providers: []              # [PRAX_RERANK_PROVIDERS]
+#   threads: 0                 # [PRAX_RERANK_THREADS]
+#   arena: shrink              # [PRAX_RERANK_ARENA] keep: 340 MB held after a
+#                              #   search against 120, for 180 ms a rerank against 200
 
 # parse:
 #   ocr_max_pages: 60          # [PRAX_OCR_MAX_PAGES] pages the OCR reads a pass; a

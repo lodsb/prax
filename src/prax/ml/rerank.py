@@ -16,7 +16,10 @@ it for one run):
   ``http://127.0.0.1:8081``);
 * ``variant`` [``PRAX_RERANK_VARIANT``]: ``fp32`` or ``int8`` (default
   int8 on CPU);
-* ``providers`` [``PRAX_RERANK_PROVIDERS``]: onnxruntime providers.
+* ``providers`` [``PRAX_RERANK_PROVIDERS``], ``threads``
+  [``PRAX_RERANK_THREADS``] and ``arena`` [``PRAX_RERANK_ARENA``]: the
+  session's, as ``prax.ml.sessions`` reads them (``shrink`` by
+  default: a rerank runs inside a search request on the board).
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from prax import config
-from prax.ml import fetch
+from prax.ml import fetch, sessions
 
 SERVER_URL = "http://127.0.0.1:8081"
 SERVER_TIMEOUT = 30.0
@@ -87,6 +90,7 @@ class OnnxReranker:
     _session: Any = field(default=None, init=False, repr=False)
     _tokenizer: Any = field(default=None, init=False, repr=False)
     _inputs: set[str] = field(default_factory=set, init=False, repr=False)
+    _run_options: Any = field(default=None, init=False, repr=False)
 
     @property
     def name(self) -> str:
@@ -95,29 +99,17 @@ class OnnxReranker:
     def _resolve(self) -> None:
         if self._session is not None:
             return
-        ort = importlib.import_module("onnxruntime")
         tokenizers = importlib.import_module("tokenizers")
-        available = ort.get_available_providers()
-        providers = (
-            self.providers
-            or config.words("rerank.providers", "PRAX_RERANK_PROVIDERS")
-            or (
-                ["DmlExecutionProvider", "CPUExecutionProvider"]
-                if "DmlExecutionProvider" in available
-                else ["CPUExecutionProvider"]
-            )
-        )
+        providers = sessions.providers_for("rerank", self.providers)
         gpu = providers[0] != "CPUExecutionProvider"
         variant = (
             self.variant
             or config.setting("rerank.variant", "PRAX_RERANK_VARIANT")
             or ("fp32" if gpu else "int8")
         )
-        opts = ort.SessionOptions()
-        opts.log_severity_level = 3
-        self._session = ort.InferenceSession(
+        self._session, self._run_options = sessions.session(
             str(fetch.model_file(self.spec.repo, self.spec.files[variant])),
-            opts,
+            "rerank",
             providers=providers,
         )
         self._inputs = {i.name for i in self._session.get_inputs()}
@@ -149,7 +141,7 @@ class OnnxReranker:
                 feed["token_type_ids"] = np.array(
                     [e.type_ids for e in enc], dtype=np.int64
                 )
-            logits = self._session.run(None, feed)[0]
+            logits = self._session.run(None, feed, self._run_options)[0]
             out[start : start + len(part)] = np.asarray(
                 logits, dtype=np.float32
             ).ravel()

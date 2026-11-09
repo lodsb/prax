@@ -441,24 +441,75 @@ def test_a_session_that_lost_its_card_is_built_again_once(
 
 
 def test_the_arena_modes() -> None:
-    """``embeddings.arena``: ``shrink`` (the default) keeps the CPU arena for
+    """``<section>.arena``: ``shrink`` (the default) keeps the CPU arena for
     a batch and gives it back after, ``keep`` holds it for good, ``off`` has
     none (measured 2026-09-30: keep held 2.3 GB for the process's life)."""
     ort = pytest.importorskip("onnxruntime")
-    from prax.ml import embeddings
+    from prax.ml import sessions
 
-    assert embeddings.ARENA == "shrink"
-    on, run = embeddings.arena_options(ort, "shrink")
+    assert sessions.ARENA == "shrink"
+    on, run = sessions.arena_options(ort, "shrink", "embeddings")
     assert (
         on
         and run.get_run_config_entry("memory.enable_memory_arena_shrinkage") == "cpu:0"
     )
-    on, run = embeddings.arena_options(ort, "keep")
+    on, run = sessions.arena_options(ort, "keep", "embeddings")
     assert on
-    on, _ = embeddings.arena_options(ort, "off")
+    on, _ = sessions.arena_options(ort, "off", "embeddings")
     assert not on
-    with pytest.raises(ValueError, match="arena"):
-        embeddings.arena_options(ort, "sometimes")
+    with pytest.raises(ValueError, match="rerank.arena"):
+        sessions.arena_options(ort, "sometimes", "rerank")
+
+
+def test_every_onnx_session_is_built_in_one_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Structure review 2026-11-07, finding 51: five sessions were built by
+    hand, and the reranker, which runs inside a search request on the board,
+    had neither the arena setting nor the threads."""
+    import sys
+    from types import SimpleNamespace
+
+    from prax.ml import sessions
+
+    built: list[tuple[object, SimpleNamespace, list[str]]] = []
+
+    class Run:
+        def __init__(self) -> None:
+            self.entries: dict[str, str] = {}
+
+        def add_run_config_entry(self, key: str, value: str) -> None:
+            self.entries[key] = value
+
+    def session(model: object, opts: SimpleNamespace, providers: list[str]) -> str:
+        built.append((model, opts, providers))
+        return "a session"
+
+    fake = SimpleNamespace(
+        SessionOptions=lambda: SimpleNamespace(
+            log_severity_level=0, intra_op_num_threads=0, enable_cpu_mem_arena=True
+        ),
+        RunOptions=Run,
+        InferenceSession=session,
+        get_available_providers=lambda: ["CPUExecutionProvider"],
+    )
+    monkeypatch.setitem(sys.modules, "onnxruntime", fake)
+    monkeypatch.setenv("PRAX_RERANK_THREADS", "2")
+    _, run = sessions.session("model.onnx", "rerank")
+    _, opts, providers = built[-1]
+    assert providers == ["CPUExecutionProvider"] and opts.intra_op_num_threads == 2
+    assert opts.enable_cpu_mem_arena and run.entries == {
+        "memory.enable_memory_arena_shrinkage": "cpu:0"
+    }
+    monkeypatch.setenv("PRAX_RERANK_ARENA", "off")
+    sessions.session("model.onnx", "rerank")
+    assert not built[-1][1].enable_cpu_mem_arena
+    # without a section: the CPU and onnxruntime's own arena (the face models)
+    assert sessions.session(b"model") == ("a session", None)
+    assert built[-1][2] == ["CPUExecutionProvider"]
+    for path in Path(sessions.__file__).parent.glob("*.py"):
+        if path.name != "sessions.py":
+            assert "InferenceSession(" not in path.read_text(encoding="utf-8"), path
 
 
 def test_nothing_pending_is_remembered_until_it_is_not(

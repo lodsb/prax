@@ -33,8 +33,7 @@ from typing import Any
 
 import numpy as np
 
-from prax import config
-from prax.ml import embeddings, fetch
+from prax.ml import fetch, sessions
 
 BATCH = 16
 MAX_TOKENS = 512
@@ -84,18 +83,10 @@ class Labeller:
     def _resolve(self) -> None:
         if self._session is not None:
             return
-        ort = importlib.import_module("onnxruntime")
         tokenizers = importlib.import_module("tokenizers")
-        opts = ort.SessionOptions()
-        opts.log_severity_level = 3
-        mode = str(
-            config.setting("embeddings.arena", "PRAX_EMBED_ARENA", embeddings.ARENA)
-        )
-        opts.enable_cpu_mem_arena, self._run_options = embeddings.arena_options(
-            ort, mode
-        )
-        self._session = ort.InferenceSession(
-            str(self.path / "encoder.onnx"), opts, providers=["CPUExecutionProvider"]
+        # the embedder's threads and arena, on the CPU whatever it runs on
+        self._session, self._run_options = sessions.session(
+            str(self.path / "encoder.onnx"), "embeddings", providers=sessions.CPU
         )
         tok = tokenizers.Tokenizer.from_file(str(self.path / "tokenizer.json"))
         tok.enable_truncation(int(self.meta.get("max_tokens", MAX_TOKENS)))
