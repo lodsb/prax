@@ -10106,3 +10106,28 @@ own name (migrations 23 and 24), and `senses` matches labels with
 (checked on a test store). Its `name = ?` branch is the index's fast
 path, not the rule.
 
+
+## 2026-11-09: one union-find, one carrying of group ids
+
+Findings 42 and 18 (the rest) of the structure review, both pure helpers
+in `prax.ml.clusters`.
+
+- `DisjointSet` is the one union-find (path halving; a key joins at its
+  first `find`; `union(a, b)` keeps b's root, so the caller chooses).
+  The clustering's two copies (`_forest`, `_tree`), the rule pass's
+  `same_answers` (the smallest id stays: it unions the larger root under
+  the smaller) and the venue series' `_Sets` use it. It is backed by a
+  dict where the clustering's copies were lists: `_forest` plus `_tree`
+  over 100,000 random points with 10 neighbours each took 1.49 s before
+  and 1.75 s after, in a nightly pass.
+- `carry_ids(old, new, at_least)` says which old group each new group
+  continues: the old id it overlaps most (Jaccard, the smaller id on a
+  tie) when by `at_least` or more, the largest new group choosing first,
+  each old id given once. The communities (`CARRY`), the face groups
+  (`GROUP_CARRY`) and the event candidates (an exact match, 1.0) call it;
+  the ids not carried come from `first_fresh_id` as since 2026-11-07.
+  The communities chose in input order and among the five old
+  communities most of a new one's members came from; the groups of one
+  level are disjoint, so two can contest an id only as two equal halves,
+  and the order changes nothing else. `jaccard` moves there too, and
+  `store.jaccard`, which nothing called, goes.

@@ -28,6 +28,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from prax.graph import ontology
+from prax.ml.clusters import DisjointSet
 from prax.text import dates
 
 NEVER = re.compile(r"(?!x)x")
@@ -424,13 +425,13 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
     of every series whose acronym it states too (ICMC and SMC met once
     as one conference), never merged into either."""
     reads = {i: (read(n), d) for i, n, d in entities}
-    sets = _Sets()
+    sets: DisjointSet[object] = DisjointSet()
     for i, (v, _) in reads.items():
         for form in series_names(v, expansions):
-            sets.join(("e", i), form)
+            sets.union(("e", i), form)
     groups: dict[object, list[int]] = {}
     for i in reads:
-        if sets.has(("e", i)):
+        if ("e", i) in sets:
             groups.setdefault(sets.find(("e", i)), []).append(i)
     out = Plan([], [])
     series_of: dict[object, int] = {}  # a group's root -> its bare series
@@ -443,32 +444,12 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
     for i, (v, _) in reads.items():
         for other in v.others:
             form = other.lower()
-            if not sets.has(form):
+            if form not in sets:
                 continue
             series = series_of.get(sets.find(form))
             if series is not None and series != i and (i, series) not in out.editions:
                 out.editions.append((i, series))
     return out
-
-
-class _Sets:
-    """Union-find over the venue names and the forms of their series."""
-
-    def __init__(self) -> None:
-        self.parent: dict[object, object] = {}
-
-    def find(self, x: object) -> object:
-        parent = self.parent
-        while parent.setdefault(x, x) != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def join(self, a: object, b: object) -> None:
-        self.parent[self.find(a)] = self.find(b)
-
-    def has(self, x: object) -> bool:
-        return x in self.parent
 
 
 def _plan_group(

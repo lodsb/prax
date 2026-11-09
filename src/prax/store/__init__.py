@@ -471,7 +471,6 @@ from .graph import (  # noqa: F401
     import_edge,
     in_english_text,
     invalidate_edge,
-    jaccard,
     join_event,
     judge_faces,
     keep_printed,

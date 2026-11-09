@@ -23,7 +23,10 @@ usual shape of this tree, and recursion would run out of stack.
 
 from __future__ import annotations
 
+from collections.abc import Hashable, Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
+from typing import Generic, TypeVar
 
 FAR = 2.0  # the largest cosine distance: where unconnected parts meet
 NOISE = -1
@@ -39,6 +42,74 @@ class Grouping:
     labels: list[int]
     strength: list[float]
     persistence: list[float]
+
+
+K = TypeVar("K", bound=Hashable)
+
+
+class DisjointSet(Generic[K]):
+    """Union-find with path halving: which group a key is in. A key joins
+    at its first ``find``. ``union(a, b)`` puts a's group under b's root,
+    so the caller chooses which root stays, and says whether the two were
+    apart. The one copy: the clustering's two, the rule pass's answers and
+    the venue series wrote their own until 2026-11-09 (structure review
+    finding 42)."""
+
+    def __init__(self, keys: Iterable[K] = ()) -> None:
+        self.parent: dict[K, K] = {k: k for k in keys}
+
+    def __contains__(self, x: object) -> bool:
+        return x in self.parent
+
+    def find(self, x: K) -> K:
+        parent = self.parent
+        while (up := parent.setdefault(x, x)) != x:
+            parent[x] = parent[up]
+            x = parent[x]
+        return x
+
+    def union(self, a: K, b: K) -> bool:
+        ra, rb = self.find(a), self.find(b)
+        if ra == rb:
+            return False
+        self.parent[ra] = rb
+        return True
+
+
+def jaccard(a: AbstractSet[object], b: AbstractSet[object]) -> float:
+    """How much two memberships overlap: shared over all, 1.0 for two empty."""
+    return len(a & b) / len(a | b) if a or b else 1.0
+
+
+def carry_ids(
+    old: Mapping[int, AbstractSet[K]], new: Sequence[AbstractSet[K]], at_least: float
+) -> list[tuple[int | None, float]]:
+    """Which old group each new group continues, in the order of ``new``:
+    the old id it overlaps most (``jaccard``, the smaller id on a tie) and
+    the overlap, when that is ``at_least`` or more, else ``(None, 0.0)``.
+    The largest new group chooses first, so it keeps a contested id, and an
+    old id is given once. A group given None takes a fresh id, never a
+    dissolved one's (``store.first_fresh_id``). The communities, the face
+    groups and the event candidates each wrote this until 2026-11-09, the
+    communities in input order (structure review finding 18)."""
+    holds: dict[K, list[int]] = {}
+    for gid, members in old.items():
+        for m in members:
+            holds.setdefault(m, []).append(gid)
+    taken: set[int] = set()
+    out: list[tuple[int | None, float]] = [(None, 0.0)] * len(new)
+    for i in sorted(range(len(new)), key=lambda i: -len(new[i])):
+        mine = new[i]
+        near = {gid for m in mine for gid in holds.get(m, ())} - taken
+        best, best_j = None, 0.0
+        for gid in sorted(near):
+            j = jaccard(mine, old[gid])
+            if j > best_j:
+                best, best_j = gid, j
+        if best is not None and best_j >= at_least:
+            taken.add(best)
+            out[i] = (best, best_j)
+    return out
 
 
 def _core(neighbours: list[list[tuple[int, float]]], min_samples: int) -> list[float]:
@@ -63,21 +134,12 @@ def _forest(
             w = max(core[i], core[j], d)
             if w < edges.get(key, FAR + 1):
                 edges[key] = w
-    parent = list(range(n))
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
+    sets = DisjointSet(range(n))
     merges = []
     for (a, b), w in sorted(edges.items(), key=lambda kv: kv[1]):
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[ra] = rb
+        if sets.union(a, b):
             merges.append((a, b, min(w, FAR)))
-    roots = sorted({find(i) for i in range(n)})
+    roots = sorted({sets.find(i) for i in range(n)})
     merges.extend((roots[0], r, FAR) for r in roots[1:])
     return merges
 
@@ -87,23 +149,16 @@ def _tree(
 ) -> tuple[list[tuple[int, int, float]], list[int]]:
     """The single-linkage tree: node n + k is merge k of two nodes at a
     distance, leaves 0 … n-1; and each node's size."""
-    parent = list(range(n))
+    sets = DisjointSet(range(n))
     top = list(range(n))  # a union's root -> the tree node it is now
     size = [1] * n
     nodes: list[tuple[int, int, float]] = []
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
     for a, b, w in merges:
-        ra, rb = find(a), find(b)
+        ra, rb = sets.find(a), sets.find(b)
         node = n + len(nodes)
         nodes.append((top[ra], top[rb], w))
         size.append(size[top[ra]] + size[top[rb]])
-        parent[ra] = rb
+        sets.union(ra, rb)
         top[rb] = node
     return nodes, size
 

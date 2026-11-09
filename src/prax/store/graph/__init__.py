@@ -50,7 +50,6 @@ from .communities import (  # noqa: F401
     communities_to_summarize,
     community,
     community_of,
-    jaccard,
     list_communities,
     region_map,
     regions_for_matching,

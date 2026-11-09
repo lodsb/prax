@@ -296,7 +296,7 @@ against the code on 2026-11-08.
 
 **Mechanical, an hour each.**
 
-- [ ] 42. Union-find written four times: one `DisjointSet` in
+- [x] 42 (2026-11-09, the log). Union-find written four times: one `DisjointSet` in
       `ml.clusters`.
 - [ ] 53. Run names and "N ago" cutoffs by hand, some in local time:
       `run_name` everywhere, `base.ago(seconds)`, `process._now` on
@@ -312,7 +312,7 @@ against the code on 2026-11-08.
 - [ ] 21 (the rest). Four one-line "is this model free" wrappers become
       `pipeline.free(step)`; the spend policy is one
       `paid_refusal(step, spec, spend, *, spend_allowed)`.
-- [ ] 18 (the rest). Fresh ids are shared since 2026-11-07
+- [x] 18 (the rest; 2026-11-09, the log). Fresh ids are shared since 2026-11-07
       (`first_fresh_id`); carrying an old group's id to its successor is
       still written three times: a pure `carry_ids` in `ml.clusters`.
 

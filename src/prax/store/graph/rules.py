@@ -34,6 +34,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from prax.graph import ontology
+from prax.ml.clusters import DisjointSet
 
 from ..base import _NOW, _reading, _scrubbed, _serialized, live, personal_sql, rows_in
 from .edges import Edge, end_edges, link
@@ -519,20 +520,13 @@ def same_answers(
     when one is part of the other ("NIME 2010" and "NIME"); two siblings
     ("ISMIR 2008" and "ISMIR 2009") are two (the review of 2026-10-04)."""
     vals = sorted(set(values))
-    group = {v: v for v in vals}
-
-    def find(x: int) -> int:
-        while group[x] != x:
-            group[x] = group[group[x]]
-            x = group[x]
-        return x
-
+    group = DisjointSet(vals)
     for i, v in enumerate(vals):
         for w in vals[i + 1 :]:
             if w in ancestors(v) or v in ancestors(w):
-                a, b = find(v), find(w)
-                group[max(a, b)] = min(a, b)
-    return {v: find(v) for v in vals}
+                a, b = group.find(v), group.find(w)
+                group.union(max(a, b), min(a, b))  # the smallest id stays
+    return {v: group.find(v) for v in vals}
 
 
 Breach = dict[int, list[tuple[int, int, str]]]

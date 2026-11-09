@@ -23,6 +23,7 @@ import sqlite3
 from typing import Any
 
 from prax.ml import matching
+from prax.ml.clusters import carry_ids
 
 from ..base import (
     NotFound,
@@ -159,7 +160,6 @@ def replace_face_groups(
     old: dict[int, set[int]] = {}
     for r in con.execute("SELECT face_id, group_id FROM face_group_members"):
         old.setdefault(int(r[1]), set()).add(int(r[0]))
-    was = {face: g for g, members in old.items() for face in members}
     members: dict[int, list[int]] = {}
     for i, g in enumerate(labels):
         if g >= 0:
@@ -171,29 +171,22 @@ def replace_face_groups(
             (json.dumps(faces),),
         )
     }
-    taken: set[int] = set()
     # an id no group ever had: a page names a group by its id, and a group
     # that dissolved must not lend its id to another (id_marks, 59)
     next_id = first_fresh_id(con, "face_groups", above=max(old, default=0))
     stamp = now()
     groups, rows = [], []
     report = {"groups": len(members), "carried": 0, "new": 0, "doubled": 0}
-    # the largest first, so it is the one that keeps a contested id
-    for g, at in sorted(members.items(), key=lambda kv: -len(kv[1])):
-        mine = {faces[i] for i in at}
-        best, best_j = None, 0.0
-        for gid in sorted({was[f] for f in mine if f in was} - taken):
-            j = len(mine & old[gid]) / len(mine | old[gid])
-            if j > best_j:
-                best, best_j = gid, j
-        if best is not None and best_j >= GROUP_CARRY:
+    found = [{faces[i] for i in at} for at in members.values()]
+    carried = carry_ids(old, found, GROUP_CARRY)
+    for (g, at), mine, (best, _) in zip(members.items(), found, carried, strict=True):
+        if best is not None:
             gid = best
             report["carried"] += 1
         else:
             gid = next_id
             next_id += 1
             report["new"] += 1
-        taken.add(gid)
         per_doc: dict[int, int] = {}
         for f in mine:
             per_doc[docs[f]] = per_doc.get(docs[f], 0) + 1

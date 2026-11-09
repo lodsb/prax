@@ -43,6 +43,29 @@ def _blobs(seed: int, spread: float = 0.15) -> tuple[np.ndarray, list[int]]:
     return np.array(pts), truth
 
 
+def test_a_disjoint_set_keeps_the_root_its_caller_chose() -> None:
+    sets: clusters.DisjointSet[object] = clusters.DisjointSet([1, 2, 3])
+    assert sets.union(3, 1) and sets.union(2, 1)
+    assert not sets.union(3, 2)  # already one group
+    assert {sets.find(x) for x in (1, 2, 3)} == {1}
+    assert "x" not in sets
+    assert sets.find("x") == "x" and "x" in sets  # joins at its first find
+
+
+def test_a_group_keeps_the_id_of_the_old_one_it_continues() -> None:
+    """Finding 18: the largest new group chooses first, an old id is given
+    once, and a group that is too far from every old one gets None (a
+    fresh id, never a dissolved group's)."""
+    old = {7: {1, 2, 3, 4}, 9: {5, 6}}
+    new = [{1, 2}, {1, 2, 3, 4, 8}, {5, 6}, {10}]
+    assert clusters.carry_ids(old, new, 0.5) == [
+        (None, 0.0),  # the larger group took 7 first
+        (7, 0.8),
+        (9, 1.0),
+        (None, 0.0),
+    ]
+
+
 def test_three_people_are_three_groups() -> None:
     pts, truth = _blobs(3)
     got = clusters.group(_lists(pts), min_size=5, min_samples=3)

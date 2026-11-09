@@ -9,6 +9,8 @@ import sqlite3
 from collections import Counter, defaultdict
 from typing import Any
 
+from prax.ml.clusters import carry_ids
+
 from ..base import (
     _reading,
     _serialized,
@@ -23,11 +25,6 @@ CARRY = 0.5  # a new community takes the id and summary of an old one this close
 FRESH = 0.8  # below this, what the summary was written about has moved
 SUMMARY_MIN = 5  # communities smaller than this get no summary
 LIST_MEMBERS = 8  # members named in a list of communities
-
-
-def jaccard(a: frozenset[int] | set[int], b: frozenset[int] | set[int]) -> float:
-    """How much two memberships overlap: shared over all, 1.0 for two empty."""
-    return len(a & b) / len(a | b) if a or b else 1.0
 
 
 @_reading
@@ -87,34 +84,20 @@ def replace_communities(
             "meta": json.loads(r["summary_meta"]) if r["summary_meta"] else None,
             "members": set(),
         }
-    where: dict[tuple[int, int], int] = {}  # (entity, level) -> old community
-    for r in con.execute(
-        "SELECT entity_id, level, community_id FROM entity_communities"
-    ):
+    for r in con.execute("SELECT entity_id, community_id FROM entity_communities"):
         if r["community_id"] in old:
             old[r["community_id"]]["members"].add(r["entity_id"])
-            where[(r["entity_id"], r["level"])] = r["community_id"]
-    taken: set[int] = set()
     next_id = first_fresh_id(con, "communities", above=max(old, default=0))
     stamp = now()
     report: dict[str, Any] = {"levels": {}, "carried": 0, "stale": 0, "new": 0}
 
-    def place(level: int, members: frozenset[int]) -> tuple[int, dict[str, Any]]:
+    def place(best: int | None, j: float) -> tuple[int, dict[str, Any]]:
         nonlocal next_id
-        votes = Counter(where[(e, level)] for e in members if (e, level) in where)
-        best, best_j = None, 0.0
-        for cid, _ in votes.most_common(5):
-            if cid in taken:
-                continue
-            j = jaccard(members, old[cid]["members"])
-            if j > best_j:
-                best, best_j = cid, j
-        if best is not None and best_j >= CARRY:
-            taken.add(best)
+        if best is not None:
             report["carried"] += 1
             was = old[best]
             meta = dict(was["meta"] or {})
-            if was["summary"] and (best_j < FRESH or meta.get("stale")):
+            if was["summary"] and (j < FRESH or meta.get("stale")):
                 meta["stale"] = True
                 report["stale"] += 1
             return best, {
@@ -132,8 +115,10 @@ def replace_communities(
     region_ids: list[int] = []
     for level, groups in ((0, [(None, r) for r in regions]), (1, parts)):
         report["levels"][level] = len(groups)
-        for parent_index, members in groups:
-            cid, kept = place(level, members)
+        mine = {c: o["members"] for c, o in old.items() if o["level"] == level}
+        carried = carry_ids(mine, [m for _, m in groups], CARRY)
+        for (parent_index, members), (best, j) in zip(groups, carried, strict=True):
+            cid, kept = place(best, j)
             parent = region_ids[parent_index] if parent_index is not None else None
             if level == 0:
                 region_ids.append(cid)

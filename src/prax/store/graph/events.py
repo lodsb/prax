@@ -43,6 +43,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from prax import config
+from prax.ml.clusters import carry_ids
 from prax.text import dates, mimes
 
 from ..base import (
@@ -261,29 +262,26 @@ def replace_event_candidates(
             " ON c.id = p.candidate_id WHERE c.state != 'open'"
         )
     }
-    held: dict[frozenset[int], int] = {}
-    for r in con.execute(
-        "SELECT c.id, json_group_array(p.doc_id) FROM event_candidates c"
-        " JOIN event_candidate_photos p ON p.candidate_id = c.id"
-        " WHERE c.state = 'open' GROUP BY c.id"
-    ):
-        held[frozenset(json.loads(r[1]))] = int(r[0])
+    held: dict[int, frozenset[int]] = {
+        int(r[0]): frozenset(json.loads(r[1]))
+        for r in con.execute(
+            "SELECT c.id, json_group_array(p.doc_id) FROM event_candidates c"
+            " JOIN event_candidate_photos p ON p.candidate_id = c.id"
+            " WHERE c.state = 'open' GROUP BY c.id"
+        )
+    }
     top = con.execute("SELECT coalesce(max(id), 0) FROM event_candidates").fetchone()
     fresh = first_fresh_id(con, "event_candidates", above=int(top[0]))
-    kept: set[int] = set()
     at = now()
-    found = skipped = 0
-    rows: list[tuple[int | None, dict[str, Any]]] = []
-    for g in groups:
-        if sum(d in decided for d in g["docs"]) * 2 >= len(g["docs"]):
-            skipped += 1
-            continue
-        same = held.get(frozenset(g["docs"]))
-        if same is not None and same not in kept:
-            kept.add(same)
-            rows.append((same, g))
-        else:
-            rows.append((None, g))
+    found = 0
+    wanted = [
+        g for g in groups if sum(d in decided for d in g["docs"]) * 2 < len(g["docs"])
+    ]
+    skipped = len(groups) - len(wanted)
+    # an open candidate found again with the same photos keeps its id
+    carried = carry_ids(held, [frozenset(g["docs"]) for g in wanted], 1.0)
+    rows = [(s, g) for (s, _), g in zip(carried, wanted, strict=True)]
+    kept = {s for s, _ in rows if s is not None}
     con.execute(
         "DELETE FROM event_candidates WHERE state = 'open'"
         " AND id NOT IN (SELECT value FROM json_each(?))",
