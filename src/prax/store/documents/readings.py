@@ -25,7 +25,7 @@ from ..base import (
     now,
     rows_in,
 )
-from .meta import DOCTYPES, _put_meta, get_meta, update_meta
+from .meta import DOCTYPES, _put_meta, get_meta, sure_labels, update_meta
 from .places import original_file
 
 # A reading request: a person (or an agent) asks for a named extractor on
@@ -443,7 +443,6 @@ MATHS_MIN_REFS = 15  # fewer references to numbered equations is not a maths pap
 # the Voron Cascade Assembly Manual scored 18 and went to marker, an army
 # field manual and an op-amp datasheet with it (2026-10-06)
 NOT_MATHS_GENRES = ("manual", "datasheet")
-NOT_MATHS_P = 0.5  # the labeller's probability for it; a person's counts always
 
 
 # what the checks of a text found (stage AO): only of the text a document
@@ -503,14 +502,9 @@ def _numbered_steps(con: sqlite3.Connection, ids: list[int]) -> set[int]:
         f" WHERE id IN ({','.join('?' * len(ids))})",
         [int(i) for i in ids],
     ):
-        for label in json.loads(r["g"]) if r["g"] else []:
-            if (
-                not isinstance(label, dict)
-                or label.get("genre") not in NOT_MATHS_GENRES
-            ):
-                continue
-            if label.get("p") is None or float(label["p"]) >= NOT_MATHS_P:
-                out.add(int(r["id"]))
+        given = json.loads(r["g"]) if r["g"] else []
+        if set(sure_labels(given, "genre")) & set(NOT_MATHS_GENRES):
+            out.add(int(r["id"]))
     return out
 
 

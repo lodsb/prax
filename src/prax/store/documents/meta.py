@@ -497,24 +497,43 @@ _KIND_WORDS = {
     "application/xhtml+xml": "web page",
     "text/plain": "text",
 }
+# How sure a label must be to count: a person's labels are 1.0 (or carry
+# no p), a model's their calibrated probability (stage Z,
+# docs/eval/genres-2026-09-29.md). One line for every reader of a label: a
+# recalibration moves it once
+LABEL_P = 0.5
+
+
+def sure_labels(given: Any, key: str, *, at_least: float = LABEL_P) -> list[str]:
+    """The names of the labels in ``given`` (``meta.genres``, ``meta.subjects``:
+    ``[{key: name, "p": …}]``) with ``p`` of ``at_least`` or more; one
+    without a ``p``, or with ``p`` null, is a person's and counts. The
+    sample of the Review page, the domain rules, a document's field and
+    marker's choice each read it with a constant of their own until
+    2026-11-09 (structure review finding 36)."""
+    out = []
+    for x in given if isinstance(given, list) else []:
+        if not isinstance(x, dict) or not x.get(key):
+            continue
+        p = x.get("p")
+        if p is None or float(p) >= at_least:
+            out.append(str(x[key]))
+    return out
+
+
 # what a document is, in the words a query would use (stage Z): the
-# genre labels a person or the labeller gave, each as sure as GENRE_FIELD_P.
+# genre labels a person or the labeller gave, sure enough (``sure_labels``).
 # The levels ("informational") say too little to help a search
-GENRE_FIELD_P = 0.5
 _GENRE_WORDS = {"qa": "question and answer", "source": "source code"}
 
 
 def _genre_words(meta: dict[str, Any]) -> list[str]:
     levels = {lv.name for lv in ontology.genres().levels}
-    out = []
-    for g in meta.get("genres") or []:
-        label = str((g or {}).get("genre") or "")
-        if not label or label in levels:
-            continue
-        if float((g or {}).get("p", 1.0)) < GENRE_FIELD_P:
-            continue
-        out.append(_GENRE_WORDS.get(label, label))
-    return out
+    return [
+        _GENRE_WORDS.get(g, g)
+        for g in sure_labels(meta.get("genres"), "genre")
+        if g not in levels
+    ]
 
 
 _VISION_SOURCES = ("claude-vision", "vision/")

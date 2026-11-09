@@ -31,7 +31,6 @@ from .domains import (  # noqa: F401
     RULE_FACTS_MIN,
     RULE_FACTS_SHARE,
     RULE_KEYS,
-    RULE_LABEL_P,
     SENSITIVITY,
     _check_domains,
     _check_rule,
@@ -109,6 +108,7 @@ from .meta import (  # noqa: F401
     DOCTYPES,
     HISTORY_KEEP,
     HISTORY_TAIL,
+    LABEL_P,
     PUBLISHED_BY,
     SECTION_FIELD_CHARS,
     TRIED_STEPS,
@@ -138,6 +138,7 @@ from .meta import (  # noqa: F401
     set_summary,
     stamp_world_dates,
     step_tried,
+    sure_labels,
     update_meta,
     world_dates_needed,
 )

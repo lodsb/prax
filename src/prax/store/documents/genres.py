@@ -35,7 +35,7 @@ from ..base import (
     meta_of,
     now,
 )
-from .meta import _put_meta, _untried, get_meta
+from .meta import _put_meta, _untried, get_meta, sure_labels
 
 GENRE_OPENING = 1500  # characters of the text a labeller reads beside the summary
 
@@ -106,11 +106,6 @@ GENRE_KEYS: tuple[
     "genres_run",
     "genres_tried",
 )
-
-
-def _sure(labels: list[dict[str, Any]] | None, key: str) -> list[str]:
-    """The labels given with ``p`` of 0.5 or more."""
-    return [str(x[key]) for x in labels or [] if float(x.get("p", 1.0)) >= 0.5]
 
 
 @_serialized
@@ -239,8 +234,8 @@ def genre_training(
                 or r["original_path"],
                 "by": by,
                 "blind": by == "human" and not meta.get("genres_model"),
-                "g": _sure(meta.get("genres"), "genre"),
-                "s": _sure(meta.get("subjects"), "subject"),
+                "g": sure_labels(meta.get("genres"), "genre"),
+                "s": sure_labels(meta.get("subjects"), "subject"),
             }
         )
     return out

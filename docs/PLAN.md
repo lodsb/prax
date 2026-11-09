@@ -301,7 +301,7 @@ against the code on 2026-11-08.
 - [x] 53 (2026-11-09, the log). Run names and "N ago" cutoffs by hand, some in local time:
       `run_name` everywhere, `base.ago(seconds)`, `process._now` on
       `base.now`.
-- [ ] 36. "A label sure enough" four times with four constants equal to
+- [x] 36 (2026-11-09, the log). "A label sure enough" four times with four constants equal to
       0.5: `labels(meta, field, *, at_least=LABEL_P)`; a rule's own `p`
       stays a parameter.
 - [ ] 49. Callers write the markup format by hand while its emitters are

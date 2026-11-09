@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from prax import config, store
 from prax.graph import extraction, ontology
+from prax.store import documents
 from tests.conftest import copy_ontology
 
 FAMILY = """
@@ -500,3 +501,21 @@ def test_the_door_counts_the_domain_menu(three_modules: Path) -> None:
         "requires": ["core"],
         "holds": [],
     }
+
+
+def test_a_label_counts_at_one_line_and_a_persons_always() -> None:
+    """Structure review 2026-11-07, finding 36: four readers of a label,
+    four constants, and a ``p`` of null a crash at three of them."""
+    given = [
+        {"genre": "recipe", "p": 0.9},
+        {"genre": "manual", "p": 0.2},
+        {"genre": "essay"},  # a person's
+        {"genre": "datasheet", "p": None},  # a person's too
+        "not a label",
+    ]
+    assert store.sure_labels(given, "genre") == ["recipe", "essay", "datasheet"]
+    assert store.sure_labels(given, "genre", at_least=0.1)[1] == "manual"
+    assert store.sure_labels(None, "genre") == []
+    meta = {"genres": given}
+    assert documents._has_label(meta, "genres", "genre", "datasheet", store.LABEL_P)
+    assert not documents._has_label(meta, "genres", "genre", ["manual"], store.LABEL_P)

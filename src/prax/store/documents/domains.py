@@ -28,7 +28,7 @@ from ..base import (
     personal_sql,
     rows_in,
 )
-from .meta import _document_meta, _put_meta, get_meta, set_meta
+from .meta import LABEL_P, _document_meta, _put_meta, get_meta, set_meta, sure_labels
 
 # Which ontology modules a document is read against (``meta.domains``): the
 # research papers see the research module, the family photos the family
@@ -254,10 +254,6 @@ def domain_counts(con: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
-# How sure a label must be for a rule to name it, when the rule says not:
-# a person's labels are 1.0, a model's carry their calibrated probability
-# (stage Z; docs/eval/genres-2026-09-29.md)
-RULE_LABEL_P = 0.5
 # how much of a document's typed facts one module must hold for a
 # ``facts:`` rule, when the rule says not
 RULE_FACTS_SHARE = 0.5
@@ -271,10 +267,7 @@ def _has_label(meta: dict[str, Any], field: str, key: str, want: Any, p: float) 
     """Whether the document carries the label ``want``, or one of them when
     it is a list, with at least ``p``."""
     names = {str(w) for w in want} if isinstance(want, list) else {str(want)}
-    return any(
-        x.get(key) in names and float(x.get("p", 1.0)) >= p
-        for x in meta.get(field) or []
-    )
+    return not names.isdisjoint(sure_labels(meta.get(field), key, at_least=p))
 
 
 def fact_modules(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
@@ -348,7 +341,7 @@ def _rule_matches(
     m = rule.get("match") or {}
     if not m:
         return True
-    p = float(m.get("p", RULE_LABEL_P))
+    p = float(m.get("p", LABEL_P))
     if "genre" in m and not _has_label(meta, "genres", "genre", m["genre"], p):
         return False
     if "subject" in m and not _has_label(meta, "subjects", "subject", m["subject"], p):
@@ -464,7 +457,7 @@ def assign_domains(
     default. ``origin`` is a piece (or a list of pieces, any one) of the
     path the document had where it came from (``_origin_has``). ``genre``
     and ``subject`` name a label the document carries with at least ``p``
-    (``RULE_LABEL_P``), or a list of labels of which it carries one;
+    (``LABEL_P``), or a list of labels of which it carries one;
     ``facts`` a module that holds at least ``share`` of the entities its
     facts name (``fact_modules``), when they are ``min`` or more
     (``RULE_FACTS_MIN``).

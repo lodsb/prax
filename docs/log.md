@@ -10155,3 +10155,22 @@ reads in `why` and `changes` before undoing a run.
   `schedule`'s `fromisoformat`, reads both.
 - Test: a step's run is `extract-<UTC>Z`, and a cutoff an hour ago sorts
   before `now`.
+
+## 2026-11-09: a label sure enough, read once
+
+Finding 36 of the structure review. Four readers of a document's genre
+or subject labels each tested "sure enough" against a constant of their
+own, all 0.5: the Review page's sample (`genres._sure`, a literal), the
+domain rules (`RULE_LABEL_P`), a document's field (`GENRE_FIELD_P`) and
+marker's choice of documents whose "(4)" numbers steps
+(`NOT_MATHS_P`). The line is one fact about the labeller's calibration
+(stage Z, `docs/eval/genres-2026-09-29.md`), and a recalibration would
+have had to move it four times.
+
+`documents.meta.sure_labels(given, key, *, at_least=LABEL_P)` reads them
+all (`store.sure_labels`, `store.LABEL_P`). A label without a `p`, or
+with `p` null, is a person's and counts. Three of the four raised on a
+null `p`, and the fourth counted it. A domain rule's own `p` stays a
+parameter, with `LABEL_P` as its default. `RULE_LABEL_P` goes from the
+store's names. Test: the line, a person's label with and without a `p`,
+and a rule's `_has_label`.
