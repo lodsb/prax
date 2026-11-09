@@ -38,6 +38,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
+from prax.text import markup
+
 SOURCE = "latex2html"
 REVISION = 2  # 2: no comment kept as text, sub- and superscripts as LaTeX
 USER_AGENT = "prax/latex2html (a personal research library; one request at a time)"
@@ -269,7 +271,7 @@ def contents_page(
     top = min((d for d, _, _ in entries), default=1)
     for depth, title, url in entries:
         doc = documents.get(url)
-        shown = f"[{title}](#doc/{doc})" if doc else title
+        shown = markup.doc_link(title, doc) if doc else title
         lines.append("  " * (depth - top) + "- " + shown)
     return "\n".join(lines) + "\n"
 

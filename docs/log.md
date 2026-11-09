@@ -10174,3 +10174,28 @@ null `p`, and the fourth counted it. A domain rule's own `p` stays a
 parameter, with `LABEL_P` as its default. `RULE_LABEL_P` goes from the
 store's names. Test: the line, a person's label with and without a `p`,
 and a rule's `_has_label`.
+
+## 2026-11-09: the format's writers call its emitters
+
+Finding 49 of the structure review. `markup.read_by` and
+`markup.doc_link` had no caller outside the tests. Their lines were
+written by hand: the reading line in `figures` and `formulas`, and a
+`[title](#doc/N)` link in `ask`'s sources, three lines of the briefing,
+a split page's index, and the `mdwiki` and `latex2html` importers. A
+link is what a page's `annotates` edges are read from (`DOC_LINK`), so a
+change to its shape in `markup` would have left nine writers on the old
+one. All of them call the emitters now. `markup.figure_line_of(line)` is
+the figure a line ends on, the place a reading goes under; it replaces
+`figures`' two `endswith(f"(figure:{ref})")`. It is looser than
+`FIGURE_REF`, which wants the figure alone on its line. `ingredients`
+reads a heading with `markup.HEADING`. A project file's title is the
+first heading of level 1 to 3 that `markup.headings` finds, so a `#`
+line inside a fenced code block is no longer a title.
+
+The review's other sites were checked and left. `chats`' heading
+pattern demotes a chat's headings, `latex`'s `_TITLE` matches a linked
+title, `polish` matches a frame's time caption, and `chunking`'s
+`_FIGURE` matches prose captions ("Fig. 3"). `graphio` rewrites the tail
+of a link `DOC_LINK` matched. `latex2html` builds a bare data URL, not a
+figure line. A test scans the source for a reading line or a document
+link written by hand.

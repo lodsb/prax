@@ -34,6 +34,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from prax.text import markup
+
 _HEADING = re.compile(
     r"^\s*(zutaten|ingredients|einkaufsliste|shopping list|"
     r"was du brauchst|was ihr braucht|you(?:'ll)? need|you will need|"
@@ -302,9 +304,9 @@ def parse(text: str) -> dict[str, Any]:
         line = raw.strip()
         if not line:
             continue
-        head = re.match(r"^#{1,6}\s+(?P<title>.*?)\s*$", line)
+        head = markup.HEADING.match(line)
         if head:
-            title = head.group("title")
+            title = head.group("text")
             if is_heading(title):
                 continue  # the region's own heading
             groups.append({"name": title, "items": []})

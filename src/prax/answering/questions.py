@@ -47,7 +47,7 @@ from typing import Any
 
 from prax import store
 from prax.answering import ask as ask_mod
-from prax.text import blocks, mimes
+from prax.text import blocks, markup, mimes
 
 log = logging.getLogger("prax.questions")
 
@@ -866,7 +866,7 @@ def briefing(
 def _arrived_line(row: Any, meta: store.MetaLike) -> str:
     """One document that arrived: its link, what it is (a video, a PDF, an
     image, a web page) and its domains, and its summary's first sentence."""
-    line = f"- [{row['title'] or 'document ' + str(row['id'])}](#doc/{row['id']})"
+    line = "- " + markup.doc_link(row["title"] or f"document {row['id']}", row["id"])
     bits = []
     if meta.get("video"):
         bits.append("video")
@@ -903,7 +903,8 @@ def _moved(con: sqlite3.Connection, since: str, until: str) -> list[str]:
         for h in q.get("history") or []:
             if within(h):
                 out.append(
-                    f"- [{q.get('question')}](#doc/{page['doc_id']}) — revision"
+                    f"- {markup.doc_link(str(q.get('question')), page['doc_id'])}"
+                    " — revision"
                     f" {h.get('revision')}" + new_of(h)
                 )
     for page in block_pages(con):
@@ -911,7 +912,9 @@ def _moved(con: sqlite3.Connection, since: str, until: str) -> list[str]:
             for h in kept.get("history") or []:
                 if within(h):
                     out.append(
-                        f"- [{kept.get('question')}](#doc/{page['doc_id']}) — in"
+                        "- "
+                        + markup.doc_link(str(kept.get("question")), page["doc_id"])
+                        + " — in"
                         f" {page['title']}, revision {h.get('revision')}" + new_of(h)
                     )
     return out

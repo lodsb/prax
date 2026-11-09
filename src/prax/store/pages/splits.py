@@ -163,7 +163,7 @@ def _split_page(
         )
     index = (
         (head.rstrip() + "\n\n" if head.strip() else "")
-        + "\n".join(f"- [{c['title']}](#doc/{c['doc_id']})" for c in children)
+        + "\n".join("- " + markup.doc_link(c["title"], c["doc_id"]) for c in children)
         + "\n"
     )
     written = _write_page(

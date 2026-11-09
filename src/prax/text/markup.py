@@ -90,6 +90,17 @@ def figure_ref(alt: str, ref: str) -> str:
     return f"![{alt}](figure:{ref})"
 
 
+_ENDS_ON_FIGURE = re.compile(r"\(figure:(?P<ref>[0-9a-f]{16,64})\)\s*$")
+
+
+def figure_line_of(line: str) -> str | None:
+    """The hash of the figure a line ends on, or None: the line a reading
+    goes under. Looser than ``FIGURE_REF``, which wants the line to be the
+    figure alone; a figure inside a list item or after a word is found too."""
+    m = _ENDS_ON_FIGURE.search(line)
+    return m["ref"] if m else None
+
+
 def data_image(alt: str, media: str, b64: str) -> str:
     """A picture inlined for the door to file (``figures.file_inline``)."""
     return f"![{alt}](data:{media};base64,{b64})"

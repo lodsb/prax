@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from prax.text import slugs, status
+from prax.text import markup, slugs, status
 
 SOURCE = "mdwiki"
 WIKI = "wiki"  # the folder a topic's wiki is in
@@ -195,6 +195,6 @@ def rewrite(
         doc = documents.get(path) or pages.get(path)
         if doc is None and "/" not in path:  # a topic's folder, "../../diffusion/"
             doc = topics.get(path)
-        return f"[{words}](#doc/{doc})" if doc else words
+        return markup.doc_link(words, doc) if doc else words
 
     return _LINK.sub(link, text)

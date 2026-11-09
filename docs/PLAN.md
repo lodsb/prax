@@ -304,7 +304,7 @@ against the code on 2026-11-08.
 - [x] 36 (2026-11-09, the log). "A label sure enough" four times with four constants equal to
       0.5: `labels(meta, field, *, at_least=LABEL_P)`; a rule's own `p`
       stays a parameter.
-- [ ] 49. Callers write the markup format by hand while its emitters are
+- [x] 49 (2026-11-09, the log). Callers write the markup format by hand while its emitters are
       test-only: `markup.doc_link`, `read_by`, `figure_ref`, `HEADING`,
       and a new `figure_line_of`.
 - [ ] 47. 37 list routes take a limit, 12 clamp it by hand:

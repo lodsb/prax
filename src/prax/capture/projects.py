@@ -32,16 +32,14 @@ applied:
 from __future__ import annotations
 
 import functools
-import re
 import sqlite3
 from typing import Any
 
 from prax import client, store
 from prax.errors import NotFound
-from prax.text import paths
+from prax.text import markup, paths
 
 PLAN_SHOWN = 400  # plan rows returned; the counts are always whole
-_HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*$", re.MULTILINE)
 SETTINGS = ("domains", "tags", "include", "exclude")
 SENSITIVITIES = (None, "personal")  # what a project's notes may be marked on sync
 
@@ -55,8 +53,10 @@ def doc_key(name: str, remote: str | None, repo_path: str, rel: str) -> str:
 def _title(rel: str, text: str, name: str) -> str:
     """The first heading of a Markdown file, else its path; with the
     project's name."""
-    m = _HEADING.search(text) if rel.lower().endswith((".md", ".markdown")) else None
-    return f"{m.group(1).strip() if m else rel} ({name})"
+    first = None
+    if rel.lower().endswith((".md", ".markdown")):
+        first = next((w for _, level, w in markup.headings(text) if level <= 3), None)
+    return f"{first.strip() if first else rel} ({name})"
 
 
 def _words(value: Any) -> list[str]:

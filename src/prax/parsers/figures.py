@@ -1127,7 +1127,7 @@ def describe(data: bytes, previous: str) -> str:
             (
                 i
                 for i, line in enumerate(lines)
-                if line.rstrip().endswith(f"(figure:{r['ref']})")
+                if markup.figure_line_of(line) == r["ref"]
             ),
             -1,
         )
@@ -1144,7 +1144,7 @@ def describe(data: bytes, previous: str) -> str:
         # paragraph; reading again replaces this model's earlier one and
         # leaves another model's where it is
         for i, line in enumerate(lines):
-            if line.rstrip().endswith(f"(figure:{r['ref']})"):
+            if markup.figure_line_of(line) == r["ref"]:
                 at = i + 1
                 if again:
                     # through the readings under this image line: this
@@ -1154,7 +1154,7 @@ def describe(data: bytes, previous: str) -> str:
                             del lines[at]
                         else:
                             at += 1
-                lines.insert(at, f"*Figure, as read by {who}:* {text}")
+                lines.insert(at, markup.read_by("Figure", who, text))
                 done += 1
                 break
     if not done:

@@ -164,7 +164,7 @@ def describe(previous: str, *, runtime: Any | None = None) -> str:
                     del lines[at]
                 else:
                     at += 1
-        lines.insert(at, f"*Formula, as read by {who}:* {text}")
+        lines.insert(at, markup.read_by("Formula", who, text))
         done += 1
     if not done:
         raise ExtractionError("no formula could be read")

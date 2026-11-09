@@ -37,6 +37,7 @@ from typing import Any, Protocol
 from prax import config, models, packs, store
 from prax.graph import extraction
 from prax.ml import pricing
+from prax.text import markup
 
 PASSAGES = 8  # documents per bundle; one passage each
 PASSAGE_CHARS = 1200
@@ -787,7 +788,7 @@ def section_of(result: dict[str, Any], *, trail: bool = True) -> tuple[str, list
             where = f"{where}, p. {c['page']}" if where else f"p. {c['page']}"
         title = c.get("title") or f"document {c['doc_id']}"
         lines.append(
-            f"- [{c['n']}] [{title}](#doc/{c['doc_id']})"
+            f"- [{c['n']}] {markup.doc_link(title, c['doc_id'])}"
             + (f" — {where}" if where else "")
         )
     section = answer + "\n\nSources:\n\n" + "\n".join(lines) if lines else answer

@@ -127,3 +127,25 @@ def test_markup_imports_nothing_of_prax() -> None:
     the UI all read it, so it can depend on none of them."""
     text = Path(markup.__file__ or "").read_text(encoding="utf-8")
     assert not re.search(r"^from prax|^import prax|^from \.", text, re.MULTILINE)
+
+
+def test_a_reading_and_a_document_link_are_written_by_markup_alone() -> None:
+    """Structure review 2026-11-07, finding 49: the format's emitters were
+    test-only while ten callers wrote the lines by hand. ``graphio``
+    rewrites the tail ``DOC_LINK`` matched, which is not a new link."""
+    src = Path(markup.__file__ or "").parents[1]
+    by_hand = re.compile(r"\]\(#doc/\{|, as read by \{")
+    found = [
+        str(p.relative_to(src))
+        for p in src.rglob("*.py")
+        if p.name != "markup.py" and by_hand.search(p.read_text(encoding="utf-8"))
+    ]
+    assert found == [str(Path("graph/graphio.py"))]
+
+
+def test_a_reading_goes_under_the_figure_a_line_ends_on() -> None:
+    ref = "ab" * 8
+    assert markup.figure_line_of(markup.figure_ref("x", ref)) == ref
+    assert markup.figure_line_of(f"- see {markup.figure_ref('x', ref)}  ") == ref
+    assert markup.figure_line_of("![x](figure:not-a-hash)") is None
+    assert markup.READ_BY.match(markup.read_by("Figure", "m", "a plot"))
