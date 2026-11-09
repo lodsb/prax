@@ -328,6 +328,18 @@ def now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def moment(epoch: float) -> str:
+    """A UNIX time (a file's mtime) in the shape of ``now``."""
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))
+
+
+def ago(seconds: float) -> str:
+    """The moment ``seconds`` before now, in the shape of ``now``: what a
+    cutoff compares a stored timestamp with. Until 2026-11-09 six callers
+    wrote it by hand (structure review finding 53)."""
+    return moment(time.time() - seconds)
+
+
 def first_fresh_id(con: sqlite3.Connection, kind: str, *, above: int = 0) -> int:
     """The first id no row of ``kind`` was ever given, for the rows that are
     replaced whole (communities, face groups, event candidates): a page or

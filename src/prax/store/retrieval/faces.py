@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-import time
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +41,7 @@ from ..base import (
     document_hidden,
     hidden_documents,
     is_digest,
+    moment,
     now,
 )
 from .vectors import RECONCILE_SLACK, _index_has, _save_delta
@@ -186,7 +186,7 @@ def reconcile_face_vectors(
     since = "0"
     if files:
         saved = max(f.stat().st_mtime for f in files) - RECONCILE_SLACK
-        since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(saved))
+        since = moment(saved)
     ids = [
         int(r[0])
         for r in con.execute(

@@ -561,7 +561,7 @@ def _references(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The citations a document's reference list makes to the library
     (``link_references``): the documents whose text changed since their
     last reading, or never were read."""
-    run = "references-" + time.strftime("%Y%m%dT%H%M%S")
+    run = run_name("references")
     return {"run": run, **link_references(con, run=run, job=job)}
 
 
@@ -633,7 +633,7 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     ):
         by_name.setdefault(name.lower(), []).append((etype, name))
 
-    run = "polysemy-" + time.strftime("%Y%m%dT%H%M%S")
+    run = run_name("polysemy")
     made = 0
     existing = 0
     pairs: Counter[str] = Counter()

@@ -32,6 +32,7 @@ from ..base import (
     _reading,
     _serialized,
     marks,
+    moment,
     vectors_available,
 )
 from .knobs import knobs
@@ -452,7 +453,7 @@ def reconcile_unsaved(con: sqlite3.Connection, model: str) -> dict[str, int]:
         if not files:
             continue
         saved = max(f.stat().st_mtime for f in files) - RECONCILE_SLACK
-        since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(saved))
+        since = moment(saved)
         ids = [
             int(r[0])
             for r in con.execute(

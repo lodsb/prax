@@ -367,4 +367,6 @@ def healthy(url: str, timeout: float = 3.0) -> bool:
 
 
 def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
+    """``store.now``'s shape (``+00:00`` until 2026-11-09, finding 53); the
+    supervisor does not import the store."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

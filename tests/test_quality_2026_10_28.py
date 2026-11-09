@@ -37,6 +37,28 @@ def test_a_persons_run_is_never_another_actions() -> None:
     assert ":" in store.run_name("twins", sep=":")
 
 
+def test_a_steps_run_and_a_cutoff_are_moments_in_utc() -> None:
+    """Structure review 2026-11-07, finding 53: a worker's run was named
+    in its local clock, and cutoffs were written by hand."""
+    import re
+
+    from prax.steps.base import TakeIn
+
+    took = TakeIn(con=None, step="extract", payload={}, results=[], worker="w")
+    assert re.fullmatch(r"extract-\d{8}T\d{6}Z", took.run())
+    assert re.fullmatch(r"work-\d{8}T\d{6}Z", took.run("work"))
+    assert (
+        TakeIn(
+            con=None, step="x", payload={"run": "given"}, results=[], worker="w"
+        ).run()
+        == "given"
+    )
+    hour_ago = store.ago(3600)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", hour_ago)
+    assert hour_ago < store.now()
+    assert store.moment(0) == "1970-01-01T00:00:00Z"
+
+
 # ------------------- 7, 8, 10. one test of personal, one writer of a mark
 
 

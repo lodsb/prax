@@ -34,7 +34,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from http.client import HTTPMessage
 from pathlib import Path
 from typing import IO, Any
@@ -791,7 +790,7 @@ def scan(
     root.mkdir(parents=True, exist_ok=True)
     failed_dir = root / FAILED_DIR
     report = ScanReport()
-    session = session or f"inbox-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}"
+    session = session or store.run_name("inbox")
     for item in drop.walk(root):
         if item is None:
             report.waiting += 1  # still being written, or a sidecar alone

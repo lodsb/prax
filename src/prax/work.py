@@ -382,7 +382,6 @@ def demand(con: Any) -> dict[str, Any]:
     stopped one look the same in a count alone, and the figures backlog
     spent a day looking stopped while it was moving at 55 an hour.
     """
-    from datetime import UTC, datetime, timedelta
 
     from prax import store
 
@@ -394,9 +393,7 @@ def demand(con: Any) -> dict[str, Any]:
     }
     for role, n in wanted_roles().items():  # what found its server gone
         roles[role] = roles.get(role, 0) + n
-    since = (datetime.now(UTC) - timedelta(hours=RATE_HOURS)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    since = store.ago(RATE_HOURS * 3600)
     done = store.readings_done_since(con, since)
     rate = {name: round(n / RATE_HOURS, 1) for name, n in done.items() if n}
     left = {

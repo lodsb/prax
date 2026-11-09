@@ -30,7 +30,6 @@ import sqlite3
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import numpy as np
@@ -681,7 +680,7 @@ def apply(
     subtype folds when asked, and ask the adjudicator about the likely
     ones. Idempotent: a re-run finds nothing left to merge."""
     report = Report()
-    run = run or "resolve-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+    run = run or store.run_name("resolve")
     for c in p.sure:
         store.merge_entities(con, c.drop, c.keep, producer=PRODUCER, run=run)
         report.merged_sure += 1

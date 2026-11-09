@@ -298,7 +298,7 @@ against the code on 2026-11-08.
 
 - [x] 42 (2026-11-09, the log). Union-find written four times: one `DisjointSet` in
       `ml.clusters`.
-- [ ] 53. Run names and "N ago" cutoffs by hand, some in local time:
+- [x] 53 (2026-11-09, the log). Run names and "N ago" cutoffs by hand, some in local time:
       `run_name` everywhere, `base.ago(seconds)`, `process._now` on
       `base.now`.
 - [ ] 36. "A label sure enough" four times with four constants equal to

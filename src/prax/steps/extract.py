@@ -6,7 +6,6 @@ worker does differs."""
 from __future__ import annotations
 
 import contextlib
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from typing import Any
@@ -135,7 +134,7 @@ class Extract(Step):
             {
                 "results": results,
                 "extractor": ext.name,
-                "run": f"{prefix}-{time.strftime('%Y%m%dT%H%M%S')}",
+                "run": store.run_name(prefix),
             },
         )
         line = f"{rep.get('applied', 0)} documents: {rep.get('report')}"

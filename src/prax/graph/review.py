@@ -22,7 +22,6 @@ import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 from prax import store
@@ -823,9 +822,7 @@ def apply_typing_rules(
     ``linked`` too. With ``commit=False`` nothing is written and the
     report says what would be."""
     onto = onto or ontology.current()
-    rep = TypingReport(
-        run=run or "typing-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-    )
+    rep = TypingReport(run=run or store.run_name("typing"))
     items: list[dict[str, Any]] = []
     offset = 0
     while True:

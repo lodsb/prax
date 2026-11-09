@@ -10131,3 +10131,27 @@ in `prax.ml.clusters`.
   level are disjoint, so two can contest an id only as two equal halves,
   and the order changes nothing else. `jaccard` moves there too, and
   `store.jaccard`, which nothing called, goes.
+
+## 2026-11-09: a run and a cutoff are moments in UTC
+
+Finding 53 of the structure review. Ten run names were stamped by hand.
+Six of them (the steps' `TakeIn.run` and `ModelStep`'s post, the
+extraction and typing steps, the `references` and `polysemy` passes of
+`prax maintain`) used `time.strftime`, the clock of the host they ran
+on. Four (resolution, the typing review and its model pass, the inbox
+session) used UTC without the `Z`. All ten are `store.run_name` now:
+UTC, with the `Z`, as the fourteen callers it already had. On a worker
+outside UTC, a step's batch and the door's pass of the same moment no
+longer carry two different times in their names, which is what a person
+reads in `why` and `changes` before undoing a run.
+
+- `store.ago(seconds)` is a cutoff in `now`'s shape, and
+  `store.moment(epoch)` a file's mtime in it. They replace six cutoffs
+  written by hand (the resolve hand-out, the reading rates of `work`,
+  the Admin page's spending, the briefing's first day, and the two
+  reconciliations of the vector and face indexes).
+- The supervisor's status file wrote `+00:00` (`isoformat`). It writes
+  `now`'s shape now, without importing the store. Its one reader,
+  `schedule`'s `fromisoformat`, reads both.
+- Test: a step's run is `extract-<UTC>Z`, and a cutoff an hour ago sorts
+  before `now`.

@@ -5,7 +5,6 @@ supervisor's state, and the jobs."""
 from __future__ import annotations
 
 import socket
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -232,9 +231,7 @@ def spending(request: Request, days: int = 30, limit: int = 20) -> dict[str, Any
     from prax.ml import budget
 
     con = _con(request)
-    since = (datetime.now(UTC) - timedelta(days=max(1, min(days, 365)))).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    since = store.ago(max(1, min(days, 365)) * 86400)
     return {
         "budget": budget.state(con),
         "since": since,

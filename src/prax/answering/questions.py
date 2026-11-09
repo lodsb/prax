@@ -42,7 +42,7 @@ import hashlib
 import logging
 import re
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from prax import store
@@ -803,10 +803,8 @@ def briefing(
     stays — a page whose agent part was edited by hand is left alone."""
     now = datetime.now(UTC)
     day = day or now.strftime("%Y-%m-%d")
-    since = _last_briefing_until(con) or (now - timedelta(days=1)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-    until = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    since = _last_briefing_until(con) or store.ago(86400)
+    until = store.now()
     if job is not None:
         job.update(note="briefing")
     arrived = [

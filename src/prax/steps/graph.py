@@ -74,7 +74,7 @@ class Typing(Step):
             {
                 "results": results,
                 "model": spec.runtime_name,
-                "run": f"typing-model-{time.strftime('%Y%m%dT%H%M%S')}",
+                "run": store.run_name("typing-model"),
             },
         )
         r = rep.get("report") or {}
@@ -101,10 +101,7 @@ class Resolve(Step):
         if emb is None:
             return {"step": self.name, "type": None, "names": [], "lease_seconds": 0}
         runs = store.candidate_runs(h.con)
-        cutoff = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ",
-            time.gmtime(time.time() - resolution.LIKELY_DAYS * 86400),
-        )
+        cutoff = store.ago(resolution.LIKELY_DAYS * 86400)
         for i, t in enumerate(sorted(resolution.RESOLVE_TYPES)):
             if runs.get(t, "") >= cutoff or not h.free(i):
                 continue

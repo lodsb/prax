@@ -21,7 +21,6 @@ import re
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 from prax import models, store
@@ -282,7 +281,7 @@ def run(
             )
         runtime = models.runtime(spec)
     rep = ModelTypingReport(
-        run="typing-model-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S"),
+        run=store.run_name("typing-model"),
         model=getattr(runtime, "name", spec.name if spec else "model"),
     )
     producer = f"{PRODUCER_PREFIX}:{rep.model}"

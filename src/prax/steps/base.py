@@ -21,7 +21,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import models
+from prax import models, store
 from prax.ml import usage
 
 from . import leases
@@ -100,8 +100,7 @@ class TakeIn:
     def run(self, prefix: str | None = None) -> str:
         """The batch's run name: what the worker said, or one of the
         step's own stamped now."""
-        stamp = time.strftime("%Y%m%dT%H%M%S")
-        return str(self.payload.get("run") or f"{prefix or self.step}-{stamp}")
+        return str(self.payload.get("run") or store.run_name(prefix or self.step))
 
     def release(self, items: list[int], step: str | None = None) -> None:
         leases.release(step or self.step, items)
@@ -337,8 +336,7 @@ class ModelStep(Step):
         p.note(f"{self.name}: {len(items)} items", total=len(items), done=0)
         runtime = models.runtime(spec) if spec else None
         results = self.do(items, runtime, p.log)
-        stamp = time.strftime("%Y%m%dT%H%M%S")
-        rep = p.post(self.name, {"results": results, "run": f"{self.name}-{stamp}"})
+        rep = p.post(self.name, {"results": results, "run": store.run_name(self.name)})
         return self.report(rep, results)
 
 
