@@ -10048,3 +10048,17 @@ stood (finding 30, `docs/PLAN.md`).
   `PATH_REFRESH` (300 s). A walk as of a moment or a world date reads
   it on every call, which is 24 ms more on a request that builds or
   finds an index of its own.
+
+## 2026-11-09: the domain rules' preview and their assignment agree
+
+Finding 15 of the structure review. `domains_dry_run`, the Admin page's
+preview of what the rules will do, selected live documents without a
+set; `assign_domains`, which the nightly `prax maintain` runs, had a
+WHERE of its own with no retired filter, so it placed retired documents
+the preview never showed. One generator, `domains._matched(con, rules,
+*, force, ids)`, is the selection under both (live, not personal, not
+set by a person, without a set unless `force`; `ids` through
+`rows_in`) and yields each document with the first rule it matches.
+`assign_domains(commit=False)`, which only a test used, is gone: the
+preview is the dry run. Test: a retired document is placed by neither.
+

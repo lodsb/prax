@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
 from typing import Any
 
 from prax.graph import ontology
@@ -383,6 +384,49 @@ def _rule_matches(
     return True
 
 
+def _matched(
+    con: sqlite3.Connection,
+    rules: list[dict[str, Any]],
+    *,
+    force: bool = False,
+    ids: list[int] | None = None,
+) -> Iterator[tuple[sqlite3.Row, dict[str, Any], int | None]]:
+    """Each document the rules may place, its meta and the index of the
+    first rule it matches (None: none does). The one selection under
+    ``domains_dry_run`` and ``assign_domains``: live, not personal, not
+    set by a person, and without a set unless ``force``. The two had a
+    WHERE each until 2026-11-09, and the nightly assignment placed retired
+    documents the Admin page's preview left out (structure review finding
+    15)."""
+    for rule in rules:
+        _check_rule(rule)
+    sql = (
+        "SELECT id, title, mime, original_path, meta FROM documents"
+        f" WHERE {LIVE}"
+        " AND coalesce(json_extract(meta, '$.domains_by'), '') != 'human'"
+        f"{_NOT_PERSONAL}"
+    )
+    if not force:  # only the documents without a set (the index knows them)
+        sql += " AND json_extract(meta, '$.domains') IS NULL"
+    rows = (
+        con.execute(sql).fetchall()
+        if ids is None
+        else rows_in(con, sql + " AND id IN ({ids})", ids)
+    )
+    for r in rows:
+        meta = meta_of(r["meta"])
+        doc = {
+            "id": r["id"],
+            "mime": r["mime"],
+            "original_path": r["original_path"],
+            "meta": meta,
+        }
+        hit = next(
+            (i for i, rule in enumerate(rules) if _rule_matches(rule, doc, con)), None
+        )
+        yield r, meta, hit
+
+
 @_reading
 def domains_dry_run(
     con: sqlite3.Connection, rules: list[dict[str, Any]], *, examples: int = 8
@@ -390,30 +434,15 @@ def domains_dry_run(
     """What ``assign_domains`` would do with these rules to the documents
     without a domain set, written nowhere: per rule, how many documents it
     takes (first match wins) and a few of their titles."""
-    for rule in rules:
-        _check_rule(rule)
     taken: list[dict[str, Any]] = [{"count": 0, "examples": []} for _ in rules]
     unmatched = 0
-    for r in con.execute(
-        "SELECT id, title, mime, original_path, meta FROM documents"
-        " WHERE json_extract(meta, '$.domains') IS NULL"
-        f" AND {LIVE}"
-        f"{_NOT_PERSONAL}"
-    ).fetchall():
-        doc = {
-            "id": r["id"],
-            "mime": r["mime"],
-            "original_path": r["original_path"],
-            "meta": meta_of(r["meta"]),
-        }
-        for i, rule in enumerate(rules):
-            if _rule_matches(rule, doc, con):
-                taken[i]["count"] += 1
-                if len(taken[i]["examples"]) < examples:
-                    taken[i]["examples"].append({"id": r["id"], "title": r["title"]})
-                break
-        else:
+    for r, _meta, i in _matched(con, rules):
+        if i is None:
             unmatched += 1
+        else:
+            taken[i]["count"] += 1
+            if len(taken[i]["examples"]) < examples:
+                taken[i]["examples"].append({"id": r["id"], "title": r["title"]})
     return {
         "rules": [{**rule, **t} for rule, t in zip(rules, taken, strict=True)],
         "unmatched": unmatched,
@@ -426,7 +455,6 @@ def assign_domains(
     rules: list[dict[str, Any]],
     *,
     force: bool = False,
-    commit: bool = True,
     ids: list[int] | None = None,
 ) -> dict[str, int]:
     """Give every document without a domain set (all of them with ``force``;
@@ -442,42 +470,18 @@ def assign_domains(
     (``RULE_FACTS_MIN``).
     Documents whose set a person wrote by hand (``domains_by: human``) are
     never touched, nor those marked personal or suspected
-    (``sensitivity``). Returns counts per rule index and ``unmatched``."""
+    (``sensitivity``), nor retired ones. Returns counts per rule index and
+    ``unmatched``; ``domains_dry_run`` shows the same choice unwritten."""
     counts: dict[str, int] = {"unmatched": 0}
-    for rule in rules:
-        _check_rule(rule)
-    sql = (
-        "SELECT id, mime, original_path, meta FROM documents"
-        " WHERE coalesce(json_extract(meta, '$.domains_by'), '') != 'human'"
-        f"{_NOT_PERSONAL}"
-    )
-    args: tuple[Any, ...] = ()
-    if not force:  # only the documents without a set (the index knows them)
-        sql += " AND json_extract(meta, '$.domains') IS NULL"
-    if ids is not None:
-        sql += f" AND id IN ({','.join('?' * len(ids))})"
-        args = tuple(ids)
-    for r in con.execute(sql, args).fetchall():
-        meta = meta_of(r["meta"])
-        doc = {
-            "id": r["id"],
-            "mime": r["mime"],
-            "original_path": r["original_path"],
-            "meta": meta,
-        }
-        for i, rule in enumerate(rules):
-            if _rule_matches(rule, doc, con):
-                key = f"rule {i}"
-                counts[key] = counts.get(key, 0) + 1
-                if commit:
-                    meta["domains"] = list(rule["domains"])
-                    meta["domains_by"] = "rule"
-                    _put_meta(con, r["id"], meta)
-                break
-        else:
+    for r, meta, i in _matched(con, rules, force=force, ids=ids):
+        if i is None:
             counts["unmatched"] += 1
-    if commit:
-        con.commit()
+            continue
+        counts[f"rule {i}"] = counts.get(f"rule {i}", 0) + 1
+        meta["domains"] = list(rules[i]["domains"])
+        meta["domains_by"] = "rule"
+        _put_meta(con, r["id"], meta)
+    con.commit()
     return counts
 
 

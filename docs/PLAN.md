@@ -276,7 +276,7 @@ against the code on 2026-11-08.
       writes no edge. The paths take `graph_stamp`, which counts merges
       (some 25 ms, read only after `PATH_REFRESH`; measure on the board).
       Test: merge, then connect.
-- [ ] 15. `assign_domains` assigns domains to retired documents, which
+- [x] (2026-11-09, the log) 15. `assign_domains` assigns domains to retired documents, which
       `domains_dry_run` (the Admin page's preview) leaves out. One
       `_matched(con, rules, *, force, ids)` with the one WHERE under
       both; `commit=False` (test-only) goes.

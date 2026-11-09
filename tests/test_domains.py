@@ -73,10 +73,14 @@ def test_assign_by_rules(con: sqlite3.Connection, three_modules: Path) -> None:
         {"match": {"collection": "family"}, "domains": ["family", "research"]},
         {"match": {"source": "zotero"}, "domains": ["research"]},
     ]
-    dry = store.assign_domains(con, rules, commit=False)
-    assert dry == {"unmatched": 0, "rule 0": 1, "rule 1": 1}
+    dry = store.domains_dry_run(con, rules)
+    assert [r["count"] for r in dry["rules"]] == [1, 1] and dry["unmatched"] == 0
     assert store.document_domains(con, fam) is None
-    store.assign_domains(con, rules)
+    assert store.assign_domains(con, rules) == {
+        "unmatched": 0,
+        "rule 0": 1,
+        "rule 1": 1,
+    }
     assert store.document_domains(con, fam) == ["family", "research"]
     assert store.get_meta(con, fam)["domains_by"] == "rule"
     assert store.document_domains(con, paper) == ["research"]
@@ -89,6 +93,21 @@ def test_assign_by_rules(con: sqlite3.Connection, three_modules: Path) -> None:
     with pytest.raises(ValueError, match="unknown domain"):
         store.assign_domains(con, [{"domains": ["cooking"]}])
     assert store.documents_in_domain(con, "family") == [fam, paper]
+
+
+def test_the_preview_and_the_assignment_place_the_same_documents(
+    con: sqlite3.Connection, three_modules: Path
+) -> None:
+    """The nightly assignment placed retired documents the Admin page's
+    preview left out (structure review finding 15)."""
+    kept = store.ingest_text(con, "x " * 40, title="Kept")["doc_id"]
+    gone = store.ingest_text(con, "y " * 40, title="Gone")["doc_id"]
+    store.retire_document(con, gone, reason="a test")
+    rules = [{"domains": ["research"]}]
+    assert store.domains_dry_run(con, rules)["rules"][0]["count"] == 1
+    assert store.assign_domains(con, rules) == {"unmatched": 0, "rule 0": 1}
+    assert store.document_domains(con, kept) == ["research"]
+    assert store.document_domains(con, gone) is None
 
 
 def test_extraction_uses_the_documents_subset(

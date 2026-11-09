@@ -233,7 +233,7 @@ def _domains(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     if not rules:
         return {"rules": 0}
     job.update(note="domains from the rules")
-    counts = assign_domains(con, rules, commit=True)
+    counts = assign_domains(con, rules)
     assigned = sum(v for k, v in counts.items() if k.startswith("rule "))
     return {"rules": len(rules), "assigned": assigned, "unmatched": counts["unmatched"]}
 
