@@ -307,7 +307,7 @@ against the code on 2026-11-08.
 - [x] 49 (2026-11-09, the log). Callers write the markup format by hand while its emitters are
       test-only: `markup.doc_link`, `read_by`, `figure_ref`, `HEADING`,
       and a new `figure_line_of`.
-- [ ] 47. 37 list routes take a limit, 12 clamp it by hand:
+- [x] 47 (2026-11-09, the log). 37 list routes take a limit, 12 clamp it by hand:
       `Annotated[int, Query(ge=1, le=N)]` aliases in `api/_base.py`.
 - [ ] 21 (the rest). Four one-line "is this model free" wrappers become
       `pipeline.free(step)`; the spend policy is one

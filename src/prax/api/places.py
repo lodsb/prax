@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from prax import store
 from prax.capture import inbox
 
-from ._base import _con
+from ._base import Page, _con
 
 router = APIRouter()
 
@@ -121,19 +121,19 @@ def places(
 
 @router.get("/places/single")
 def single(
-    request: Request, root: str | None = None, limit: int = 50
+    request: Request, root: str | None = None, limit: Page = 50
 ) -> dict[str, Any]:
     """The files that lie at one place only and are not in the archive,
     largest first: what one disk's failure would lose."""
-    return store.single_copies(_con(request), root=root, limit=min(limit, 500))
+    return store.single_copies(_con(request), root=root, limit=limit)
 
 
 @router.get("/places/duplicates")
 def duplicates(
-    request: Request, root: str | None = None, min_size: int = 0, limit: int = 50
+    request: Request, root: str | None = None, min_size: int = 0, limit: Page = 50
 ) -> dict[str, Any]:
     """The files that lie at several places, those whose extra copies take
     the most space first."""
     return store.duplicate_places(
-        _con(request), root=root, min_size=min_size, limit=min(limit, 500)
+        _con(request), root=root, min_size=min_size, limit=limit
     )

@@ -16,7 +16,7 @@ from prax import store
 from prax.capture import inbox
 from prax.graph import ontology
 
-from ._base import _capture_out, _con, _split, max_upload, ui_url
+from ._base import AtMost, Page, _capture_out, _con, _split, max_upload, ui_url
 
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
@@ -163,12 +163,13 @@ def cleanup_runs(request: Request) -> dict[str, Any]:
 
 @router.get("/cleanup/{rule}")
 def cleanup_preview(
-    rule: str, request: Request, folder: str | None = None, limit: int = 30
+    rule: str,
+    request: Request,
+    folder: str | None = None,
+    limit: Annotated[int, AtMost(200)] = 30,
 ) -> dict[str, Any]:
     """What a clean-up rule would retire, before it does (stage X)."""
-    return store.cleanup_preview(
-        _con(request), rule, folder=folder, limit=max(1, min(limit, 200))
-    )
+    return store.cleanup_preview(_con(request), rule, folder=folder, limit=limit)
 
 
 class CleanupReq(BaseModel):
@@ -489,7 +490,7 @@ class RequestDone(BaseModel):
 
 @router.get("/captures/requests")
 def requests_list(
-    request: Request, state: str = "waiting", limit: int = 20
+    request: Request, state: str = "waiting", limit: Page = 20
 ) -> dict[str, Any]:
     """The captures the door could not fetch and the extension may:
     ``waiting`` (what it fetches next, oldest first), ``done``, ``failed``
@@ -524,7 +525,7 @@ def requests_finish(
 
 
 @router.get("/inbox")
-def inbox_view(request: Request, limit: int = 50) -> dict[str, Any]:
+def inbox_view(request: Request, limit: Page = 50) -> dict[str, Any]:
     """The latest captures (uploads, sent pages, fetched URLs, dropped
     files) with their state, the drop folder, and the domains to choose."""
     return {

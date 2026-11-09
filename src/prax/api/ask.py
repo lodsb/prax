@@ -8,7 +8,7 @@ import json
 import queue
 import threading
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Annotated, Any
 
 import anyio
 from fastapi import APIRouter, HTTPException, Request
@@ -21,7 +21,7 @@ from prax import config, models, store, work
 from prax.answering import ask as ask_mod
 from prax.ml import budget
 
-from ._base import _con
+from ._base import AtMost, _con
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ router = APIRouter()
 
 class AskReq(BaseModel):
     question: str
-    limit: int = ask_mod.PASSAGES
+    limit: Annotated[int, AtMost(20)] = ask_mod.PASSAGES
     doctype: str | None = None
     backend: str | None = None  # local | claude | none; None: the host default
     history: list[dict[str, Any]] | None = None  # earlier turns: question, answer
@@ -94,7 +94,7 @@ def ask(req: AskReq, request: Request) -> Any:
     if steps is None and answerer is not None:
         steps = ask_mod.default_steps()
     kw: dict[str, Any] = {
-        "limit": max(1, min(req.limit, 20)),
+        "limit": req.limit,
         "doctype": req.doctype,
         "answerer": answerer,
         "history": req.history,

@@ -4,7 +4,7 @@ the overview."""
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from prax import store
 from prax.graph import ontology, review
 
-from ._base import _con
+from ._base import AtMost, Page, _con
 
 router = APIRouter()
 
@@ -129,7 +129,7 @@ def changes(
     derived: bool = False,
     rereadings: bool = False,
     corrections: bool = False,
-    limit: int = store.CHANGES_SHOWN,
+    limit: Page = store.CHANGES_SHOWN,
 ) -> dict[str, Any]:
     """What changed in a period (``store.changes``): on record time the
     facts prax wrote and ended in it, on world time (``world``) the facts
@@ -260,7 +260,7 @@ class BulkReq(BaseModel):
 @router.get("/review")
 def review_list(
     request: Request,
-    limit: int = 50,
+    limit: Page = 50,
     offset: int = 0,
     open: bool = True,
     rel: str | None = None,
@@ -351,7 +351,7 @@ def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str
 
 
 @router.get("/entities")
-def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
+def entities(q: str, request: Request, limit: Page = 20) -> list[dict[str, Any]]:
     """Entities whose name contains ``q``, most connected first."""
     return store.find_entities(_con(request), q, limit=limit)
 
@@ -359,7 +359,7 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
 @router.get("/graph/overview")
 def graph_overview(
     request: Request,
-    limit: int = 30,
+    limit: Page = 30,
     min_shared: int = 2,
     domain: str | None = None,
     page: int | None = None,
@@ -414,18 +414,22 @@ def graph_documents(ids: str, request: Request) -> dict[str, Any]:
 
 
 @router.get("/communities/map")
-def communities_map(request: Request, limit: int = 40) -> dict[str, Any]:
+def communities_map(
+    request: Request, limit: Annotated[int, AtMost(120)] = 40
+) -> dict[str, Any]:
     """The regions as one picture: the largest as nodes and how many facts
     reach between each two (``store.region_map``)."""
-    return store.region_map(_con(request), limit=max(1, min(limit, 120)))
+    return store.region_map(_con(request), limit=limit)
 
 
 @router.get("/communities/{cid}/graph")
-def community_graph(cid: int, request: Request, members: int = 40) -> dict[str, Any]:
+def community_graph(
+    cid: int, request: Request, members: Annotated[int, AtMost(120)] = 40
+) -> dict[str, Any]:
     """A region drawn: its members that weigh most, the facts among them,
     and which of them share documents (``store.hub_graph``)."""
     con = _con(request)
-    got = store.community(con, cid, members=max(1, min(members, 120)), documents=1)
+    got = store.community(con, cid, members=members, documents=1)
     if got is None:
         raise HTTPException(404, "no such region")
     ids = [int(m["id"]) for m in got["members"]]
@@ -434,7 +438,7 @@ def community_graph(cid: int, request: Request, members: int = 40) -> dict[str, 
 
 @router.get("/communities")
 def communities(
-    request: Request, level: int = 0, parent: int | None = None, limit: int = 100
+    request: Request, level: int = 0, parent: int | None = None, limit: Page = 100
 ) -> dict[str, Any]:
     """The regions of the library (level 0) or their parts (level 1, a
     region's with ``parent``), largest first: label, size, the summary's
@@ -448,7 +452,10 @@ def communities(
 
 @router.get("/communities/{cid}")
 def community(
-    cid: int, request: Request, members: int = 30, documents: int = 10
+    cid: int,
+    request: Request,
+    members: Annotated[int, AtMost(120)] = 30,
+    documents: int = 10,
 ) -> dict[str, Any]:
     """One region or part: its summary, members, parts and the documents
     that name most of its members."""
@@ -469,7 +476,7 @@ def graph_document(doc_id: int, request: Request) -> dict[str, Any]:
 
 @router.get("/graph/candidates")
 def graph_candidates(
-    request: Request, type: str | None = None, offset: int = 0, limit: int = 30
+    request: Request, type: str | None = None, offset: int = 0, limit: Page = 30
 ) -> dict[str, Any]:
     """The likely pairs nobody has decided, closest names first, each side
     with its edges and a document naming it (the review page's "same
@@ -523,7 +530,7 @@ def graph_decide(req: DecideReq, request: Request) -> dict[str, Any]:
 
 @router.get("/graph/split-names")
 def graph_split_names(
-    request: Request, offset: int = 0, limit: int = 30
+    request: Request, offset: int = 0, limit: Page = 30
 ) -> dict[str, Any]:
     """Names held by things of unrelated types that nobody has settled,
     each part with its edges and a document naming it."""
@@ -531,7 +538,7 @@ def graph_split_names(
 
 
 @router.get("/graph/merges")
-def graph_merges(request: Request, offset: int = 0, limit: int = 30) -> dict[str, Any]:
+def graph_merges(request: Request, offset: int = 0, limit: Page = 30) -> dict[str, Any]:
     """Merges worth a second look: one word apart, or a name folded into a
     narrower one (``store.merges_page``)."""
     return store.merges_page(_con(request), offset=offset, limit=limit)
@@ -628,7 +635,7 @@ async def graph_import(
 
 @router.get("/graph/imports/likely")
 def graph_imports_likely(
-    request: Request, offset: int = 0, limit: int = 30
+    request: Request, offset: int = 0, limit: Page = 30
 ) -> dict[str, Any]:
     """Another library's entities whose name a thing here answers to, waiting
     with their edges for an answer (``store.foreign_likely``)."""
@@ -692,7 +699,10 @@ def graph_unmerge_entity(req: UnmergeEntityReq, request: Request) -> dict[str, A
 
 @router.get("/graph/events")
 def graph_events(
-    request: Request, state: str = "open", offset: int = 0, limit: int = 20
+    request: Request,
+    state: str = "open",
+    offset: int = 0,
+    limit: Annotated[int, AtMost(100)] = 20,
 ) -> dict[str, Any]:
     """Groups of photos taken close together, for a person to name as an
     event or set aside (``store.event_candidates_page``)."""
@@ -700,7 +710,7 @@ def graph_events(
         _con(request),
         state=state,
         offset=max(0, offset),
-        limit=max(1, min(limit, 100)),
+        limit=limit,
     )
 
 
@@ -734,7 +744,10 @@ def graph_event_undo(candidate_id: int, request: Request) -> dict[str, Any]:
 
 @router.get("/graph/versions")
 def graph_versions(
-    request: Request, verdict: str | None = None, offset: int = 0, limit: int = 20
+    request: Request,
+    verdict: str | None = None,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.VERSIONS_PAGE)] = 20,
 ) -> dict[str, Any]:
     """Pairs of documents that are probably versions of one work or one
     text twice, the most alike first, for a person to answer
@@ -743,7 +756,7 @@ def graph_versions(
         _con(request),
         verdict=verdict or None,
         offset=max(0, offset),
-        limit=max(1, min(limit, store.VERSIONS_PAGE)),
+        limit=limit,
     )
 
 
@@ -800,7 +813,7 @@ def graph_event_join(candidate_id: int, request: Request) -> dict[str, Any]:
 
 
 @router.get("/people")
-def people(request: Request, q: str = "", limit: int = 50) -> list[dict[str, Any]]:
+def people(request: Request, q: str = "", limit: Page = 50) -> list[dict[str, Any]]:
     """Persons, the most photographed and connected first; ``q`` narrows
     them by name (``store.people``)."""
     return store.people(_con(request), q=q, limit=limit)
@@ -821,7 +834,7 @@ def pictures(
     candidate: int | None = None,
     place: int | None = None,
     offset: int = 0,
-    limit: int = store.PICTURES_PAGE,
+    limit: Page = store.PICTURES_PAGE,
 ) -> dict[str, Any]:
     """One page of a set of pictures, the gallery's (``store.picture_set``):
     a person's, an event's, an event candidate's or a place's. The

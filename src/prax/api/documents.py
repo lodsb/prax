@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
@@ -22,7 +22,7 @@ from prax import (
 )
 from prax.parsers import quality
 
-from ._base import _con, ui_url
+from ._base import AtMost, Page, _con, ui_url
 
 router = APIRouter()
 
@@ -99,7 +99,7 @@ def get(
 def search(
     q: str,
     request: Request,
-    limit: int = 10,
+    limit: Annotated[int, AtMost(100)] = 10,
     kind: str | None = None,
     mode: str = "hybrid",
     rerank: bool | None = None,
@@ -171,7 +171,7 @@ def chunk(chunk_id: int, request: Request) -> dict[str, Any]:
 @router.get("/documents")
 def documents(
     request: Request,
-    limit: int = 50,
+    limit: Page = 50,
     offset: int = 0,
     title: str | None = None,
     source: str | None = None,
@@ -262,7 +262,7 @@ def photo_faces(doc_id: int, request: Request) -> list[dict[str, Any]]:
 
 @router.get("/faces")
 def faces_page(
-    request: Request, order: str = "least", offset: int = 0, limit: int = 100
+    request: Request, order: str = "least", offset: int = 0, limit: Page = 100
 ) -> dict[str, Any]:
     """Faces to look at with their crops, and their counts by score and
     size (``store.faces_page``). Not a named token's route."""
@@ -283,14 +283,16 @@ def face_crop(face_id: int, request: Request) -> FileResponse:
 
 
 @router.get("/face/{face_id}/similar")
-def face_similar(face_id: int, request: Request, k: int = 12) -> list[dict[str, Any]]:
+def face_similar(
+    face_id: int, request: Request, k: Annotated[int, AtMost(60)] = 12
+) -> list[dict[str, Any]]:
     """The faces that look most like this one (``store.similar_faces``)."""
-    return store.similar_faces(_con(request), face_id, k=max(1, min(k, 60)))
+    return store.similar_faces(_con(request), face_id, k=k)
 
 
 @router.get("/faces/groups")
 def face_groups(
-    request: Request, offset: int = 0, limit: int = 30, event: int | None = None
+    request: Request, offset: int = 0, limit: Page = 30, event: int | None = None
 ) -> dict[str, Any]:
     """The face groups with faces to name, each with its firmest open faces
     (``store.face_groups``, made by the facegroups pass); with ``event``,
@@ -300,7 +302,7 @@ def face_groups(
 
 @router.get("/faces/matches")
 def face_matches(
-    request: Request, offset: int = 0, limit: int = 30, person: int | None = None
+    request: Request, offset: int = 0, limit: Page = 30, person: int | None = None
 ) -> dict[str, Any]:
     """The open faces that are probably someone already named, by person
     (``store.face_matches``); with ``person``, that person's all. Not a
@@ -511,7 +513,10 @@ REFERENCES_MAX = 300
 
 @router.get("/doc/{doc_id}/references")
 def doc_references(
-    doc_id: int, request: Request, limit: int = REFERENCES_SHOWN, offset: int = 0
+    doc_id: int,
+    request: Request,
+    limit: Annotated[int, AtMost(REFERENCES_MAX)] = REFERENCES_SHOWN,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """A paper's reference list, an entry each: what it names, the library
     document it cites (``in_library``) or ``links`` to read it elsewhere
@@ -523,7 +528,6 @@ def doc_references(
     if store.get_document(con, doc_id, max_chars=0) is None:
         raise HTTPException(404, "no such document")
     refs = store.references_of(con, doc_id)
-    limit = max(1, min(int(limit), REFERENCES_MAX))
     offset = max(0, int(offset))
     shown = refs[offset : offset + limit]
     return {
@@ -541,7 +545,7 @@ class MissingReq(BaseModel):
     tag: str | None = None
     project: str | None = None
     page: str | None = None  # the documents a page links
-    limit: int = 30
+    limit: Annotated[int, AtMost(200)] = 30
     min_count: int = 1  # works fewer of them cite are left out
 
 
@@ -562,7 +566,7 @@ def references_missing(req: MissingReq, request: Request) -> dict[str, Any]:
         ids += store.linked_documents(page["text"])
     if not ids:
         raise HTTPException(400, "name the set: doc_ids, a tag, a project or a page")
-    limit = max(1, min(req.limit, 200))
+    limit = req.limit
     return store.cited_but_missing(
         con, ids, limit=limit, min_count=max(1, req.min_count)
     )
@@ -570,7 +574,7 @@ def references_missing(req: MissingReq, request: Request) -> dict[str, Any]:
 
 @router.get("/doc/{doc_id}/context")
 def doc_context(
-    doc_id: int, request: Request, limit: int = 8, domain: str | None = None
+    doc_id: int, request: Request, limit: Page = 8, domain: str | None = None
 ) -> dict[str, Any]:
     """What places the document in the library: summary and entities,
     citations in and out, nearest documents by vector (within ``domain``

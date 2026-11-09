@@ -763,3 +763,26 @@ def test_what_a_write_or_a_read_answers_carries_its_link(client: TestClient) -> 
 def test_the_drops_beside_the_review_queue(client: TestClient) -> None:
     got = client.get("/review/drops")
     assert got.status_code == 200 and got.json() == {"total": 0, "reasons": {}}
+
+
+def test_every_list_route_declares_and_clamps_its_limit(client: TestClient) -> None:
+    """Structure review 2026-11-07, finding 47: twelve routes clamped a
+    limit by hand, the rest passed the client's number to the store."""
+    schema = client.get("/openapi.json").json()
+    open_ended = []
+    for path, ops in schema["paths"].items():
+        for op in ops.values():
+            for p in op.get("parameters") or []:
+                if p["name"] not in ("limit", "k", "members"):
+                    continue
+                s = p["schema"]
+                if s.get("type") == "integer" and "maximum" not in s:
+                    open_ended.append(path)
+    assert open_ended == ["/work/{step}"]  # a worker's batch, its own protocol
+    for i in range(3):
+        client.post(
+            "/ingest", json={"title": f"note {i}", "text": "granular synthesis"}
+        )
+    assert client.get("/people", params={"limit": 10**6}).status_code == 200
+    got = client.get("/jobs", params={"limit": 0})
+    assert got.status_code == 200

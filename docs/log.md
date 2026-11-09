@@ -10183,7 +10183,7 @@ written by hand: the reading line in `figures` and `formulas`, and a
 `[title](#doc/N)` link in `ask`'s sources, three lines of the briefing,
 a split page's index, and the `mdwiki` and `latex2html` importers. A
 link is what a page's `annotates` edges are read from (`DOC_LINK`), so a
-change to its shape in `markup` would have left nine writers on the old
+change to its shape in `markup` would have left seven writers on the old
 one. All of them call the emitters now. `markup.figure_line_of(line)` is
 the figure a line ends on, the place a reading goes under; it replaces
 `figures`' two `endswith(f"(figure:{ref})")`. It is looser than
@@ -10199,3 +10199,35 @@ title, `polish` matches a frame's time caption, and `chunking`'s
 of a link `DOC_LINK` matched. `latex2html` builds a bare data URL, not a
 figure line. A test scans the source for a reading line or a document
 link written by hand.
+
+## 2026-11-09: every list route declares its limit
+
+Finding 47 of the structure review. Of the door's list routes, twelve
+clamped `limit` (or `k`, or `members`) by hand with a literal of their
+own. The rest passed the client's number straight to the store, among
+them `/people`, `/readings` and `/inbox`. Invariants 6 and 7 rest on
+these caps, and no test could fail for a missing one.
+
+- `api._base.AtMost(most)` is a parameter's metadata. It clamps the
+  number to 1..`most` rather than refusing it, so a client that
+  over-asks gets the most, and it writes `minimum` and `maximum` into
+  the OpenAPI schema. It works on a query parameter and on a body
+  model's field (`ask`'s passages, the similar-documents body).
+- The twelve keep their caps, now declared: 20 passages for `ask`, 60
+  similar faces, 100 search hits (the UI's own maximum), 120 for a
+  region map or a region's members, `REFERENCES_MAX`, `VERSIONS_PAGE`,
+  100 events, and 200 for the spending ledger, a clean-up preview and
+  similar documents.
+- The rest are `Page`, at most `PAGE_MOST` (500). The largest callers
+  ask for 500: the UI's region labels from `/communities` and the feed
+  importer's pages of `/documents`. `/places/single` and
+  `/places/duplicates` clamped to 500 with `min` alone, so a limit of 0
+  or less reached the store; it is 1 now.
+- `/work/{step}` is left open: it is a worker's batch in the work
+  protocol, not a list a reader pages through. Routes whose limit is
+  optional (`/traverse`'s `limit=0` is "every edge") keep `int | None`.
+- Test: the OpenAPI schema has a `maximum` for every limit but the work
+  protocol's, and an over-large or zero limit is answered rather than
+  refused.
+- The test found one the review did not list: `/communities/{cid}`'s
+  `members`, now at most 120 as on the region's map.

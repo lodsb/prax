@@ -5,7 +5,7 @@ supervisor's state, and the jobs."""
 from __future__ import annotations
 
 import socket
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from prax import models, store, work
 from prax.host import hostinfo, schedule
 
 from . import passes
-from ._base import _con, _split
+from ._base import AtMost, Page, _con, _split
 from .passes import MAINTENANCE
 
 router = APIRouter()
@@ -223,7 +223,9 @@ def stats(request: Request) -> dict[str, Any]:
 
 
 @router.get("/spending")
-def spending(request: Request, days: int = 30, limit: int = 20) -> dict[str, Any]:
+def spending(
+    request: Request, days: int = 30, limit: Annotated[int, AtMost(200)] = 20
+) -> dict[str, Any]:
     """What the paid steps have cost: the budget and what is left of it
     today and this month, then the ledger by step, by model and call by
     call over the last ``days`` (``prax.ml.budget``, ``store.spending``).
@@ -235,7 +237,7 @@ def spending(request: Request, days: int = 30, limit: int = 20) -> dict[str, Any
     return {
         "budget": budget.state(con),
         "since": since,
-        "ledger": store.spending(con, since=since, limit=max(1, min(limit, 200))),
+        "ledger": store.spending(con, since=since, limit=limit),
         "today": store.spending(con, since=budget.day_start(), limit=0),
     }
 
@@ -301,7 +303,7 @@ def up_command(req: UpCommand, request: Request) -> dict[str, Any]:
 
 
 @router.get("/jobs")
-def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
+def jobs(request: Request, limit: Page = 20) -> dict[str, Any]:
     """What runs and what ran lately, and what this door's host has left
     (free RAM, commit headroom) so a wall is visible before it is hit."""
     out: dict[str, Any] = dict(store.list_jobs(_con(request), limit=limit))

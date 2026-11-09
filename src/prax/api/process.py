@@ -14,7 +14,7 @@ from prax.capture import routes
 from prax.graph import ontology
 from prax.parsers import quality
 
-from ._base import _con
+from ._base import Page, _con
 from .passes import request_fixes, request_groups
 
 router = APIRouter()
@@ -121,7 +121,7 @@ def genres() -> dict[str, Any]:
 
 @router.get("/documents/genre-sample")
 def genre_sample(
-    request: Request, state: str = "open", offset: int = 0, limit: int = 10
+    request: Request, state: str = "open", offset: int = 0, limit: Page = 10
 ) -> dict[str, Any]:
     """The documents to label on the Review page's "genre" tab (``open``),
     a model's labels to check (``check``, and ``ruled`` for those a domain
@@ -409,7 +409,7 @@ def cancel_reading(doc_id: int, request: Request) -> dict[str, bool]:
 
 @router.get("/documents/quality")
 def documents_quality(
-    request: Request, check: str | None = None, offset: int = 0, limit: int = 30
+    request: Request, check: str | None = None, offset: int = 0, limit: Page = 30
 ) -> dict[str, Any]:
     """What the checks of a text found (stage AO, ``store.quality_page``):
     how many documents each check flags, and with ``check`` those documents
@@ -420,7 +420,7 @@ def documents_quality(
 
 
 @router.get("/readings")
-def readings(request: Request, limit: int = 50) -> dict[str, Any]:
+def readings(request: Request, limit: Page = 50) -> dict[str, Any]:
     """Reading requests: the waiting ones (a page of them, with how many
     wait in all: a bulk re-read places thousands) and the recently
     finished."""
@@ -435,7 +435,7 @@ def readings(request: Request, limit: int = 50) -> dict[str, Any]:
 
 
 @router.get("/promote")
-def promote_view(request: Request, limit: int = 30) -> dict[str, Any]:
+def promote_view(request: Request, limit: Page = 30) -> dict[str, Any]:
     """The flagged documents with their status under the promote step's
     model, and the candidates the library keeps coming back to."""
     step = models.describe("promote")

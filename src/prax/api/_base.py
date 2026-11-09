@@ -4,12 +4,41 @@ the body cap."""
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Annotated, Any
 
 from fastapi import Request
+from pydantic_core import core_schema
 
 from prax import config, store
 from prax.capture import inbox
+
+
+@dataclass(frozen=True)
+class AtMost:
+    """A list route's ``limit``: 1 to ``most``, a number outside clamped
+    rather than refused (a client that over-asks gets the most), the bounds
+    shown in the OpenAPI schema the clients read. Invariant 6 and 7 rest
+    on these caps; until 2026-11-09 twelve routes clamped by hand and the
+    rest passed any number to the store (structure review finding 47)."""
+
+    most: int
+
+    def __get_pydantic_core_schema__(self, source: Any, handler: Any) -> Any:
+        return core_schema.no_info_after_validator_function(
+            lambda v: max(1, min(int(v), self.most)), handler(source)
+        )
+
+    def __get_pydantic_json_schema__(self, schema: Any, handler: Any) -> Any:
+        out = handler(schema)
+        out.update(minimum=1, maximum=self.most)
+        return out
+
+
+# a page of a list a person reads, or a client pages through: the largest
+# caller asks for 500 (the UI's region labels, the feed importer)
+PAGE_MOST = 500
+Page = Annotated[int, AtMost(PAGE_MOST)]
 
 
 def _con(request: Request) -> Any:

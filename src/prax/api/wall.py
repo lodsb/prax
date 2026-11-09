@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from prax import store
 from prax.graph import ontology
 
-from ._base import _con
+from ._base import Page, _con
 
 router = APIRouter()
 
@@ -108,7 +108,7 @@ def private_rules(request: Request) -> dict[str, Any]:
 def documents_suspected(
     request: Request,
     offset: int = 0,
-    limit: int = 30,
+    limit: Page = 30,
     state: str = "suspected",
     referenced: bool = False,
 ) -> dict[str, Any]:
@@ -140,7 +140,7 @@ def media_pictures(
     by: str,
     key: str,
     offset: int = 0,
-    limit: int = store.MEDIA_PAGE,
+    limit: Page = store.MEDIA_PAGE,
 ) -> dict[str, Any]:
     """One page of a group's photos and recordings, for the gallery."""
     return store.media_pictures(_con(request), by, key, offset=offset, limit=limit)
