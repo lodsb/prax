@@ -285,13 +285,14 @@ against the code on 2026-11-08.
       never receives, so the fingerprint and the answer search different
       sets. `_reask` and `_remember` under `create`, `refresh` and
       `refresh_blocks`; `domain` passed to `ask` or dropped.
-- [ ] 44 and 54 (one finding, found twice). Boolean settings are parsed at
+- [x] (2026-11-09, the log) 44 and 54 (one finding, found twice). Boolean settings are parsed at
       eight sites with opposite readings of an unknown word (inbox, pdf
       and extraction: on only for yes-words; pipeline and web: on unless
       a no-word). `config.flag(dotted, env, default)`, one vocabulary,
       a `ConfigError` on anything else.
-- [ ] (left by 5853c60) `senses` matches a name by case where the walk
-      does not.
+- [x] (2026-11-09, the log: not a defect; an entity's own name is a
+      label, matched without case) (left by 5853c60) `senses` matches a
+      name by case where the walk does not.
 
 **Mechanical, an hour each.**
 

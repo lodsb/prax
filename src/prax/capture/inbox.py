@@ -143,8 +143,7 @@ def check_url(url: str) -> None:
 def fetch_private() -> bool:
     """Whether the door may fetch from private addresses (``door.fetch_private``
     in ``prax.yaml``, ``PRAX_FETCH_PRIVATE``); off unless a host says so."""
-    raw = config.setting("door.fetch_private", "PRAX_FETCH_PRIVATE", False)
-    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+    return config.flag("door.fetch_private", "PRAX_FETCH_PRIVATE", False)
 
 
 def _is_private(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:

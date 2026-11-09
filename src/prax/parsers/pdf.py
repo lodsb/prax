@@ -235,8 +235,7 @@ def _ocr_gpu() -> bool:
     """``parse.ocr_gpu``: run the OCR models on DirectML (needs
     ``onnxruntime-directml``); a page takes a fraction of a second instead
     of one."""
-    flag = str(config.setting("parse.ocr_gpu", "PRAX_OCR_GPU", "0")).lower()
-    return flag in ("1", "true", "yes", "on")
+    return config.flag("parse.ocr_gpu", "PRAX_OCR_GPU", False)
 
 
 # scripts the font pymupdf4llm writes OCR text with (Droid Sans Fallback:

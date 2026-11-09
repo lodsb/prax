@@ -282,18 +282,14 @@ def standard_names() -> bool:
     """Whether the prompt gives each relation its standard name
     (``same_as``: ``schema:author``) beside prax's (AN; measured before
     it is on: ``extraction.standard_names``, ``PRAX_EXTRACT_STANDARD``)."""
-    return str(
-        config.setting("extraction.standard_names", "PRAX_EXTRACT_STANDARD", False)
-    ).lower() in ("1", "true", "yes", "on")
+    return config.flag("extraction.standard_names", "PRAX_EXTRACT_STANDARD", False)
 
 
 def world_dates() -> bool:
     """Whether the prompt asks for a fact's world dates where the text
     states them (AL step 5; ``extraction.world_dates``,
     ``PRAX_EXTRACT_DATES``)."""
-    return str(
-        config.setting("extraction.world_dates", "PRAX_EXTRACT_DATES", False)
-    ).lower() in ("1", "true", "yes", "on")
+    return config.flag("extraction.world_dates", "PRAX_EXTRACT_DATES", False)
 
 
 _DATE = re.compile(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$")

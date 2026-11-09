@@ -19,9 +19,7 @@ def _comments_wanted() -> bool:
     """``parse.comments`` [``PRAX_COMMENTS``]: a page's comment section
     kept under its own heading (on by default: a thread under an article
     is where the corrections and the jokes are)."""
-
-    value = str(config.setting("parse.comments", "PRAX_COMMENTS", "true")).lower()
-    return value not in ("0", "false", "no", "off")
+    return config.flag("parse.comments", "PRAX_COMMENTS", True)
 
 
 def _video(data: bytes) -> str:

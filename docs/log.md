@@ -10086,3 +10086,23 @@ they make keeps to it, as `doctype` did.
 - Test: a block with `domain=kitchen` answers from the kitchen document
   where the research one ranks first.
 
+## 2026-11-09: a switch is on or off
+
+Findings 44 and 54 of the structure review (one finding, reported
+twice). The seven boolean settings each read their own words: four
+(`door.fetch_private`, `extraction.standard_names`,
+`extraction.world_dates`, `parse.ocr_gpu`) took a word they did not know
+as off, three (`parse.choose_reader`, `parse.comments`,
+`private.referenced`) as on. `config.flag(dotted, env, default)` reads
+them all: a YAML bool, or a word of `config.YES` or `config.NO`, and a
+`ConfigError` on anything else, so `ture` is refused rather than meaning
+the opposite at half of them. The live `prax.yaml` sets none of the
+seven, so nothing changes on this host.
+
+`senses`' case-sensitive name match, left by the entity-lookup stage of
+2026-11-08 as "wrong now", is not: every entity carries a label of its
+own name (migrations 23 and 24), and `senses` matches labels with
+`COLLATE NOCASE`, so "wavelet transform" reaches "Wavelet Transform"
+(checked on a test store). Its `name = ?` branch is the index's fast
+path, not the rule.
+

@@ -89,6 +89,23 @@ def test_a_number_that_is_not_one_is_refused(data_dir: Path) -> None:
         config.whole("vectors.ef")
 
 
+def test_a_switch_is_on_or_off_and_nothing_else(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Findings 44 and 54: a word no switch knows meant off at four of
+    them and on at three."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / config.CONFIG_NAME).write_text(
+        "parse:\n  comments: off\n  ocr_gpu: ture\n", "utf-8"
+    )
+    assert config.flag("parse.comments", "PRAX_COMMENTS", True) is False
+    assert config.flag("parse.choose_reader", "PRAX_CHOOSE_READER", True) is True
+    monkeypatch.setenv("PRAX_COMMENTS", "Yes")
+    assert config.flag("parse.comments", "PRAX_COMMENTS", False) is True
+    with pytest.raises(config.ConfigError, match="not on or off"):
+        config.flag("parse.ocr_gpu", "PRAX_OCR_GPU")
+
+
 def test_the_embedder_and_the_index_read_their_settings(
     written: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

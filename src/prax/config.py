@@ -181,6 +181,29 @@ def whole(dotted: str, env: str | None = None, default: int = 0) -> int:
     return int(number(dotted, env, default))
 
 
+YES = ("1", "true", "yes", "on")
+NO = ("0", "false", "no", "off")
+
+
+def flag(dotted: str, env: str | None = None, default: bool = False) -> bool:
+    """A switch: a YAML bool, or one of the words of ``YES`` and ``NO``
+    (what an environment variable carries). Anything else is refused:
+    until 2026-11-09 each switch read its own words, four taking an
+    unknown one as off and three as on, so a typo meant the opposite at
+    half of them (structure review findings 44 and 54)."""
+    value = setting(dotted, env, default)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    word = str(value).strip().lower()
+    if word in YES:
+        return True
+    if word in NO:
+        return False
+    raise ConfigError(f"{dotted}: {value!r} is not on or off ({'/'.join(YES + NO)})")
+
+
 def host_packs() -> list[str]:
     """The packs whose capability this host runs (``packs:``,
     docs/packs.md); ``PRAX_PACKS`` overrides it for one run."""

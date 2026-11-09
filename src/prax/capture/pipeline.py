@@ -172,8 +172,7 @@ SOURCE_READ = "latex-source/"
 
 def choose_reader_on() -> bool:
     """``parse.choose_reader`` [``PRAX_CHOOSE_READER``], on by default."""
-    value = config.setting("parse.choose_reader", "PRAX_CHOOSE_READER", True)
-    return str(value).lower() not in ("0", "false", "no", "off")
+    return config.flag("parse.choose_reader", "PRAX_CHOOSE_READER", True)
 
 
 def _tried(meta: Mapping[str, Any]) -> set[str]:
