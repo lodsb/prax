@@ -131,6 +131,90 @@ def _fingerprint(
     return {"top": top, "since_id": store.newest_document(con)}
 
 
+def _remember(
+    con: sqlite3.Connection,
+    question: str,
+    options: dict[str, Any],
+    *,
+    at: str,
+    model: str,
+    revision: Any,
+    docs: list[int],
+) -> dict[str, Any]:
+    """What a question's page or block keeps of its last answer: the
+    options it was asked with, the model, the revision, its sources and
+    their text hashes, and the search's top and the high-water mark the
+    next check compares against. A page's ``meta.question`` and a
+    block's ``meta.asks[id]`` both hold it, with their history beside."""
+    print_ = _fingerprint(con, question, options)
+    return {
+        "question": question,
+        "options": options,
+        "asked_at": at,
+        "model": model,
+        "revision": revision,
+        "sources": docs,
+        "source_hashes": _hashes(con, docs),
+        "top": print_["top"],
+        "since_id": print_["since_id"],
+    }
+
+
+def _answered(
+    revision: Any, at: str, model: str, seen: dict[str, Any], forced: bool
+) -> dict[str, Any]:
+    """One entry of the history: the revision an answer wrote and what
+    made it due."""
+    return {
+        "revision": revision,
+        "at": at,
+        "model": model,
+        "new": [{"doc_id": n["doc_id"], "title": n["title"]} for n in seen["new"]],
+        "reread": seen["reread"],
+        "forced": forced,
+    }
+
+
+def _reask(
+    con: sqlite3.Connection,
+    question: str,
+    options: dict[str, Any],
+    previous: str,
+    seen: dict[str, Any],
+    answerer: Any,
+    on_event: Any,
+) -> tuple[dict[str, Any] | None, str]:
+    """Ask again with the options kept: the earlier answer as the
+    conversation so far, the change as a note beside the question; the
+    result, or None and why nothing is written. A page and a block asked
+    with two calls of their own until 2026-11-09, and a block's
+    ``domain`` reached its check's search but not its answer's (structure
+    review finding 25)."""
+    steps = options.get("steps")
+    if steps is None:
+        steps = ask_mod.default_steps()
+    history = [{"question": question, "answer": previous}] if previous else None
+    try:
+        result = ask_mod.ask(
+            con,
+            question,
+            limit=int(options.get("limit") or ask_mod.PASSAGES),
+            doctype=options.get("doctype"),
+            domain=options.get("domain"),
+            answerer=answerer,
+            history=history,
+            steps=max(0, int(steps)),
+            tokens=options.get("tokens"),
+            on_event=on_event,
+            note=_asked_again(seen["new"], seen["reread"]) if previous else "",
+        )
+    except ValueError as exc:  # an option written by hand the ask refuses
+        return None, f"not asked: {exc}"
+    if not (result.get("answer") or "").strip():
+        return None, "the model gave no answer"
+    return result, ""
+
+
 def _hashes(con: sqlite3.Connection, ids: list[int]) -> dict[str, str]:
     """The sources' text hashes keyed by id as a string (JSON keys)."""
     return {str(k): v for k, v in store.text_hashes(con, ids).items()}
@@ -179,20 +263,18 @@ def create(
         if k in ("steps", "tokens", "doctype", "domain", "limit", "backend")
         and v not in (None, "")
     }
-    print_ = _fingerprint(con, question, opts)
-    asked = {
-        "question": question,
-        "options": opts,
-        "asked_at": _now(),
-        "model": model,
-        "revision": written["revision"],
-        "sources": docs,
-        "source_hashes": _hashes(con, docs),
-        "top": print_["top"],
-        "since_id": print_["since_id"],
-        "history": [],
-    }
-    store.update_meta(con, written["doc_id"], keys={"question": asked})
+    asked = _remember(
+        con,
+        question,
+        opts,
+        at=_now(),
+        model=model,
+        revision=written["revision"],
+        docs=docs,
+    )
+    store.update_meta(
+        con, written["doc_id"], keys={"question": {**asked, "history": []}}
+    )
     return {**written, "question": question}
 
 
@@ -306,29 +388,14 @@ def refresh(
         )
     if answerer is None:
         return {"slug": slug, "refreshed": False, "why": "no model to ask"}
-    steps = opts.get("steps")
-    if steps is None:
-        steps = ask_mod.default_steps()
     # the earlier answer is the conversation so far: the model revises it
     # in the light of what is new (named in the question) and may cite
     # only this turn's passages, so nothing stale comes back by name
     current = store.get_page(con, slug)
     previous = _previous_answer(current["text"] if current else "")
-    history = [{"question": question, "answer": previous}] if previous else None
-    result = ask_mod.ask(
-        con,
-        question,
-        limit=int(opts.get("limit") or ask_mod.PASSAGES),
-        doctype=opts.get("doctype"),
-        answerer=answerer,
-        history=history,
-        steps=max(0, int(steps)),
-        tokens=opts.get("tokens"),
-        on_event=on_event,
-        note=_asked_again(seen["new"], seen["reread"]),
-    )
-    if not (result.get("answer") or "").strip():
-        return {"slug": slug, "refreshed": False, "why": "the model gave no answer"}
+    result, why = _reask(con, question, opts, previous, seen, answerer, on_event)
+    if result is None:
+        return {"slug": slug, "refreshed": False, "why": why}
     section, docs = ask_mod.section_of(result)
     _, yours = _own_part(current["text"] if current else "")
     text = f"# {question}\n\n{section}\n" + (
@@ -356,26 +423,19 @@ def refresh(
         annotates=docs,
         force=True,  # the answer is the agent's; a person's sections were kept above
     )
-    print_ = _fingerprint(con, question, opts)
-    entry = {
-        "revision": written["revision"],
-        "at": _now(),
-        "model": model,
-        "new": [{"doc_id": n["doc_id"], "title": n["title"]} for n in seen["new"]],
-        "reread": seen["reread"],
-        "forced": bool(force and not seen["due"]),
-    }
-    asked = {
-        "question": question,
-        "options": opts,
-        "asked_at": _now(),
-        "model": model,
-        "revision": written["revision"],
-        "sources": docs,
-        "source_hashes": _hashes(con, docs),
-        "top": print_["top"],
-        "since_id": print_["since_id"],
-    }
+    at = _now()
+    entry = _answered(
+        written["revision"], at, model, seen, bool(force and not seen["due"])
+    )
+    asked = _remember(
+        con,
+        question,
+        opts,
+        at=at,
+        model=model,
+        revision=written["revision"],
+        docs=docs,
+    )
 
     def ask_again(meta: store.DocumentMeta) -> None:
         kept = dict(meta.get("question") or {})
@@ -429,41 +489,6 @@ def block_check(
 def _run_of(model: str) -> str:
     """The model's name as the tail's ``run=``: one word."""
     return _RUN_CHARS.sub("-", model).strip("-") or "ask"
-
-
-def _ask_block(
-    con: sqlite3.Connection,
-    b: blocks.Block,
-    text: str,
-    seen: dict[str, Any],
-    answerer: Any,
-    on_event: Any,
-) -> tuple[dict[str, Any] | None, str]:
-    """One block asked: its earlier interior as the conversation so far, the
-    change as a note; the result, or None and why it is not filled."""
-    opts = dict(b.options)
-    steps = opts.get("steps")
-    if steps is None:
-        steps = ask_mod.default_steps()
-    previous = blocks.answer_of(text[b.interior[0] : b.interior[1]]) if b.filled else ""
-    history = [{"question": b.question, "answer": previous}] if previous else None
-    try:
-        result = ask_mod.ask(
-            con,
-            b.question,
-            limit=int(opts.get("limit") or ask_mod.PASSAGES),
-            doctype=opts.get("doctype"),
-            answerer=answerer,
-            history=history,
-            steps=max(0, int(steps)),
-            on_event=on_event,
-            note=_asked_again(seen["new"], seen["reread"]) if previous else "",
-        )
-    except ValueError as exc:  # an option written by hand the ask refuses
-        return None, f"not asked: {exc}"
-    if not (result.get("answer") or "").strip():
-        return None, "the model gave no answer"
-    return result, ""
 
 
 def _why_asked(seen: dict[str, Any]) -> str:
@@ -530,7 +555,13 @@ def refresh_blocks(
         if answerer is None:
             report[b.id] = {"filled": False, "why": "no model to ask"}
             continue
-        result, why = _ask_block(con, b, text, seen, answerer, on_event)
+        # its earlier interior is the conversation so far
+        previous = (
+            blocks.answer_of(text[b.interior[0] : b.interior[1]]) if b.filled else ""
+        )
+        result, why = _reask(
+            con, b.question, dict(b.options), previous, seen, answerer, on_event
+        )
         if result is None:
             report[b.id] = {"filled": False, "why": why}
             continue
@@ -558,32 +589,21 @@ def refresh_blocks(
                 report[b_id] = {"filled": False, "why": written["report"].get(b_id)}
                 continue
             b = next(x for x in found if x.id == b_id)
-            print_ = _fingerprint(con, b.question, dict(b.options))
             kept = dict(asks.get(b_id) or {})
             answered: list[dict[str, Any]] = list(kept.get("history") or [])
             answered.append(
-                {
-                    "revision": revision,
-                    "at": now,
-                    "model": model,
-                    "new": [
-                        {"doc_id": n["doc_id"], "title": n["title"]}
-                        for n in seen["new"]
-                    ],
-                    "reread": seen["reread"],
-                    "forced": bool(force and not seen["due"]),
-                }
+                _answered(revision, now, model, seen, bool(force and not seen["due"]))
             )
             kept.update(
-                question=b.question,
-                options=dict(b.options),
-                asked_at=now,
-                model=model,
-                revision=revision,
-                sources=docs,
-                source_hashes=_hashes(con, docs),
-                top=print_["top"],
-                since_id=print_["since_id"],
+                _remember(
+                    con,
+                    b.question,
+                    dict(b.options),
+                    at=now,
+                    model=model,
+                    revision=revision,
+                    docs=docs,
+                ),
                 history=answered[-50:],
             )
             asks[b_id] = kept

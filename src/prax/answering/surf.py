@@ -165,6 +165,7 @@ class Surf:
     steps_left: int
     tokens_left: int
     note: str = ""  # beside the question, for the model only
+    domain: str | None = None  # every search keeps to it, as doctype
     tools: bool = True  # the packs' tools this host runs (False: without them)
     mode: str = "grounded"  # or open: the model's own knowledge beside
     passages: list[ask.Passage] = field(default_factory=list)
@@ -283,7 +284,10 @@ def do_search(con: sqlite3.Connection, s: Surf, query: str) -> tuple[str, list[i
     query = " ".join(query.split())
     if not query:
         return "search needs words", []
-    hits = ask.evidence(con, store.search(con, query, s.limit * 3, doctype=s.doctype))
+    hits = ask.evidence(
+        con,
+        store.search(con, query, s.limit * 3, doctype=s.doctype, domain=s.domain),
+    )
     dropped_docs = {p.doc_id for p in s.passages if p.n in s.dropped}
     blocks: list[str] = []
     added: list[int] = []
@@ -728,6 +732,7 @@ def run(
     tokens: int,
     limit: int = ask.PASSAGES,
     doctype: str | None = None,
+    domain: str | None = None,
     history: list[dict[str, str]] | None = None,
     on_event: Event | None = None,
     stop: threading.Event | None = None,
@@ -748,6 +753,7 @@ def run(
         query=ask.search_query(question, history),
         history=history,
         doctype=doctype,
+        domain=domain,
         note=note,
         mode=mode,
         tools=tools,

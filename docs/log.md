@@ -10062,3 +10062,27 @@ set by a person, without a set unless `force`; `ids` through
 `assign_domains(commit=False)`, which only a test used, is gone: the
 preview is the dry run. Test: a retired document is placed by neither.
 
+## 2026-11-09: a standing question's domain reaches its answer
+
+Finding 25 of the structure review. A standing question (a page) and an
+ask block (inside a person's page) kept `domain` among their options and
+used it in the check's search (`_fingerprint`), but `ask` took no domain,
+so the answer searched the whole library while the check watched one
+domain. `ask`, `gather` and `surf.run` take `domain` and every search
+they make keeps to it, as `doctype` did.
+
+- `questions._reask` is the one re-ask under `refresh` and
+  `refresh_blocks` (the block's `_ask_block` goes): the options kept,
+  the earlier answer as the conversation so far, the change as a note;
+  a refused option is a "not asked" for a page too, where it was an
+  exception out of the job.
+- `_remember` builds what a page's `meta.question` and a block's
+  `meta.asks[id]` keep (three copies), `_answered` a history entry (two).
+- The review also said a block ignored `tokens` and `backend`. It does,
+  because a block's head grammar has neither (`blocks.OPTIONS`: steps,
+  doctype, limit, domain); `_reask` passes `tokens` for both all the
+  same. The notes a page and a block write differ on purpose (a block's
+  is one of several in a revision's note) and stay.
+- Test: a block with `domain=kitchen` answers from the kitchen document
+  where the research one ranks first.
+

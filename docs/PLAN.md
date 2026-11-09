@@ -280,7 +280,7 @@ against the code on 2026-11-08.
       `domains_dry_run` (the Admin page's preview) leaves out. One
       `_matched(con, rules, *, force, ids)` with the one WHERE under
       both; `commit=False` (test-only) goes.
-- [ ] 25. An ask block ignores the `tokens` and `backend` options a
+- [x] (2026-11-09, the log) 25. An ask block ignores the `tokens` and `backend` options a
       standing question honours, and both keep a `domain` that `ask`
       never receives, so the fingerprint and the answer search different
       sets. `_reask` and `_remember` under `create`, `refresh` and

@@ -475,3 +475,21 @@ def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None
     page = client.get("/page/fdn-notes").json()
     assert page["revision"] == 4 and not page["blocks"][1]["held"]  # 3: the re-save
     assert "written by hand" not in page["text"]
+
+
+def test_a_blocks_domain_reaches_its_answer(con: sqlite3.Connection) -> None:
+    """A block's ``domain`` kept its check's search to the domain and not
+    its answer's (structure review finding 25)."""
+    a, b = _library(con)
+    store.set_domains(con, a, ["research"])  # no set is every domain
+    store.set_domains(con, b, ["kitchen"])
+    page = (
+        "<!-- prax:ask id=q1 steps=0 domain=kitchen"
+        ' "how do feedback delay networks build reverb" -->\n'
+    )
+    store.write_page(con, "reverb-notes", page, kind="topic")
+    page_ = questions.block_pages(con)[0]
+    rep = questions.refresh_blocks(con, page_, answerer=ask.StubAnswerer())
+    assert rep["blocks"]["q1"]["filled"]
+    kept = store.get_page(con, "reverb-notes")["meta"]["asks"]["q1"]
+    assert kept["sources"] == [b] and kept["options"]["domain"] == "kitchen"

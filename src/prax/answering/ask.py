@@ -332,6 +332,7 @@ def gather(
     *,
     limit: int = PASSAGES,
     doctype: str | None = None,
+    domain: str | None = None,
     passage_chars: int = PASSAGE_CHARS,
     history: list[dict[str, str]] | None = None,
     note: str = "",
@@ -350,7 +351,9 @@ def gather(
     # hybrid search fuses at document level; the FTS-only fallback does not,
     # so one passage per document is enforced here and the search over-fetches
     query = search_query(bundle.question, bundle.history)
-    hits = evidence(con, store.search(con, query, limit * 3, doctype=doctype))
+    hits = evidence(
+        con, store.search(con, query, limit * 3, doctype=doctype, domain=domain)
+    )
     seen: set[int] = set()
     for h in hits:
         if h["doc_id"] in seen or len(bundle.passages) >= limit:
@@ -668,6 +671,7 @@ def ask(
     *,
     limit: int = PASSAGES,
     doctype: str | None = None,
+    domain: str | None = None,
     answerer: Answerer | None = None,
     history: list[dict[str, Any]] | None = None,
     steps: int = 0,
@@ -706,6 +710,7 @@ def ask(
             tokens=tokens,
             limit=limit,
             doctype=doctype,
+            domain=domain,
             history=clean_history(history),
             on_event=on_event,
             stop=stop,
@@ -718,6 +723,7 @@ def ask(
         question,
         limit=limit,
         doctype=doctype,
+        domain=domain,
         history=clean_history(history),
         note=note,
         regions=regions,
