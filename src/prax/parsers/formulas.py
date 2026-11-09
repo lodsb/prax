@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from prax.parsers import annotate
 from prax.text import chunking, markup
 
 SYSTEM = """\
@@ -62,9 +63,9 @@ def refs(text: str) -> list[dict[str, Any]]:
     i = 0
     while i < len(lines):
         stripped = lines[i].strip()
-        if chunking._is_formula(stripped):
+        if chunking.is_formula(stripped):
             j = i + 1
-            while j < len(lines) and chunking._READ_BY.match(lines[j].strip()):
+            while j < len(lines) and markup.READ_BY.match(lines[j].strip()):
                 j += 1
             parsed = chunking.parse_formula("\n".join(lines[i:j]))
             if parsed:
@@ -85,18 +86,10 @@ def refs(text: str) -> list[dict[str, Any]]:
 
 def around(lines: list[str], at: int) -> str:
     """The text on either side of the equation line, without any reading
-    (a model must not be shown its own earlier work or another's) and
-    without the other equations' lines."""
-    keep = [
-        ln
-        for ln in lines[: max(0, at)][-30:] + ["…"] + lines[at + 1 :][:30]
-        if not chunking._READ_BY.match(ln.strip())
-        and not chunking._is_formula(ln.strip())
-    ]
-    text = " ".join(" ".join(keep).split())
-    if len(text) > 2 * AROUND_CHARS:
-        text = text[:AROUND_CHARS] + " … " + text[-AROUND_CHARS:]
-    return text
+    and without the other equations' lines."""
+    return annotate.nearby(
+        lines, at, each=30, chars=AROUND_CHARS, skip=chunking.is_formula
+    )
 
 
 def user_message(title: str, latex: str, number: str | None, near: str) -> str:
@@ -110,26 +103,17 @@ def user_message(title: str, latex: str, number: str | None, near: str) -> str:
     return "\n\n".join(parts)
 
 
-def _read_by(line: str, who: str) -> bool:
-    m = READ_BY.match(line)
-    return bool(m and m.group("model").strip() == who)
-
-
 def describe(previous: str, *, runtime: Any | None = None) -> str:
     """The text with a reading under every display equation this model
     has not read (``parse.formula_readings: again``: every one, its earlier
     reading replaced, another model's kept). ``runtime`` stands in for the
     step's model in tests."""
-    from prax import config, models
+    from prax import models
     from prax.parsers import ExtractionError, figures
 
-    which = str(
-        config.setting("parse.formula_readings", "PRAX_FORMULA_READINGS", "new")
+    which = annotate.mode(
+        "parse.formula_readings", "PRAX_FORMULA_READINGS", "new", WHICH
     )
-    if which not in WHICH:
-        raise ExtractionError(
-            f"parse.formula_readings must be one of {WHICH}, not {which!r}"
-        )
     again = which == "again"
     if runtime is None:
         spec = models.resolve("formulas")
@@ -157,14 +141,7 @@ def describe(previous: str, *, runtime: Any | None = None) -> str:
         text = " ".join(str(out).split())
         if not text:
             continue
-        at = r["at"] + 1
-        if again:
-            while at < len(lines) and chunking._READ_BY.match(lines[at].strip()):
-                if _read_by(lines[at].strip(), who):
-                    del lines[at]
-                else:
-                    at += 1
-        lines.insert(at, markup.read_by("Formula", who, text))
+        annotate.place(lines, r["at"], "Formula", who, text, again=again)
         done += 1
     if not done:
         raise ExtractionError("no formula could be read")

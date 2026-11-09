@@ -29,7 +29,7 @@ from typing import Any
 
 from prax import parsers, store
 from prax.errors import NotFound
-from prax.parsers import figures
+from prax.parsers import annotate, figures
 
 MIN_CHARS = 200  # below this an extraction is "empty"
 MIN_RATIO = 0.2  # an upgrade must keep at least this share of the old length
@@ -255,7 +255,7 @@ def apply_parse(
         current = store.get_document(con, doc_id)
         if current is not None:
             texts = [current["text"], *store.earlier_texts(con, doc_id)]
-            text = figures.carry_readings(texts, text)
+            text = annotate.carry(texts, text)
     old_len = doc["text_len"]
     entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}
     if not text:

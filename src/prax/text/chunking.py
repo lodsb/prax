@@ -281,7 +281,7 @@ class _Reader:
         return _Element("heading", start, end, title, level=len(m.group(1))), i + 1
 
     def _read_formula(self, i: int, stripped: str) -> _Read:
-        if not _is_formula(stripped):
+        if not is_formula(stripped):
             return None
         j = i + 1
         while j < self.n and _READ_BY.match(self.lines[j][2].strip()):
@@ -316,7 +316,7 @@ class _Reader:
             or self.table_starts(j, s)
         ):
             return True
-        return j > i and (_is_formula(s) or s == markup.PICTURE_START)
+        return j > i and (is_formula(s) or s == markup.PICTURE_START)
 
     def _read_paragraph(self, i: int, stripped: str) -> tuple[_Element, int]:
         """Consecutive non-blank lines that are not structural."""
@@ -374,7 +374,7 @@ def _assign_pages(els: list[_Element]) -> None:
             e.page = current
 
 
-def _is_formula(stripped: str) -> bool:
+def is_formula(stripped: str) -> bool:
     """A line that is one display equation and nothing else."""
     if not (
         stripped.startswith("$$")

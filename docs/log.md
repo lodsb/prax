@@ -10540,3 +10540,36 @@ never reach the supervisor's demand (`work.role_work`, `GET
   model's step has a default, and every step has its object. It passed
   before the change too, since the copies agreed for the core; it is
   there for the next pack reading.
+
+## 2026-11-09: a model's reading under its line, placed one way
+
+The rest of finding 6 of the structure review. Its loss (a replacing
+read dropped every formula reading) was fixed on 2026-11-07, when
+`carry_readings` learnt the formula's anchor. What was left is the copy:
+the figures pass (`parsers.figures.describe`) and the formulas pass
+(`parsers.formulas.describe`) each wrote the mode check, the text around
+the line a model is shown, a "read by" test and the placing of a
+reading, and formulas reached into `chunking`'s private `_READ_BY` and
+`_is_formula`.
+
+- `prax.parsers.annotate` holds what they share: `mode` (the setting,
+  refused when not one of the kind's modes), `nearby` (the text around a
+  line without any reading and without the lines the kind names),
+  `place` (a reading right under its line; with `again` this model's
+  earlier one goes, another's stays, and the new one follows them) and
+  `carry` with `anchor_of`, moved from `figures.carry_readings`.
+- Named `annotate`: `parsers.readings` already holds the extractors a
+  reading request names, and the first draft of this change wrote over it
+  (the file was restored from git before anything ran on it).
+- `chunking.is_formula` is public; formulas reads `markup.READ_BY`.
+- One change of behaviour: the text a figure's model is shown left out
+  only figure readings, and now leaves out a formula's too, as the
+  formulas pass always did. A model is shown no model's words.
+- Not done: a single `annotate(lines, anchors, who, again, read_one)`
+  driver, as the review proposed. The two loops differ in what they
+  fetch (a picture from the original, or nothing) and in their order (the
+  formulas from the last up, so indexes hold); the shared steps are the
+  functions above.
+- Test: `place` with and without `again`, `nearby` leaving out readings
+  of both kinds, and no private `_read_by` or `carry_readings` left in
+  either pass.

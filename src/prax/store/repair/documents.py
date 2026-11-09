@@ -766,7 +766,7 @@ def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
     2026-10-06, nearly all marker's). The earlier texts are the ones the
     parse record names by hash (``earlier_texts``). Each with how many
     readings would come back."""
-    from prax.parsers import figures
+    from prax.parsers import annotate, figures
 
     out: list[dict[str, Any]] = []
     for r in con.execute(
@@ -783,7 +783,7 @@ def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
             current = _read_archive(str(r["text_hash"])).decode("utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        carried = figures.carry_readings([current, *earlier], current)
+        carried = annotate.carry([current, *earlier], current)
         gained = len(figures.READ_BY.findall(carried)) - len(
             figures.READ_BY.findall(current)
         )
@@ -800,7 +800,7 @@ def _repair_lost_figure_readings(
     as an annotation (``parsers.queue.apply_parse``, ``keep_source``): the
     parse record says so under this repair's name, the text source stays,
     and a chunk whose text did not change keeps its vector."""
-    from prax.parsers import figures, queue
+    from prax.parsers import annotate, queue
 
     done = 0
     for row in rows:
@@ -808,7 +808,7 @@ def _repair_lost_figure_readings(
         if doc is None:
             continue
         earlier = docs.earlier_texts(con, int(row["id"]))
-        carried = figures.carry_readings([doc["text"], *earlier], doc["text"])
+        carried = annotate.carry([doc["text"], *earlier], doc["text"])
         if carried == doc["text"]:
             continue
         outcome = queue.apply_parse(

@@ -40,7 +40,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from prax.text import chunking, markup
+from prax.parsers import annotate
+from prax.text import markup
 
 MIN_HTML_BYTES = 4_000  # smaller inline images are icons
 BIG_HTML_BYTES = 40_000  # a photo, caption or not
@@ -913,19 +914,11 @@ def document_title(text: str) -> str:
 
 
 def around(lines: list[str], at: int) -> str:
-    """The text on either side of the image line at ``at``, without the
-    readings of any figure (a model must not be shown its own earlier
-    work, or another figure's)."""
-    keep = [
-        ln
-        for ln in lines[: max(0, at)][-40:] + ["…"] + lines[at + 1 :][:40]
-        if not READ_BY.match(ln) and not REF.match(ln)
-    ]
-    text = " ".join(" ".join(keep).split())
-    if len(text) > 2 * AROUND_CHARS:
-        half = AROUND_CHARS
-        text = text[:half] + " … " + text[-half:]
-    return text
+    """The text on either side of the image line at ``at``, without any
+    reading and without the other figures' lines."""
+    return annotate.nearby(
+        lines, at, each=40, chars=AROUND_CHARS, skip=lambda ln: bool(REF.match(ln))
+    )
 
 
 def figure_prompt(title: str, caption: str, near: str) -> str:
@@ -968,12 +961,6 @@ def is_frame(caption: str) -> bool:
     return bool(TIME_CAPTION.match(caption or ""))
 
 
-def _read_by(line: str, who: str) -> bool:
-    """Is this line ``who``'s reading of a figure?"""
-    m = READ_BY.match(line)
-    return bool(m and m.group("model").strip() == who)
-
-
 def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
     """The image as PNG or JPEG under ``MAX_SIDE`` pixels: what both the
     local server (stb_image: no AVIF, no WebP) and the Claude API read."""
@@ -1000,85 +987,6 @@ def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
 WHICH = ("captioned", "all", "again", "all-again")
 
 
-def _figure_ref_of(line: str) -> str | None:
-    """The figure a line references, when the line ends with one."""
-    found = list(REF.finditer(line))
-    if not found or not line.rstrip().endswith(found[-1].group(0)):
-        return None
-    return found[-1].group("ref")
-
-
-def _anchor_of(line: str) -> str | None:
-    """What a line holds that a model reads under it: a figure, by its
-    hash, or a display equation, by its LaTeX with the spacing collapsed
-    (two reads of one paper write the same equation spaced differently)."""
-    ref = _figure_ref_of(line)
-    if ref is not None:
-        return ref
-    stripped = line.strip()
-    if chunking._is_formula(stripped):
-        return "formula:" + "".join(stripped[2:-2].split())
-    return None
-
-
-def carry_readings(previous: str | list[str], text: str) -> str:
-    """``text`` with the readings ``previous`` held carried over: a
-    replacing read (marker, OCR, the parser again) writes a text of its
-    own, and the readings were lines of the old one, under each figure's
-    or equation's line (``_anchor_of``). One still in the new text gets the
-    readings it had, after any the new text already gives it, a model's
-    line once. Until 2026-11-07 only figures' were carried, so a marker
-    read dropped every formula reading of the paper.
-    ``previous`` may be several texts, newest first (the current one and
-    the earlier ones, ``store.earlier_texts``): a model's newest reading of
-    a figure is the one carried. On 2026-10-06 a marker evening dropped
-    every figure reading of the papers it read."""
-    texts = [previous] if isinstance(previous, str) else previous
-    held: dict[str, list[str]] = {}
-    for one in texts:
-        if "(figure:" not in one and "$$" not in one:
-            continue
-        old = one.split("\n")
-        for i, line in enumerate(old):
-            ref = _anchor_of(line)
-            if ref is None:
-                continue
-            have = {
-                m.group("model")
-                for t in held.get(ref, [])
-                if (m := markup.READ_BY.match(t))
-            }
-            at = i + 1
-            while at < len(old) and (m := markup.READ_BY.match(old[at])):
-                if m.group("model") not in have:
-                    held.setdefault(ref, []).append(old[at])
-                    have.add(m.group("model"))
-                at += 1
-    if not held:
-        return text
-    lines = text.split("\n")
-    out: list[str] = []
-    i = 0
-    while i < len(lines):
-        out.append(lines[i])
-        ref = _anchor_of(lines[i])
-        i += 1
-        if ref is None or ref not in held:
-            continue
-        there: list[str] = []
-        while i < len(lines) and markup.READ_BY.match(lines[i]):
-            there.append(lines[i])
-            i += 1
-        models = {m.group("model") for t in there if (m := markup.READ_BY.match(t))}
-        out += there
-        for reading in held.pop(ref):
-            m = markup.READ_BY.match(reading)
-            if m and m.group("model") not in models:
-                out.append(reading)
-                models.add(m.group("model"))
-    return "\n".join(out)
-
-
 def describe(data: bytes, previous: str) -> str:
     """The text with every figure reference followed by the vision model's
     reading of it. ``parse.figures`` says which figures: ``captioned``
@@ -1088,13 +996,10 @@ def describe(data: bytes, previous: str) -> str:
     earlier reading replaced, which is how a library takes up a better
     prompt or a better model of the same name. ``data`` is the original
     the figures come from."""
-    from prax import config
     from prax.parsers import ExtractionError, vision
 
     model = vision.model_name()
-    which = str(config.setting("parse.figures", "PRAX_FIGURES", "captioned"))
-    if which not in WHICH:
-        raise ExtractionError(f"parse.figures must be one of {WHICH}, not {which!r}")
+    which = annotate.mode("parse.figures", "PRAX_FIGURES", "captioned", WHICH)
     again = which.endswith("again")
     every = which.startswith("all")
     wanted = [
@@ -1140,21 +1045,9 @@ def describe(data: bytes, previous: str) -> str:
         text = " ".join(text.split())
         if not text:
             continue
-        # the reading goes right under the image line, inside its
-        # paragraph; reading again replaces this model's earlier one and
-        # leaves another model's where it is
         for i, line in enumerate(lines):
             if markup.figure_line_of(line) == r["ref"]:
-                at = i + 1
-                if again:
-                    # through the readings under this image line: this
-                    # model's earlier one goes, another model's stays
-                    while at < len(lines) and READ_BY.match(lines[at]):
-                        if _read_by(lines[at], who):
-                            del lines[at]
-                        else:
-                            at += 1
-                lines.insert(at, markup.read_by("Figure", who, text))
+                annotate.place(lines, i, "Figure", who, text, again=again)
                 done += 1
                 break
     if not done:

@@ -343,7 +343,7 @@ against the code on 2026-11-08.
       `ReadingSelection` model the CLI sends too.
 - [x] 43 (2026-11-09, the log; no pack hook for model defaults yet). A step's facts in seven registries that disagree for pack
       steps: `SERVER_READINGS`, `models.STEPS` and `CORE_STEPS` derived.
-- [ ] 6 (the rest). Readings under a marked line written twice (figures,
+- [x] 6 (the rest; 2026-11-09, the log: `parsers.annotate`). Readings under a marked line written twice (figures,
       formulas); both are carried since 2026-11-07: one
       `parsers/readings` core with an anchor per kind.
 - [ ] 40 and 55. `maintain.py` holds the citation matcher and the

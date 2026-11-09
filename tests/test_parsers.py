@@ -17,7 +17,7 @@ import pytest
 
 from prax import parsers, store
 from prax.importers import zotero
-from prax.parsers import queue
+from prax.parsers import annotate, queue
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zotero"
 AMBRITS_PDF = next((FIXTURE / "storage" / "FCEK3EI9").glob("*.pdf"))
@@ -876,7 +876,6 @@ def test_a_forced_reading_that_found_nothing_is_empty(con: sqlite3.Connection) -
 
 
 def test_a_new_read_keeps_what_the_models_read_in_figures_and_formulas() -> None:
-    from prax.parsers import figures
 
     ref = "a" * 64
     old = (
@@ -893,9 +892,38 @@ def test_a_new_read_keeps_what_the_models_read_in_figures_and_formulas() -> None
         f"![Figure 1: the bench](figure:{ref})\n\n"
         "$$V = I  R$$\n\nMore text.\n"
     )
-    carried = figures.carry_readings([old], new)
+    carried = annotate.carry([old], new)
     assert "*Figure, as read by vision-m:* A bench with a scope." in carried
     assert "$$V = I  R$$\n*Formula, as read by maths-m:* Ohm's law." in carried
     # a formula the new text no longer holds takes its reading with it
-    gone = figures.carry_readings([old], f"![Figure 1](figure:{ref})\n")
+    gone = annotate.carry([old], f"![Figure 1](figure:{ref})\n")
     assert "Ohm's law" not in gone
+
+
+def test_a_reading_under_its_line_is_placed_one_way() -> None:
+    """Structure review 2026-11-07, finding 6: the figures and the formulas
+    passes each wrote the mode, the context, the placing and the
+    replacing of a reading."""
+    from prax.parsers import figures, formulas
+    from prax.text import markup
+
+    lines = ["$$a = b + c$$", markup.read_by("Formula", "other", "o."), "after"]
+    annotate.place(lines, 0, "Formula", "m", "first.", again=False)
+    assert lines[1] == markup.read_by("Formula", "m", "first.")  # right under it
+    annotate.place(lines, 0, "Formula", "m", "second.", again=True)
+    assert lines == [
+        "$$a = b + c$$",
+        markup.read_by("Formula", "other", "o."),  # another model's stays
+        markup.read_by("Formula", "m", "second."),  # this one's replaced
+        "after",
+    ]
+    near = annotate.nearby(
+        ["before", *lines, markup.read_by("Figure", "v", "a plot.")],
+        1,
+        each=5,
+        chars=99,
+    )
+    assert "o." not in near and "plot" not in near and "before" in near
+    for module in (figures, formulas):
+        assert not hasattr(module, "_read_by"), module
+    assert not hasattr(figures, "carry_readings")

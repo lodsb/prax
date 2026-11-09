@@ -106,7 +106,7 @@ def earlier_texts(
     names them by hash (every text stays in the archive), the current one
     left out: what a replacing read looks back over for the figure
     readings the text it replaces had already lost
-    (``figures.carry_readings``). A hash the archive no longer holds is
+    (``parsers.annotate.carry``). A hash the archive no longer holds is
     skipped."""
     row = con.execute(
         "SELECT text_hash, meta FROM documents WHERE id = ?", (doc_id,)

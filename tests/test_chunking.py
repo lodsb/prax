@@ -330,11 +330,11 @@ def test_a_formula_carries_what_a_model_read_in_it() -> None:
 def test_what_counts_as_a_formula() -> None:
     """A relation, or an expression long enough to stand on its own; a
     symbol a parser lifted out of a diagram is neither."""
-    assert chunking._is_formula("$$E = mc^2$$")  # short, but it states one
-    assert chunking._is_formula(r"$$\sum_{n=0}^{N-1} x[n] e^{-j 2 \pi k n / N}$$")
-    assert not chunking._is_formula("$$\rightarrow K$$")
-    assert not chunking._is_formula("$$x$$")
-    assert not chunking._is_formula("text $$x = 1$$ more")  # not alone on its line
+    assert chunking.is_formula("$$E = mc^2$$")  # short, but it states one
+    assert chunking.is_formula(r"$$\sum_{n=0}^{N-1} x[n] e^{-j 2 \pi k n / N}$$")
+    assert not chunking.is_formula("$$\rightarrow K$$")
+    assert not chunking.is_formula("$$x$$")
+    assert not chunking.is_formula("text $$x = 1$$ more")  # not alone on its line
 
 
 def test_a_reference_list_is_one_chunk_per_entry() -> None:
