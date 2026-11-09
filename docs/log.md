@@ -10029,3 +10029,22 @@ shape.
   stamps, the readings queue) is a larger change with a migration and
   the meta-path indexes to rebuild; it stays with findings 8 to 56.
 
+## 2026-11-09: the path index after a merge
+
+The first of the structure review's findings that were wrong as they
+stood (finding 30, `docs/PLAN.md`).
+
+- **`connect` answered from before a merge.** The path index folds an
+  edge's ends through `canonical_id`, and its stamp read only the edges'
+  maxima (`max(id)`, `max(valid_to)`). `merge_entities` writes no edge,
+  so after `PATH_REFRESH` the stamp still matched and the index of
+  before the merge was served until some edge was written. The paths
+  now take the graph view's stamp (`views._graph_stamp`), which also
+  counts unmerged entities and the latest label, so a merge, an unmerge
+  and a rename move it. Test: two papers that are one, merged, then
+  connected.
+- What it costs: 24 ms on the library (one scan of `entities` for the
+  count; 2 ms before). The live index reads it at most once every
+  `PATH_REFRESH` (300 s). A walk as of a moment or a world date reads
+  it on every call, which is 24 ms more on a request that builds or
+  finds an index of its own.

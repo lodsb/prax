@@ -18,6 +18,7 @@ from typing import Any
 from ..base import _reading, hidden_documents
 from .edges import held_at, held_in_world
 from .traversal import _choose
+from .views import _graph_stamp
 
 PATH_REFRESH = 300  # seconds an index serves after the edges changed
 EVIDENCE_CHARS = 160
@@ -27,14 +28,11 @@ _HELD_LOCK = threading.Lock()
 
 
 def _stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
-    """What moves when an edge is written or ended. Two scalar reads, each
-    on an index: one SELECT of both maxima scanned the edges table, 62 ms
-    on every call (the quality review of 2026-10-05)."""
-    row = con.execute(
-        "SELECT (SELECT max(id) FROM edges),"
-        " (SELECT max(valid_to) FROM edges WHERE valid_to IS NOT NULL)"
-    ).fetchone()
-    return tuple(row)
+    """What moves when the index would: an edge written or ended, and an
+    entity merged, which writes no edge but moves the ends the index folds
+    through ``canonical_id`` (the edges' maxima alone missed it, structure
+    review finding 30). Read only once ``PATH_REFRESH`` has passed."""
+    return _graph_stamp(con)
 
 
 REFERENCES = "references"  # the producer of a reference list's citations

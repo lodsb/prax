@@ -271,7 +271,7 @@ against the code on 2026-11-08.
 
 **Wrong now, an hour or two each.**
 
-- [ ] 30. `connect` answers from the path index as it was before a merge:
+- [x] (2026-11-09, the log) 30. `connect` answers from the path index as it was before a merge:
       `paths._stamp` reads the edges' maxima only, and `merge_entities`
       writes no edge. The paths take `graph_stamp`, which counts merges
       (some 25 ms, read only after `PATH_REFRESH`; measure on the board).

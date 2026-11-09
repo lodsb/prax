@@ -133,6 +133,19 @@ def test_a_new_edge_is_seen_once_the_index_is_refreshed(
     assert store.connect_entities(con, "Paper A", "Paper B")["paths"]
 
 
+def test_a_merge_is_seen_once_the_index_is_refreshed(
+    con: sqlite3.Connection, fresh: None
+) -> None:
+    """A merge writes no edge: the index's stamp read the edges only, so
+    connect answered from before it (structure review finding 30)."""
+    store.link(con, E("Paper A", "paper", "cites", "Paper C", "paper"))
+    store.link(con, E("Paper C.", "paper", "cites", "Paper B", "paper"))
+    assert not store.connect_entities(con, "Paper A", "Paper B").get("paths")
+    ids = dict(con.execute("SELECT name, id FROM entities").fetchall())
+    store.merge_entities(con, ids["Paper C."], ids["Paper C"])
+    assert store.connect_entities(con, "Paper A", "Paper B")["paths"]
+
+
 def test_a_path_in_the_world_at_a_date(con: sqlite3.Connection, fresh: None) -> None:
     """Ada was at the lab from 2019 to 2021; the lab is part of the
     institute, undated. In 2020 she is connected to the institute through

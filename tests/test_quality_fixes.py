@@ -75,7 +75,8 @@ def test_the_path_stamp_is_read_on_indexes(con: sqlite3.Connection) -> None:
         ).fetchall()
     )
     assert "SCAN edges" not in plan
-    assert part._stamp(con) == (None, None)
+    # the graph's stamp since finding 30 of 2026-11-07: a merge moves it too
+    assert part._stamp(con) == (None, None, 0, None)
 
 
 def test_a_past_moments_index_is_kept(con: sqlite3.Connection) -> None:
