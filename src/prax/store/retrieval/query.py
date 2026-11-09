@@ -4,7 +4,6 @@ words the graph adds through an entity's labels and senses."""
 
 from __future__ import annotations
 
-import json
 import sqlite3
 
 from prax.graph import ontology
@@ -12,6 +11,7 @@ from prax.graph import ontology
 from ..base import (
     _TOKEN,
     _serialized,
+    decode_domains,
 )
 from .compounds import forms as compound_forms
 from .compounds import split as compound_split
@@ -187,9 +187,10 @@ def _lives_in(con: sqlite3.Connection, entity_id: int, etype: str) -> Scope | No
         "  UNION SELECT source_doc FROM edges WHERE dst = ? AND valid_to IS NULL)",
         (entity_id, entity_id),
     ):
-        if not raw:
-            return None  # a document of every module says it
-        found.update(json.loads(raw))
+        held = decode_domains(raw)
+        if held is None:  # a document of every module says it ("[]" too)
+            return None
+        found.update(held)
     return frozenset(found)
 
 

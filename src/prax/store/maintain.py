@@ -48,6 +48,7 @@ from .base import (
     _reading,
     _serialized,
     archive_path,
+    domain_clause,
     live,
     meta_of,
     now,
@@ -721,8 +722,6 @@ def _attachment(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         f" WHERE text_len >= 60000{live}",
         "with an ingredient list": "SELECT COUNT(DISTINCT doc_id) FROM chunks"
         " WHERE kind = 'ingredients'",
-        "in the kitchen domain": "SELECT COUNT(*) FROM documents"
-        f" WHERE json_extract(meta,'$.domains') LIKE '%kitchen%'{live}",
         "with a reference list": "SELECT COUNT(DISTINCT doc_id) FROM chunks"
         " WHERE kind = 'reference'",
         "entities": "SELECT COUNT(*) FROM entities WHERE canonical_id IS NULL",
@@ -734,6 +733,15 @@ def _attachment(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             out[name] = int(con.execute(sql).fetchone()[0])
         except sqlite3.Error:  # a count nobody can take is not a failed pass
             out[name] = -1
+    # the kitchen's documents by their domain set; a substring match until
+    # 2026-11-09 counted any module whose name held "kitchen" (structure
+    # review finding 10)
+    clause, args = domain_clause(con, ["kitchen"], unset=False)
+    out["in the kitchen domain"] = int(
+        con.execute(
+            f"SELECT COUNT(*) FROM documents d WHERE 1=1{clause}{live}", args
+        ).fetchone()[0]
+    )
     # the pairs worth reading as a ratio, because the bare count hides the gap
     for whole, part in (
         ("long enough for sections", "with section summaries"),

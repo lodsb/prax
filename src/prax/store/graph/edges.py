@@ -26,6 +26,7 @@ from ..base import (
     doc_visible,
     document_hidden,
     domain_clause,
+    domain_sets,
     hidden_documents,
     rows_in,
 )
@@ -1114,15 +1115,8 @@ def _subset_version_case(
         return "?", [whole]
     whens: list[str] = []
     args: list[Any] = []
-    for (raw,) in con.execute(
-        "SELECT DISTINCT json_extract(meta, '$.domains') FROM documents"
-        " WHERE json_extract(meta, '$.domains') IS NOT NULL"
-    ):
-        try:
-            domains = json.loads(raw)
-        except (TypeError, ValueError):
-            continue
-        if not domains:
+    for raw, domains in domain_sets(con):
+        if domains is None:
             continue
         whens.append("WHEN ? THEN ?")
         args.extend([raw, onto.for_domains(domains).version])

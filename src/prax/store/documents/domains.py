@@ -46,7 +46,7 @@ def document_domains(con: sqlite3.Connection, doc_id: int) -> list[str] | None:
     ).fetchone()
     if row is None:
         raise NotFound(f"no such document: {doc_id}")
-    return list(json.loads(row[0])) if row[0] else None
+    return decode_domains(row[0])
 
 
 def domains_of(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, list[str]]:
@@ -57,7 +57,8 @@ def domains_of(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, list[st
         "SELECT id, json_extract(meta, '$.domains') FROM documents WHERE id IN ({ids})",
         sorted({int(i) for i in doc_ids}),
     )
-    return {int(r[0]): list(json.loads(r[1])) for r in rows if r[1]}
+    decoded = {int(r[0]): decode_domains(r[1]) for r in rows}
+    return {i: d for i, d in decoded.items() if d is not None}
 
 
 def _check_domains(domains: list[str]) -> list[str]:

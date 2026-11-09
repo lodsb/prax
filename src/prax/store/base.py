@@ -638,6 +638,21 @@ def decode_domains(raw: str | None) -> list[str] | None:
     return list(got) if got else None
 
 
+def domain_sets(con: sqlite3.Connection) -> list[tuple[str, list[str] | None]]:
+    """The distinct domain sets the documents hold, as stored and decoded
+    (None for an empty list stored, which is no set): a dozen on the
+    library, read through ``idx_documents_domains``. The one read under
+    ``domain_clause`` and the extraction stamps' version case (structure
+    review finding 10)."""
+    return [
+        (str(raw), decode_domains(raw))
+        for (raw,) in con.execute(
+            "SELECT DISTINCT json_extract(meta, '$.domains') FROM documents"
+            " WHERE json_extract(meta, '$.domains') IS NOT NULL"
+        )
+    ]
+
+
 def holds_domain(raw: str | None, names: Iterable[str], *, unset: bool) -> bool:
     """Whether a document whose ``meta.domains`` is ``raw`` belongs to one
     of ``names``; one with no set belongs when ``unset``."""
@@ -666,11 +681,7 @@ def domain_clause(
     wanted = set(names)
     held: list[str] = []
     none: list[str] = []  # an empty list stored is no set too
-    for (raw,) in con.execute(
-        "SELECT DISTINCT json_extract(meta, '$.domains') FROM documents"
-        " WHERE json_extract(meta, '$.domains') IS NOT NULL"
-    ):
-        decoded = decode_domains(raw)
+    for raw, decoded in domain_sets(con):
         if decoded is None:
             none.append(raw)
         elif wanted and not wanted.isdisjoint(decoded):

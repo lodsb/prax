@@ -544,3 +544,27 @@ def test_a_domains_share_follows_a_document_moved_into_it(
     assert legs._share(con, kitchen) == 0.0  # held for a while
     clock[0] += legs.SHARE_REFRESH
     assert legs._share(con, kitchen) == 0.25
+
+
+def test_an_empty_domain_set_is_no_set_at_every_read(con: sqlite3.Connection) -> None:
+    """Structure review 2026-11-07, finding 10: a stored ``[]`` was no set
+    to the search's filter and an empty set to three other reads, so a
+    word's senses narrowed to nothing where its document is in every
+    module."""
+    from prax.store.retrieval import query
+
+    doc = int(store.ingest_text(con, "apple cake " * 30, title="cake")["doc_id"])
+    store.set_meta(con, doc, {**store.get_meta(con, doc), "domains": []})
+    store.link(
+        con,
+        store.Edge("cake", "recipe", "calls_for", "apple", "ingredient"),
+        source_doc=doc,
+    )
+    apple = store.entity_answering(con, "apple", "ingredient")
+    assert apple is not None
+    assert store.document_domains(con, doc) is None
+    assert store.domains_of(con, [doc]) == {}
+    assert query._lives_in(con, apple, "ingredient") is None
+    other = int(store.ingest_text(con, "a soup " * 30, title="soup")["doc_id"])
+    store.set_domains(con, other, ["kitchen"])
+    assert dict(store.domain_sets(con)) == {"[]": None, '["kitchen"]': ["kitchen"]}

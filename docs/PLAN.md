@@ -326,7 +326,7 @@ against the code on 2026-11-08.
 - [x] 12 with 30 (2026-11-09, the log). Seven hand-built memo caches: one `StampMemo(stamp,
       kept)` in `base`. The path index keeps building under its lock
       (the 150 MB peak).
-- [ ] 10. A document's domain set decoded in seven places with two
+- [x] 10 (2026-11-09, the log). A document's domain set decoded in seven places with two
       rules for an empty set: all through `decode_domains`, and
       `domain_sets(con)` under `domain_clause` and the counters.
 - [ ] 24. "Not a real name" judged in four places with three

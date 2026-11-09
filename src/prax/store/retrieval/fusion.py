@@ -24,6 +24,7 @@ from ..base import (
     _has_vectors,
     _index_path,
     _reading,
+    decode_domains,
     hidden_documents,
     holds_domain,
     live,
@@ -779,7 +780,7 @@ def _domain_prior(
     ids = sorted({h["doc_id"] for h in fused})
     marks = ",".join("?" * len(ids))
     domains: dict[int, list[str]] = {
-        int(r[0]): json.loads(r[1]) if r[1] else []
+        int(r[0]): decode_domains(r[1]) or []
         for r in con.execute(
             "SELECT id, json_extract(meta, '$.domains') FROM documents"
             f" WHERE id IN ({marks})",

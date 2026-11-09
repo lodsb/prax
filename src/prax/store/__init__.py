@@ -78,6 +78,7 @@ from .base import (  # noqa: F401
     doc_visible,
     document_hidden,
     domain_clause,
+    domain_sets,
     door_written,
     hidden_documents,
     holds_domain,

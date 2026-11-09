@@ -10309,3 +10309,37 @@ this morning).
   its own pair of counts: it is not a FIFO and holds one entry a model.
 - Test: a document moved into the kitchen is in its share once the
   window has passed.
+
+## 2026-11-09: an empty domain set is no set, at every read
+
+Finding 10 of the structure review. A document's `meta.domains` was
+decoded at seven places beside `decode_domains`, with two rules for a
+stored `[]`. `decode_domains` (and so the search's filter, the wall's
+module test and the domain rules) reads it as no set, a document of
+every module. `document_domains` returned `[]`, `domains_of` kept the
+empty list, and the senses' `_lives_in` narrowed a word's scope to the
+type's own domains where it should have been everywhere.
+
+- Every decode goes through `decode_domains`: `document_domains`,
+  `domains_of` (a document of every module is absent, as documented),
+  `_lives_in` and the domain prior's read in `fusion`.
+- `store.domain_sets(con)` is the one read of the distinct sets, as
+  stored and decoded, under `domain_clause` and the extraction stamps'
+  version case (`_subset_version_case`), which wrote the scan again with
+  its own `json.loads`.
+- The maintenance report's "in the kitchen domain" was `LIKE
+  '%kitchen%'`, which counts any module whose name holds the word. It is
+  `domain_clause(["kitchen"])` now.
+- Left: `domain_counts` and `summary.stats` each tally the sets with a
+  `GROUP BY`, but the first counts what the viewer may see and a
+  module's reach, the second neither. The walk's domain list
+  (`json_each` over a neighbourhood's documents) reads `[]` as nothing,
+  which is the same rule.
+- Test: a document stored with `[]` is of every module to
+  `document_domains`, `domains_of` and `_lives_in`, and `domain_sets`
+  decodes it to None.
+- No document on the live store has `[]` stored (counted read-only), so
+  no search on this host changes and the retrieval eval was not run.
+- One full run failed `test_readers.py::test_a_companion_moves_with_its_role_in_a_swap`
+  while a busy-wait loop of mine held a core; it passed alone three
+  times, and the suite again whole.
