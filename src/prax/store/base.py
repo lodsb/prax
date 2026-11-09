@@ -27,7 +27,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ParamSpec, Required, TypedDict, TypeVar
+from typing import Any, Generic, ParamSpec, Required, TypedDict, TypeVar
 
 from prax import config, packs
 from prax.errors import NotFound  # noqa: F401  the store's miss, store.NotFound
@@ -691,9 +691,43 @@ def domain_clause(
     )
 
 
-_HIDDEN_KEPT = 16  # (viewer, connection, state) -> hidden set, the newest kept
-_hidden_memo: dict[tuple[Any, ...], frozenset[int]] = {}
-_hidden_lock = threading.Lock()
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class Memo(Generic[K, V]):
+    """The newest ``kept`` answers of a read, by key, under a lock; the
+    answer is computed outside it, so two threads may compute one twice
+    and the second keeps it. A key that holds ``store_state`` never
+    outlives a write. The hidden set, the media members, the People list
+    and the domain shares of a search each wrote this until 2026-11-09
+    (structure review findings 12 and 30); the hubs (a stamp and an age)
+    and the path index (built under its lock, a 150 MB peak) keep rules
+    of their own."""
+
+    def __init__(self, kept: int) -> None:
+        self.kept = kept
+        self._held: dict[K, V] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: K, compute: Callable[[], V]) -> V:
+        with self._lock:
+            if key in self._held:
+                return self._held[key]
+        got = compute()
+        with self._lock:
+            self._held[key] = got
+            while len(self._held) > self.kept:
+                self._held.pop(next(iter(self._held)))
+        return got
+
+    def clear(self) -> None:
+        with self._lock:
+            self._held.clear()
+
+
+# (viewer, connection, state) -> hidden set
+_hidden_memo: Memo[tuple[Any, ...], frozenset[int]] = Memo(16)
 
 
 def store_state(con: sqlite3.Connection) -> tuple[Any, ...]:
@@ -730,17 +764,9 @@ def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
     viewer = VIEWER.get()
     if viewer is None:
         return frozenset()
-    key = (viewer, *store_state(con))
-    with _hidden_lock:
-        held = _hidden_memo.get(key)
-    if held is not None:
-        return held
-    got = _hidden_read(con, viewer)
-    with _hidden_lock:
-        if len(_hidden_memo) >= _HIDDEN_KEPT:
-            _hidden_memo.pop(next(iter(_hidden_memo)))
-        _hidden_memo[key] = got
-    return got
+    return _hidden_memo.get(
+        (viewer, *store_state(con)), lambda: _hidden_read(con, viewer)
+    )
 
 
 def personal_sql(alias: str) -> str:

@@ -323,7 +323,7 @@ against the code on 2026-11-08.
       with a wall test per graph read. Whether any single-check site reads
       derived edges goes to the next safety review (`connect` does not:
       its index leaves rule edges out).
-- [ ] 12 with 30. Seven hand-built memo caches: one `StampMemo(stamp,
+- [x] 12 with 30 (2026-11-09, the log). Seven hand-built memo caches: one `StampMemo(stamp,
       kept)` in `base`. The path index keeps building under its lock
       (the 150 MB peak).
 - [ ] 10. A document's domain set decoded in seven places with two

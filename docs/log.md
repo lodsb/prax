@@ -10282,3 +10282,30 @@ words.
 - Test: three edges, one derived from two research documents. The
   administrator sees all three; a kitchen token sees none, also from a
   row without its producer, and `edge_hidden` agrees.
+
+## 2026-11-09: one memo, and a domain's share that follows a move
+
+Findings 12 and 30 of the structure review (30's stamp bug was fixed
+this morning).
+
+- `store.Memo(kept)` is the newest `kept` answers of a read by key,
+  under a lock, with the answer computed outside the lock. Three
+  readers each wrote this FIFO with a lock of its own: the hidden set,
+  the media members and the People list. The hubs (a graph stamp and an
+  age) and the path index (built under its lock on purpose, the 150 MB
+  peak) keep their own rules, as the review's check said.
+- The domain share of a search (`legs._share`) was kept by `(scope,
+  number of documents)`. A document moved between domains left it stale
+  until a document was added or removed, and two stores of one size
+  shared an entry. It decides whether a scoped search filters inside or
+  after the ranking (`WIDE_SCOPE`) and whether the domain prior counts
+  (`PRIOR_SMALL`). It is now a `Memo` keyed by the scope, the store's
+  file and a window of `SHARE_REFRESH` (60 s). Keying it by
+  `store_state` was measured first, on the live library read-only: a
+  cold count costs 20 ms (kitchen, studio) to 50 ms (research), and the
+  worker writes every few seconds, so nearly every scoped search would
+  have paid it. A minute of staleness in a plan choice costs nothing.
+- `_EMBEDDED` (a check per model that every chunk has its vector) keeps
+  its own pair of counts: it is not a FIFO and holds one entry a model.
+- Test: a document moved into the kitchen is in its share once the
+  window has passed.

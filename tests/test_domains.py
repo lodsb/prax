@@ -519,3 +519,28 @@ def test_a_label_counts_at_one_line_and_a_persons_always() -> None:
     meta = {"genres": given}
     assert documents._has_label(meta, "genres", "genre", "datasheet", store.LABEL_P)
     assert not documents._has_label(meta, "genres", "genre", ["manual"], store.LABEL_P)
+
+
+def test_a_domains_share_follows_a_document_moved_into_it(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Structure review 2026-11-07, finding 12: the share was kept while
+    the library held as many documents, so a move between domains left it
+    stale for good. It is counted again after ``SHARE_REFRESH``."""
+    from prax.store.retrieval import legs
+
+    clock = [1000.0]
+    monkeypatch.setattr(legs.time, "monotonic", lambda: clock[0])
+
+    ids = [
+        int(store.ingest_text(con, f"note {i} " * 30, title=f"n{i}")["doc_id"])
+        for i in range(4)
+    ]
+    for i in ids:
+        store.set_domains(con, i, ["research"])
+    kitchen = frozenset({"kitchen"})
+    assert legs._share(con, kitchen) == 0.0
+    store.set_domains(con, ids[0], ["kitchen"])
+    assert legs._share(con, kitchen) == 0.0  # held for a while
+    clock[0] += legs.SHARE_REFRESH
+    assert legs._share(con, kitchen) == 0.25

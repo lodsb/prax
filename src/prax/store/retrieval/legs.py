@@ -5,6 +5,7 @@ them at document level."""
 from __future__ import annotations
 
 import sqlite3
+import time
 from typing import Any
 
 from prax import packs
@@ -13,6 +14,7 @@ from prax.text import chunking
 
 from ..base import (
     _ASIDE,
+    Memo,
     _doc_index_path,
     _has_vectors,
     _index_path,
@@ -59,21 +61,31 @@ CHUNK_KINDS = chunking.KINDS + packs.kinds()
 WIDE_SCOPE = 0.5  # a scope holding this share of the documents is filtered after
 WIDE_DRAW = 3  # and the ranked list is drawn this many times deeper for it
 
-_SHARES: dict[tuple[Scope, int], float] = {}
+SHARE_REFRESH = 60.0  # seconds a domain's share of the library is kept
+_SHARES: Memo[tuple[Any, ...], float] = Memo(32)
 
 
 def _share(con: sqlite3.Connection, scope: Scope) -> float:
-    """The share of the library's documents a scope holds, remembered
-    while the library holds as many documents."""
-    total = int(con.execute("SELECT count(*) FROM documents").fetchone()[0] or 0)
-    key = (scope, total)
-    if key not in _SHARES:
+    """The share of the library's documents a scope holds, per store file,
+    counted again after ``SHARE_REFRESH`` seconds. Until 2026-11-09 it was
+    kept while the library held as many documents, so a document moved
+    between domains left it stale for good, and two stores of one size
+    shared it (structure review finding 12). Not keyed by ``store_state``:
+    the count costs 20-50 ms on the library, and the worker writes every
+    few seconds; a share only chooses between two plans of a search and
+    the domain prior's preference, so a minute of staleness costs nothing."""
+
+    def count() -> float:
+        total = int(con.execute("SELECT count(*) FROM documents").fetchone()[0] or 0)
         where, args = _in_domains(con, scope)
         n = con.execute(
             f"SELECT count(*) FROM documents d WHERE 1 = 1{where}", args
         ).fetchone()[0]
-        _SHARES[key] = (n or 0) / max(total, 1)
-    return _SHARES[key]
+        return (n or 0) / max(total, 1)
+
+    file = str(con.execute("PRAGMA database_list").fetchone()[2])
+    window = int(time.monotonic() // SHARE_REFRESH)
+    return _SHARES.get((scope, file, window), count)
 
 
 def _in_domains(

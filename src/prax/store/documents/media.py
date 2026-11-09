@@ -22,11 +22,10 @@ from __future__ import annotations
 import json
 import posixpath
 import sqlite3
-import threading
 from collections import defaultdict
 from typing import Any
 
-from ..base import _reading, _serialized, live, meta_of, run_name, store_state
+from ..base import Memo, _reading, _serialized, live, meta_of, run_name, store_state
 from .domains import SENSITIVITY, _set_sensitivity
 from .meta import _put_meta
 
@@ -48,9 +47,7 @@ _MEMBERS = f"""
 """
 
 
-_MEMBERS_KEPT = 4  # (connection, state) -> members, the newest kept
-_members_memo: dict[tuple[Any, ...], list[sqlite3.Row]] = {}
-_members_lock = threading.Lock()
+_members_memo: Memo[tuple[Any, ...], list[sqlite3.Row]] = Memo(4)  # by state
 
 
 def _members(con: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -58,17 +55,7 @@ def _members(con: sqlite3.Connection) -> list[sqlite3.Row]:
     14,334 of the live share's (0.1 s), and ``/media`` read them twice (the
     review of 2026-11-03). A write or another connection's commit changes
     the state (``store_state``), so a memo never outlives one."""
-    key = store_state(con)
-    with _members_lock:
-        held = _members_memo.get(key)
-    if held is not None:
-        return held
-    got = con.execute(_MEMBERS).fetchall()
-    with _members_lock:
-        if len(_members_memo) >= _MEMBERS_KEPT:
-            _members_memo.pop(next(iter(_members_memo)))
-        _members_memo[key] = got
-    return got
+    return _members_memo.get(store_state(con), lambda: con.execute(_MEMBERS).fetchall())
 
 
 def _folder(place: str | None) -> str:

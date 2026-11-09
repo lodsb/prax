@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import threading
 from collections import Counter
 from typing import Any
 
@@ -27,6 +26,7 @@ from prax.graph import ontology
 
 from ..base import (
     VIEWER,
+    Memo,
     NotFound,
     _reading,
     doc_visible,
@@ -252,20 +252,11 @@ def people(
     a desktop, the quality review of 2026-10-28)."""
     limit = max(1, min(limit, PEOPLE_LIMIT))
     key = (VIEWER.get(), *store_state(con), q.strip(), limit)
-    with _PEOPLE_LOCK:
-        if key in _PEOPLE:
-            return [dict(row) for row in _PEOPLE[key]]
-    got = _people(con, q, limit)
-    with _PEOPLE_LOCK:
-        if len(_PEOPLE) >= _PEOPLE_KEPT:
-            _PEOPLE.pop(next(iter(_PEOPLE)))
-        _PEOPLE[key] = got
+    got = _PEOPLE.get(key, lambda: _people(con, q, limit))
     return [dict(row) for row in got]
 
 
-_PEOPLE_KEPT = 8
-_PEOPLE: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
-_PEOPLE_LOCK = threading.Lock()
+_PEOPLE: Memo[tuple[Any, ...], list[dict[str, Any]]] = Memo(8)
 
 
 def _people(con: sqlite3.Connection, q: str, limit: int) -> list[dict[str, Any]]:

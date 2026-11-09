@@ -55,6 +55,7 @@ from .base import (  # noqa: F401
     Checks,
     Document,
     DocumentMeta,
+    Memo,
     MetaLike,
     NotFound,
     P,
