@@ -389,3 +389,19 @@ def test_a_load_that_would_leave_no_commit_does_not_fit(
     monkeypatch.setattr(up.sys, "platform", "linux")  # overcommitted: no wall
     free["commit_free_mb"] = 0
     assert sup._fits(big)
+
+
+def test_the_step_registries_agree() -> None:
+    """Structure review 2026-11-07, finding 43: the readings a chat
+    server does were a hand copy of the core's (a pack's reading would
+    never reach the supervisor's demand), and the steps that run a model
+    were listed apart from their defaults."""
+    from prax import models, steps
+
+    waiting = {r for names in work.role_work().values() for r in names}
+    assert set(steps.READING_STEPS) <= waiting
+    assert set(steps.READING_STEPS.values()) <= set(models.STEPS)
+    assert tuple(models.STEP_DEFAULTS) == models.STEPS
+    assert set(steps.CORE_STEPS) <= set(steps.STEPS)
+    for name in steps.STEPS:
+        assert steps.get(name).name == name

@@ -10516,3 +10516,27 @@ test missed was refused.
   share the model. It has no `--finding`.
 - Test: the store's keywords, but for `con`, `fixed_by` and `limit`, are
   the selection's fields, and `chosen()` holds for a flag or a 0.
+
+## 2026-11-09: the step registries, each copy derived
+
+Finding 43 of the structure review. Three lists were hand copies of
+another. `steps.CORE_STEPS` repeated the keys of the table of which
+module holds each step (`_HOMES`). `models.STEPS` repeated the keys of
+`models.STEP_DEFAULTS`. `work.SERVER_READINGS`, the readings a chat
+server does, copied the core's five keys of `steps.READING_STEPS` and
+left out a pack's, so a pack reading that runs on a chat server would
+never reach the supervisor's demand (`work.role_work`, `GET
+/work/demand`).
+
+- `steps._CORE_HOMES` is the core's table; `CORE_STEPS` is its keys and
+  `_HOMES` it with the packs' homes. `models.STEPS` is
+  `tuple(STEP_DEFAULTS)`. `work.SERVER_READINGS` is
+  `tuple(READING_STEPS)`. Each keeps the order it had.
+- Left: `models.STEP_DEFAULTS` has no hook for a pack, so a pack step
+  that runs a model would need its default added there. No pack has one
+  (the maths pack's `equations` runs none). It is added with the first
+  pack that needs it.
+- Test: every reading that runs a model is in `role_work()`, every such
+  model's step has a default, and every step has its object. It passed
+  before the change too, since the copies agreed for the core; it is
+  there for the next pack reading.

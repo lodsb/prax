@@ -23,27 +23,31 @@ from prax import packs as _packs
 if TYPE_CHECKING:
     from prax.steps.base import Step
 
-CORE_STEPS = (
-    "parse",
-    "titles",
-    "dates",
-    "worlddates",
-    "summaries",
-    "vocabulary",
-    "sections",
-    "communities",
-    "extract",
-    "promote",
-    "typing",
-    "embed",
-    "resolve",
-    "adjudicate",
-    "genres",
-    "photos",
-    "geocode",
-    "faces",
-    "facevectors",
-)
+# every core step, and the module of `prax.steps` that holds its object:
+# loaded when a step is first asked for, so the names here stay free of
+# imports for the thin client
+_CORE_HOMES = {
+    "parse": "parse",
+    "titles": "writing",
+    "dates": "writing",
+    "worlddates": "extract",
+    "summaries": "writing",
+    "vocabulary": "vocabulary",
+    "sections": "writing",
+    "communities": "writing",
+    "extract": "extract",
+    "promote": "extract",
+    "typing": "graph",
+    "embed": "embed",
+    "resolve": "graph",
+    "adjudicate": "graph",
+    "genres": "writing",
+    "photos": "photos",
+    "geocode": "photos",
+    "faces": "faces",
+    "facevectors": "faces",
+}
+CORE_STEPS = tuple(_CORE_HOMES)
 STEPS = CORE_STEPS + tuple(_packs.step_homes())
 
 # what a worker asks for unless the run names its steps
@@ -94,39 +98,17 @@ NAMED_ONLY = tuple(s for s in STEPS if s not in WATCHED_STEPS)
 # is, and a guard that keyed on the name let them spend unasked
 # (2026-09-23). A reading absent from here runs no model of its own.
 READING_STEPS = {
+    "figures": "vision",
     "vision": "vision",
     "vision-pages": "vision",
-    "figures": "vision",
     "formulas": "formulas",
     "polish": "polish",
     **_packs.readings(),
 }
 
 
-# which module holds each step's object: loaded when a step is first asked
-# for, so the names above stay free of imports for the thin client
-_HOMES = {
-    "parse": "parse",
-    "titles": "writing",
-    "dates": "writing",
-    "worlddates": "extract",
-    "summaries": "writing",
-    "sections": "writing",
-    "communities": "writing",
-    "genres": "writing",
-    "vocabulary": "vocabulary",
-    "extract": "extract",
-    "promote": "extract",
-    "typing": "graph",
-    "resolve": "graph",
-    "adjudicate": "graph",
-    "embed": "embed",
-    "photos": "photos",
-    "geocode": "photos",
-    "faces": "faces",
-    "facevectors": "faces",
-    **_packs.step_homes(),  # a pack's: the module's full name
-}
+# a pack's: the module's full name
+_HOMES = {**_CORE_HOMES, **_packs.step_homes()}
 
 _REPEATED = _packs.duplicates({"steps": CORE_STEPS})
 if _REPEATED:

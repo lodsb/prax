@@ -60,9 +60,12 @@ from prax.steps.leases import lease as _lease
 from prax.steps.leases import note_spend as _note_spend
 from prax.steps.leases import release as release_lease
 
-# the readings a chat server does: each waits for the role that serves its
-# step's model (``READING_STEPS``), ``llama-server`` when none says
-SERVER_READINGS = ("figures", "vision", "vision-pages", "formulas", "polish")
+# the readings a chat server does: every reading that runs a step's model
+# (``READING_STEPS``, a pack's too), each waiting for the role that serves
+# that model, ``llama-server`` when none says. A hand copy of the core's
+# five until 2026-11-09, which a pack's reading would have missed
+# (structure review finding 43)
+SERVER_READINGS = tuple(READING_STEPS)
 
 
 def role_work() -> dict[str, tuple[str, ...]]:

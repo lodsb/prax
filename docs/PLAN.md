@@ -341,7 +341,7 @@ against the code on 2026-11-08.
       `graph.calibration` with Platt and the thread pool.
 - [x] 45 (2026-11-09, the log; flat, not nested). The bulk reading selection listed four times: a nested
       `ReadingSelection` model the CLI sends too.
-- [ ] 43. A step's facts in seven registries that disagree for pack
+- [x] 43 (2026-11-09, the log; no pack hook for model defaults yet). A step's facts in seven registries that disagree for pack
       steps: `SERVER_READINGS`, `models.STEPS` and `CORE_STEPS` derived.
 - [ ] 6 (the rest). Readings under a marked line written twice (figures,
       formulas); both are carried since 2026-11-07: one

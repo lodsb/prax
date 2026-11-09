@@ -54,24 +54,8 @@ from prax import config
 
 CONFIG_NAME = "prax.yaml"
 KINDS = ("claude", "openai", "stub")
-STEPS = (
-    "extract",
-    "promote",
-    "ask",
-    "titles",
-    "dates",
-    "worlddates",
-    "summaries",
-    "vocabulary",
-    "sections",
-    "communities",
-    "vision",
-    "adjudicate",
-    "typing",
-    "formulas",
-    "polish",
-    "genres",
-)
+# every step that runs a model, and the one it runs where prax.yaml names
+# none
 STEP_DEFAULTS = {
     "extract": "claude-opus-5",
     "promote": "claude-sonnet-5",  # the expensive pass over flagged documents
@@ -83,13 +67,14 @@ STEP_DEFAULTS = {
     "vocabulary": "none",  # an entity named in another language, put into English
     "sections": "none",  # what a long document's chapters are about
     "communities": "none",  # the regions of the library named and described
-    "genres": "none",  # what a document is and is about (stage Z): off until chosen
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue
     "formulas": "none",  # a reading in words under each display equation
     "polish": "none",  # an automatic transcript punctuated, the fillers dropped
+    "genres": "none",  # what a document is and is about (stage Z): off until chosen
 }
+STEPS = tuple(STEP_DEFAULTS)
 DEFAULT_CTX = 8192  # what a step may assume of a server's context per slot
 OPENAI_TIMEOUT = 600.0
 _CLAUDE_TIMEOUT = 180.0
