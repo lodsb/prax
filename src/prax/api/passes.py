@@ -123,7 +123,7 @@ def start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
     n = int(documents or FIGURES_SLICE)  # schedule: figures: {documents: N}
     with store.Job(con, "figures", note=f"a slice of {n}") as job:
         spec = models.resolve("vision")
-        if spec is None or not pipeline.vision_is_free():
+        if spec is None or not pipeline.free("vision"):
             job.update(note="the vision model is off or paid: nothing asked")
             return {"job": job.id, "requested": 0, "why": "vision model off or paid"}
         waiting = int(store.waiting_readings(con).get("figures", 0) or 0)

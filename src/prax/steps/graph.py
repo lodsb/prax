@@ -59,7 +59,9 @@ class Typing(Step):
         spec = models.resolve("typing")
         if spec is None:
             return None  # the step is off on this host: nothing to say
-        refused = paid_refusal(self.name, spec)
+        refused = paid_refusal(
+            self.name, spec, p.spend, spend_allowed=self.spend_allowed
+        )
         if refused:
             return refused
         if base.model_down(spec):
@@ -181,6 +183,7 @@ class Adjudicate(Step):
     ``PLAN_HELD_SECONDS``; the leases and the scored pairs are read fresh."""
 
     name = "adjudicate"
+    spend_allowed = True
 
     def __init__(self) -> None:
         self._held: tuple[tuple[Any, ...], float, list[Any]] | None = None
@@ -266,10 +269,11 @@ class Adjudicate(Step):
         spec = models.resolve("adjudicate")
         if spec is None:
             return None  # the step is off on this host: nothing to say
-        if spec.paid and not p.spend:
-            return (
-                f"skipped: the adjudicate step is {spec.name} (paid); --spend runs it"
-            )
+        refused = paid_refusal(
+            self.name, spec, p.spend, spend_allowed=self.spend_allowed
+        )
+        if refused:
+            return refused
         if base.model_down(spec):
             return None
         items = p.fetch(self.name, limit=p.limit * 20).get("items") or []

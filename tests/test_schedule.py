@@ -223,7 +223,7 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
         name="server", kind="openai", base_url="http://127.0.0.1:1/v1", model="v"
     )
     monkeypatch.setattr(models, "resolve", lambda s: local if s == "vision" else None)
-    monkeypatch.setattr(pipeline, "vision_is_free", lambda: True)
+    monkeypatch.setattr(pipeline, "free", lambda step: step == "vision")
     pictured = [
         _pdf_with(con, f"paper {i}", f"\n\n![Fig. {i}. A rig.](figure:{'d' * 63}{i})\n")
         for i in range(3)

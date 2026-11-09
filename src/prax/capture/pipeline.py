@@ -122,28 +122,17 @@ def titles_needed(
 # at ingest, and a parse posted by a worker.
 
 
-def _free(step: str) -> bool:
+def free(step: str) -> bool:
     """Whether a reading by that step's model costs nothing
     (``ModelSpec.paid``): the readings the door asks for on its own are
     only those. Until 2026-11-07 any OpenAI-shaped model counted as free,
-    a priced API among them."""
+    a priced API among them; four wrappers, one a step each, went on
+    2026-11-09 (structure review finding 21)."""
     try:
         spec = models.resolve(step)
     except Exception:  # noqa: BLE001 - a broken prax.yaml is not this step's problem
         return False
     return spec is not None and not spec.paid
-
-
-def vision_is_free() -> bool:
-    return _free("vision")
-
-
-def formulas_are_free() -> bool:
-    return _free("formulas")
-
-
-def polish_is_free() -> bool:
-    return _free("polish")
 
 
 # -------------------------------------------------------- the PDF's reader
@@ -324,7 +313,7 @@ def follow_ups(
     if (
         video.get("captions") == "asr"
         and not stamp.startswith("polish/")
-        and polish_is_free()
+        and free("polish")
     ):
         if "polish" not in pending:
             store.request_reading(con, doc_id, "polish", by="door")
@@ -347,7 +336,7 @@ def follow_ups(
         store.request_reading(con, doc_id, "figure-crops", by="door")
     if (
         quality.writes_latex(stamp)
-        and formulas_are_free()
+        and free("formulas")
         and store.has_unread_formulas(con, doc_id)
     ):
         if "formulas" not in pending:
@@ -360,7 +349,7 @@ def follow_ups(
     if (
         meta.get("source") in store.CAPTURE_SOURCES
         and not stamp.startswith("figures/")
-        and vision_is_free()
+        and free("vision")
     ):
         doc = store.get_document(con, doc_id)
         if doc and any(not r["described_by"] for r in figures.refs(doc["text"])):

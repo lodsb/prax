@@ -19,19 +19,13 @@ from prax.parsers import figures, queue
 from prax.text import mimes
 
 from . import READING_STEPS, leases
-from .base import HandOut, Log, Pass, Step, TakeIn, say
+from .base import HandOut, Log, Pass, Step, TakeIn, paid_refusal, say
 
 # who asks for a reading that is forced past the too-short guard: a person
 # or their agent, by name of a document, and the next window of a long
 # scan's OCR, which goes on with what they asked; the door's own
 # follow-ups, the clock's and the passes' are not
 FORCED_BY = frozenset({"human", "agent", "ocr-window"})
-
-
-def vision_is_free() -> bool:
-    """Whether a reading by the vision model costs nothing (a local
-    server): the readings the door asks for on its own are only those."""
-    return pipeline.vision_is_free()
 
 
 def ask_reading(con: Any, doc_id: int, extractor: str) -> bool:
@@ -97,7 +91,7 @@ def _capture_item(h: HandOut, doc_id: int) -> dict[str, Any] | None:
     if not exts:
         # an image has no parser of its own: the vision model reads it, as
         # a reading the door asks for when that is free
-        if mimes.is_picture(doc["mime"]) and vision_is_free():
+        if mimes.is_picture(doc["mime"]) and pipeline.free("vision"):
             ask_reading(h.con, doc_id, "vision")
         return None
     if any(queue.seen(doc["meta"], e.stamp) for e in exts):
@@ -338,14 +332,10 @@ def _requested(
     except KeyError as exc:
         return [], str(exc)
     step = steps_mod.READING_STEPS.get(name)
-    if step and not spend:
-        spec = models.resolve(step)
-        if spec is not None and spec.paid:
-            return [], (
-                f"the {step} step is {spec.name if spec else 'none'} (paid):"
-                " run it with --spend as the promote step, or point the step"
-                " at a local server"
-            )
+    if step:
+        refused = paid_refusal(step, models.resolve(step), spend, spend_allowed=True)
+        if refused:
+            return [], refused
     if ext.check is None and not ext.available():
         return [], f"{name} is not installed on this worker"
     return [ext], None  # a server that is not up says so itself: NotYet

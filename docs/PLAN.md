@@ -309,7 +309,7 @@ against the code on 2026-11-08.
       and a new `figure_line_of`.
 - [x] 47 (2026-11-09, the log). 37 list routes take a limit, 12 clamp it by hand:
       `Annotated[int, Query(ge=1, le=N)]` aliases in `api/_base.py`.
-- [ ] 21 (the rest). Four one-line "is this model free" wrappers become
+- [x] 21 (the rest; 2026-11-09, the log). Four one-line "is this model free" wrappers become
       `pipeline.free(step)`; the spend policy is one
       `paid_refusal(step, spec, spend, *, spend_allowed)`.
 - [x] 18 (the rest; 2026-11-09, the log). Fresh ids are shared since 2026-11-07

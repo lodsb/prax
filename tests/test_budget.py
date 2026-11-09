@@ -301,5 +301,5 @@ def test_the_door_asks_for_no_reading_from_a_priced_model(data_dir: Path) -> Non
         encoding="utf-8",
     )
     models.reset()
-    assert not pipeline.vision_is_free()
-    assert pipeline.formulas_are_free()
+    assert not pipeline.free("vision")
+    assert pipeline.free("formulas")

@@ -106,10 +106,10 @@ class Extract(Step):
 
     def refusal(self, p: Pass) -> str | None:
         spec = models.resolve("extract")
-        if spec is None or spec.paid:
-            return "skipped: the extract step is " + (
-                f"{spec.name} (paid)" if spec else "not configured"
-            )
+        if spec is None:
+            return "skipped: the extract step is not configured"
+        # paid extraction goes through promote, which may spend
+        return base.paid_refusal(self.name, spec)
         return None
 
     def work(self, p: Pass, items: list[dict[str, Any]]) -> tuple[Any, list[Any]]:
@@ -149,6 +149,7 @@ class Promote(Extract):
     expensive pass reads the picture again first."""
 
     name = "promote"
+    spend_allowed = True
 
     def due(self, h: HandOut) -> list[int] | None:  # type: ignore[override]
         try:
@@ -179,9 +180,9 @@ class Promote(Extract):
         spec = models.resolve("promote")
         if spec is None:
             return "skipped: the promote step is not configured"
-        if spec.paid and not p.spend:
-            return f"skipped: the promote step is {spec.name} (paid); --spend runs it"
-        return None
+        return base.paid_refusal(
+            self.name, spec, p.spend, spend_allowed=self.spend_allowed
+        )
 
     def work(self, p: Pass, items: list[dict[str, Any]]) -> tuple[Any, list[Any]]:
 

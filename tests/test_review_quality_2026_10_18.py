@@ -147,7 +147,7 @@ def test_7_a_latex2html_text_gets_its_formula_readings(
     asked for. They follow every reader that writes LaTeX."""
     from prax.capture import pipeline
 
-    monkeypatch.setattr(pipeline, "formulas_are_free", lambda: True)
+    monkeypatch.setattr(pipeline, "free", lambda step: step == "formulas")
     doc = int(
         store.ingest_text(
             con,

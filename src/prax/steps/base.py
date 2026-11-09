@@ -185,6 +185,9 @@ class Step:
     step, or None when there was nothing to do and nothing to say."""
 
     name: str = ""
+    # whether a worker given --spend may run it with a paid model
+    # (``paid_refusal``); a step that says nothing never spends
+    spend_allowed: bool = False
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
         raise NotImplementedError
@@ -282,13 +285,24 @@ def ready(step: str, load: Callable[[], Any]) -> str | None:
     return None
 
 
-def paid_refusal(step: str, spec: models.ModelSpec | None) -> str | None:
+def paid_refusal(
+    step: str,
+    spec: models.ModelSpec | None,
+    spend: bool = False,
+    *,
+    spend_allowed: bool = False,
+) -> str | None:
     """Why a worker will not run a step whose model costs money, or None
-    when it may. Asked before anything is fetched: a batch fetched and
-    not done sits leased for a quarter of an hour."""
-    if spec is not None and spec.paid:
-        return f"skipped: the {step} step is {spec.name} (paid)"
-    return None
+    when it may: a step that allows it (``Step.spend_allowed``: promote,
+    adjudicate, a reading a person asked for) runs paid when the worker was
+    given ``--spend``, the others never. Asked before anything is fetched:
+    a batch fetched and not done sits leased for a quarter of an hour. Five
+    steps wrote this with their own words until 2026-11-09 (structure
+    review finding 21)."""
+    if spec is None or not spec.paid or (spend_allowed and spend):
+        return None
+    hint = "; --spend runs it" if spend_allowed else ""
+    return f"skipped: the {step} step is {spec.name} (paid){hint}"
 
 
 def model_down(spec: models.ModelSpec | None) -> bool:
@@ -324,7 +338,9 @@ class ModelStep(Step):
         spec = models.resolve(self.name)
         if not self.available(spec):
             return None  # the step is off on this worker: nothing to say
-        refused = paid_refusal(self.name, spec)
+        refused = paid_refusal(
+            self.name, spec, p.spend, spend_allowed=self.spend_allowed
+        )
         if refused:
             return refused
         if model_down(spec):

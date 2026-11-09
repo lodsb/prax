@@ -10231,3 +10231,24 @@ these caps, and no test could fail for a missing one.
   refused.
 - The test found one the review did not list: `/communities/{cid}`'s
   `members`, now at most 120 as on the region's map.
+
+## 2026-11-09: which model is free and which step may spend, each said once
+
+The rest of finding 21 of the structure review. Its behaviour fix went
+in on 2026-11-07: `pipeline._free` reads `ModelSpec.paid`, not the
+model's kind.
+
+- `pipeline.free(step)` is the one test of "the door may ask this step
+  for a reading on its own". The four one-line wrappers
+  (`vision_is_free`, `formulas_are_free`, `polish_is_free`, and
+  `steps.parse.vision_is_free` over the first) go.
+- `steps.base.paid_refusal(step, spec, spend, *, spend_allowed)` is the
+  one spend policy and its one wording. A step declares
+  `Step.spend_allowed`. Promote and adjudicate allow `--spend`, and so
+  does a reading a person asked for (`parse._requested`). Extract, the
+  typing step and the model steps never spend: paid extraction goes
+  through promote. Five places had decided and worded this each their
+  own way. The reading's refusal now reads like the others ("skipped:
+  the vision step is … (paid); --spend runs it").
+- Test: which steps may spend, and the refusal with and without
+  `--spend`.

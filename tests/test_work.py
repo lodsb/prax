@@ -1889,3 +1889,23 @@ def test_status_tells_not_yet_from_never_from_no_worker(client: TestClient) -> N
     client.get("/work/titles")
     assert ask()["worker"]["alive"] is True
     assert client.get("/work/status", params={"ids": "a,b"}).status_code == 400
+
+
+def test_which_step_may_spend_is_said_in_one_place() -> None:
+    """Structure review 2026-11-07, finding 21: five steps decided and
+    worded a paid refusal each their own way."""
+    from prax import models, steps
+    from prax.steps.base import paid_refusal
+
+    paid = models.ModelSpec(name="opus", kind="claude", model="o", paid_=True)
+    free = models.ModelSpec(name="local", kind="openai", model="q", paid_=False)
+    may = {name for name in steps.STEPS if steps.get(name).spend_allowed}
+    assert {"promote", "adjudicate"} <= may and "extract" not in may
+    assert paid_refusal("extract", paid, True) == (
+        "skipped: the extract step is opus (paid)"
+    )
+    assert paid_refusal("promote", paid, True, spend_allowed=True) is None
+    assert paid_refusal("promote", paid, False, spend_allowed=True) == (
+        "skipped: the promote step is opus (paid); --spend runs it"
+    )
+    assert paid_refusal("extract", free) is None and paid_refusal("x", None) is None
