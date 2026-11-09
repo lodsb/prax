@@ -10383,3 +10383,20 @@ and heal then listed it.
   `attribute-not-relation` was asked (`test_typing_rules` said so). An
   attribute is asked about first: both drop, and the attribute is the
   better reason.
+
+## 2026-11-09: the heal pass lists a citation where a title belongs
+
+The owner's answer to the question finding 24 left open: an entity named
+"Surname [N]" or "Surname et al. [N]" is no name, and the heal pass lists
+it like "[12]".
+
+- `ontology.reference_name` loses `cited`; every pass asks the one test.
+- `_reference_entities` scanned names of up to 24 characters, which cut
+  86 of the citation names ("a a a [9]" in shape, 85 typed paper or
+  document). It reads up to 64.
+- On the live store (counted read-only) the ailment now lists 506
+  entities holding 385 live edges: 308 typed paper, 165 document, the
+  rest a handful each. Four are papers named by a DOI, with 6 edges.
+  `prax heal` is run by hand, so nothing is ended until someone repairs,
+  and `restore_run` undoes a repair whole.
+- Test: `test_heal` lists and repairs a "Smith et al. [12]" beside "[12]".

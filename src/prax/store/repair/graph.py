@@ -186,11 +186,12 @@ def _placeholder_entities(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def _reference_entities(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    # 64: "Surname et al. [12, 13]" runs past the 24 this was until 2026-11-09
     short = con.execute(
-        "SELECT id, name, type FROM entities WHERE length(name) <= 24"
+        "SELECT id, name, type FROM entities WHERE length(name) <= 64"
     ).fetchall()
     return _with_edge_counts(
-        con, [r for r in short if ontology.reference_name(r["name"] or "", cited=False)]
+        con, [r for r in short if ontology.reference_name(r["name"] or "")]
     )
 
 

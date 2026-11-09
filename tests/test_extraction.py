@@ -611,7 +611,6 @@ def test_a_number_the_text_refers_by_is_no_name_at_any_pass() -> None:
 
     for name in ("12", "[12]", "3, 4", "fig. 3", "Eq. (2)", "Table 4"):
         assert ontology.reference_name(name), name
-        assert ontology.reference_name(name, cited=False), name
         t = extraction.Triple(
             "A paper", "paper", "about", name, "concept", "EXTRACTED", "q"
         )
@@ -619,8 +618,7 @@ def test_a_number_the_text_refers_by_is_no_name_at_any_pass() -> None:
         assert review._placeholder(name)
     for name in ("ISMIR 2010", "DX7", "Figure 3 shows the rig", "Section"):
         assert not ontology.reference_name(name), name
-    # a citation where a title belongs: refused as a new name, but the heal
-    # pass, whose repair ends every edge of what it lists, leaves it
+    # a citation where a title belongs is no name either (the heal pass
+    # lists it, test_heal)
     assert ontology.reference_name("Smith et al. [12]")
-    assert not ontology.reference_name("Smith et al. [12]", cited=False)
     assert not hasattr(repair, "REFERENCE_NAME")

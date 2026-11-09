@@ -819,22 +819,18 @@ _BRACKETED = re.compile(r"\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]")
 BRACKETED_WORDS = 3  # a name around a bracketed reference of this many words
 
 
-def reference_name(name: str, *, cited: bool = True) -> bool:
+def reference_name(name: str) -> bool:
     """Whether a name is only a number the text refers by. Extraction drops
     such an end, the review rules on it and the heal pass lists the ones
     written before. Until 2026-11-09 each had a pattern of its own, so "Fig.
     3" was written by extraction and then listed by heal (structure review
-    finding 24). ``cited`` counts a short name around a bracketed reference
-    ("Smith et al. [12]", a citation where a title belongs) too; the heal
-    pass leaves it out, because its repair ends every edge of what it lists
-    and 365 entities of the library have that shape (2026-11-09)."""
+    finding 24). A short name around a bracketed reference ("Smith et al.
+    [12]", a citation where a title belongs) is one too."""
     plain = name.strip()
     if _NUMBERS.match(plain) or _NUMBERED.match(plain):
         return True
-    return (
-        cited
-        and bool(_BRACKETED.search(plain))
-        and len(_BRACKETED.sub("", plain).split()) <= BRACKETED_WORDS
+    return bool(_BRACKETED.search(plain)) and (
+        len(_BRACKETED.sub("", plain).split()) <= BRACKETED_WORDS
     )
 
 

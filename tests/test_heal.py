@@ -58,15 +58,16 @@ def test_placeholder_entities_are_found_and_their_edges_ended(
 
 def test_reference_numbers_and_unnamed_entities(con: sqlite3.Connection) -> None:
     _link(con, "[12]", "room acoustics")
+    _link(con, "Smith et al. [12]", "room acoustics")  # a citation for a title
     _link(con, "a whole citation as a name " * 20, "room acoustics")
     _link(con, "MIDI", "room acoustics")  # short, but a name
     assert (
         store.health(con, only=["reference-number-entities"])["ailments"][0]["count"]
-        == 1
+        == 2
     )
     assert store.health(con, only=["unnamed-entities"])["ailments"][0]["count"] == 1
     done = store.heal(con, only=["reference-number-entities", "unnamed-entities"])
-    assert done["reference-number-entities"]["repaired"] == 1
+    assert done["reference-number-entities"]["repaired"] == 2
     assert done["unnamed-entities"]["repaired"] == 1
     assert [e["src"] for e in store.traverse(con, "room acoustics")] == ["MIDI"]
 
