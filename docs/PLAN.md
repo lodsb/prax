@@ -334,7 +334,7 @@ against the code on 2026-11-08.
       `not_names:` lexicon section.
 - [x] 51 (2026-11-09, the log). ONNX sessions built five ways; the serving reranker skips the
       memory settings (invariant 7): `ml/onnx.session(path, section=)`.
-- [ ] 50. A prompt fitted to the context three ways, one parsing
+- [x] 50 (2026-11-09, the log). A prompt fitted to the context three ways, one parsing
       llama-server's error text: `models.ContextTooLong` raised by the
       runtime, caught by extraction and ask.
 - [ ] 48. The P(yes) judge written three times: one `Judge` in

@@ -739,14 +739,12 @@ class LocalExtractor:
         cut = 0
         try:
             text, usage = self._chat(system, doc, grammar)
-        except RuntimeError as exc:
+        except models.ContextTooLong as exc:
             # the server's slot is smaller than this prompt (a schematic's
             # symbols, a dense script tokenize far past four chars a
             # token): cut the text to the ratio the server states and ask
             # once more, rather than fail every pass
-            fit = _fits_after(str(exc))
-            if fit is None:
-                raise
+            fit = exc.keep()
             doc = DocumentInput(
                 doc.doc_id,
                 doc.title,
@@ -779,22 +777,6 @@ class LocalExtractor:
             temperature=self.temperature,
             repeat_penalty=self.repeat_penalty,
         )
-
-
-_EXCEEDS = re.compile(
-    r"request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)"
-)
-
-
-def _fits_after(error: str) -> float | None:
-    """The share of the text to keep after llama-server refused a prompt as
-    too long (its message carries both numbers), with room for the answer;
-    None when the error is another kind."""
-    m = _EXCEEDS.search(error)
-    if not m:
-        return None
-    asked, ctx = int(m.group(1)), int(m.group(2))
-    return max(0.1, min(0.9, (ctx * 0.85) / asked))
 
 
 def note_failure(

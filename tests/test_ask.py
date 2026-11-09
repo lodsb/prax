@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, store
+from prax import config, models, store
 from prax.answering import ask
 
 
@@ -142,10 +142,10 @@ def test_an_answer_too_long_for_the_slot_is_cut_to_fit(
         def chat(self, system: str, user: str, **kw: object):  # type: ignore[override]
             self.lengths.append(len(user))
             if len(self.lengths) == 1:
-                raise RuntimeError(
-                    "http://127.0.0.1:8080/v1/chat/completions: HTTP 400:"
-                    " request (9000 tokens) exceeds the available context"
-                    " size (8192 tokens)"
+                raise models.ContextTooLong(
+                    "request (9000 tokens) exceeds the available context",
+                    asked=9000,
+                    context=8192,
                 )
             return super().chat(system, user, **kw)
 
@@ -163,7 +163,6 @@ def test_bundle_only_without_backend(con: sqlite3.Connection) -> None:
 
 
 def test_backend_selection(monkeypatch: pytest.MonkeyPatch) -> None:
-    from prax import models
 
     for var in ("PRAX_ASK", "PRAX_ASK_MODEL", "PRAX_CONFIG"):
         monkeypatch.delenv(var, raising=False)

@@ -460,15 +460,13 @@ class LocalAnswerer:
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
         try:
             return self._answer(bundle)
-        except RuntimeError as exc:
+        except models.ContextTooLong as exc:
             # the slot cannot hold what was read: a token is nearer three
             # characters than four in dense text, so a surf that spent its
             # whole reading budget can overrun the context the budget was
             # derived from. Every passage keeps its number and its head,
             # shorter, so the answer still cites what it rests on.
-            fit = extraction._fits_after(str(exc))
-            if fit is None:
-                raise
+            fit = exc.keep()
             shorter = replace(
                 bundle,
                 passages=[

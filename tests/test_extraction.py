@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from prax import store
+from prax import models, store
 from prax.graph import extraction, ontology
 from prax.ml import pricing
 
@@ -301,12 +301,14 @@ class _TooBig:
     def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, int]]:
         self.calls.append(len(user))
         if len(self.calls) == 1:
-            raise RuntimeError(
+            raise models.ContextTooLong(
                 "http://127.0.0.1:8080/v1/chat/completions: HTTP 400:"
                 ' {"error":{"code":400,"message":"request (9816 tokens) exceeds the'
                 ' available context size (8192 tokens), try increasing it",'
                 '"type":"exceed_context_size_error","n_prompt_tokens":9816,'
-                '"n_ctx":8192}}'
+                '"n_ctx":8192}}',
+                asked=9816,
+                context=8192,
             )
         reply = (
             "summary\tA short one.\n"
@@ -328,6 +330,48 @@ def test_a_prompt_the_slot_cannot_hold_is_cut_to_fit_and_asked_again(
     # that ratio, with room to spare
     assert second < first * (8192 / 9816)
     assert result.usage.get("cut") == 1
+
+
+def test_the_servers_context_refusal_is_a_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Structure review 2026-11-07, finding 50: the overflow message was
+    read by extraction and borrowed by ask; the runtime that met it raises
+    ``models.ContextTooLong`` with both numbers, any other 400 stays
+    plain."""
+    import io
+    import urllib.error
+
+    def refusing(body: str) -> Any:
+        def urlopen(req: Any, timeout: float) -> Any:
+            raise urllib.error.HTTPError(
+                req.full_url,
+                400,
+                "Bad Request",
+                {},
+                io.BytesIO(body.encode()),  # type: ignore[arg-type]
+            )
+
+        return urlopen
+
+    monkeypatch.setattr(
+        models.urllib.request,
+        "urlopen",
+        refusing(
+            '{"error":{"message":"request (9816 tokens) exceeds the available'
+            ' context size (8192 tokens), try increasing it"}}'
+        ),
+    )
+    with pytest.raises(models.ContextTooLong) as caught:
+        models.post_json("http://127.0.0.1:8080/v1/chat/completions", {}, None)
+    assert (caught.value.asked, caught.value.context) == (9816, 8192)
+    assert caught.value.keep() == pytest.approx(8192 * 0.85 / 9816)
+    monkeypatch.setattr(
+        models.urllib.request, "urlopen", refusing('{"error":"bad grammar"}')
+    )
+    with pytest.raises(RuntimeError) as other:
+        models.post_json("http://127.0.0.1:8080/v1/chat/completions", {}, None)
+    assert not isinstance(other.value, models.ContextTooLong)
 
 
 def test_a_failed_extraction_is_remembered_and_not_retried_every_pass(

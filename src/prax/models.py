@@ -40,6 +40,7 @@ import base64
 import contextlib
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -140,6 +141,38 @@ class ServerNotReady(RuntimeError):
     "Loading model" for a minute or three after a start) or is not
     answering at all: the call was not wrong, it was early. A worker leaves
     the request waiting and tries later."""
+
+
+# llama-server's refusal of a prompt longer than its slot (an HTTP 400)
+_EXCEEDS = re.compile(
+    r"request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)"
+)
+
+
+class ContextTooLong(RuntimeError):
+    """The server's slot is smaller than the prompt, with both numbers:
+    ``asked`` tokens against a ``context`` of so many. Parsed once, here,
+    from llama-server's message (``of``); until 2026-11-09 extraction read
+    the message and ask borrowed its private parser (structure review
+    finding 50). A caller that can make its prompt shorter catches it."""
+
+    def __init__(self, message: str, *, asked: int, context: int) -> None:
+        super().__init__(message)
+        self.asked = asked
+        self.context = context
+
+    @classmethod
+    def of(cls, message: str) -> ContextTooLong | None:
+        """The error a server message says, or None for another kind."""
+        m = _EXCEEDS.search(message)
+        if not m:
+            return None
+        return cls(message, asked=int(m.group(1)), context=int(m.group(2)))
+
+    def keep(self, room: float = 0.85) -> float:
+        """The share of a text to keep so the prompt fits, with ``room``
+        of the context left over for the answer; between 0.1 and 0.9."""
+        return max(0.1, min(0.9, (self.context * room) / self.asked))
 
 
 # ------------------------------------------------------------------ file
@@ -529,7 +562,8 @@ def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]
         detail = exc.read().decode("utf-8", errors="replace")[:300]
         if exc.code == 503:  # llama-server for a minute or three after a start
             raise ServerNotReady(f"{url}: HTTP 503: {detail}") from exc
-        raise RuntimeError(f"{url}: HTTP {exc.code}: {detail}") from exc
+        message = f"{url}: HTTP {exc.code}: {detail}"
+        raise (ContextTooLong.of(message) or RuntimeError(message)) from exc
     except urllib.error.URLError as exc:
         raise ServerNotReady(f"{url}: not answering ({exc.reason})") from exc
     except ConnectionError as exc:

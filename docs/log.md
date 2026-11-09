@@ -10440,3 +10440,28 @@ kept onnxruntime's default arena (`keep`).
 - Test: a reranker's session gets its section's threads and arena, one
   without a section stays on the CPU, and no module of `prax.ml` but
   `sessions` calls `InferenceSession(`.
+
+## 2026-11-09: a prompt too long for the server's slot is a typed error
+
+Finding 50 of the structure review. When llama-server refuses a prompt
+longer than its slot, its HTTP 400 says "request (N tokens) exceeds the
+available context size (M tokens)". Extraction read that message with a
+pattern of its own (`_EXCEEDS`, `_fits_after`) to cut the text and ask
+once more, and ask borrowed the private parser to shorten its passages.
+The runtime that met the error raised a plain `RuntimeError`.
+
+- `models.post_json` raises `models.ContextTooLong` for that refusal,
+  with `asked` and `context`, the two numbers. `ContextTooLong.of` is
+  the one parse and `keep()` the share of a text to keep (0.85 of the
+  context over what was asked, between 0.1 and 0.9, as before). Any other
+  400 stays a plain `RuntimeError`, and `ContextTooLong` is one, so every
+  `except RuntimeError` still catches it.
+- Extraction and ask catch the type; `_EXCEEDS` and `_fits_after` go.
+- Left as the review's check found them: `writing.sections` counts tokens
+  before it asks and the surf works from character budgets. Both prevent
+  an overflow rather than recover from one. The other steps fail an item
+  on it as before; a step that can shorten its prompt may now catch the
+  type.
+- Test: a 400 with the message becomes `ContextTooLong` with both
+  numbers, another 400 does not; the extraction and ask tests raise the
+  type.
