@@ -329,7 +329,7 @@ against the code on 2026-11-08.
 - [x] 10 (2026-11-09, the log). A document's domain set decoded in seven places with two
       rules for an empty set: all through `decode_domains`, and
       `domain_sets(con)` under `domain_clause` and the counters.
-- [ ] 24. "Not a real name" judged in four places with three
+- [x] 24 (2026-11-09, the log; the 365 "Surname [N]" entities wait for the owner). "Not a real name" judged in four places with three
       reference-number patterns: `ontology.not_a_name` reading a
       `not_names:` lexicon section.
 - [ ] 51. ONNX sessions built five ways; the serving reranker skips the

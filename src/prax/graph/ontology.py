@@ -803,6 +803,41 @@ def _folded(name: str) -> str:
     return " " + " ".join(_FOLD.sub(" ", name.lower()).split()) + " "
 
 
+# A number a text refers by is never a name: a bare one or a run of them
+# ("12", "3, 4"), a reference, figure, table, equation, section or chapter
+# number ("[12]", "fig. 3", "eq. (2)"), and a short name around a bracketed
+# reference ("supporting document [34]")
+_NUMBERS = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
+_NUMBERED = re.compile(
+    r"^(?:\[|\()?\s*"
+    r"(?:ref\.?|reference|fig\.?|figure|table|eq\.?|equation|section|sec\.?"
+    r"|chapter|ch\.?)"
+    r"\s*\(?\d{1,4}(?:\s*[-–,]\s*\d{1,4})?\)?\s*(?:\]|\))?$",
+    re.IGNORECASE,
+)
+_BRACKETED = re.compile(r"\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]")
+BRACKETED_WORDS = 3  # a name around a bracketed reference of this many words
+
+
+def reference_name(name: str, *, cited: bool = True) -> bool:
+    """Whether a name is only a number the text refers by. Extraction drops
+    such an end, the review rules on it and the heal pass lists the ones
+    written before. Until 2026-11-09 each had a pattern of its own, so "Fig.
+    3" was written by extraction and then listed by heal (structure review
+    finding 24). ``cited`` counts a short name around a bracketed reference
+    ("Smith et al. [12]", a citation where a title belongs) too; the heal
+    pass leaves it out, because its repair ends every edge of what it lists
+    and 365 entities of the library have that shape (2026-11-09)."""
+    plain = name.strip()
+    if _NUMBERS.match(plain) or _NUMBERED.match(plain):
+        return True
+    return (
+        cited
+        and bool(_BRACKETED.search(plain))
+        and len(_BRACKETED.sub("", plain).split()) <= BRACKETED_WORDS
+    )
+
+
 def part_of_suspect(
     onto: Ontology, src: str, src_type: str, dst: str, dst_type: str
 ) -> tuple[str, str] | None:

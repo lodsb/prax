@@ -10343,3 +10343,43 @@ type's own domains where it should have been everywhere.
 - One full run failed `test_readers.py::test_a_companion_moves_with_its_role_in_a_swap`
   while a busy-wait loop of mine held a core; it passed alone three
   times, and the suite again whole.
+
+## 2026-11-09: a number the text refers by is no name, at every pass
+
+Finding 24 of the structure review. Three passes judged "this name is
+only a reference number" with three patterns. Extraction knew bare
+numbers (`^\W*\d+(\W+\d+)*\W*$`). The review knew a short name around a
+bracketed reference. The heal pass's `REFERENCE_NAME` also knew "fig.
+3", "eq. 2" and "table 4". So extraction wrote "Fig. 3" as an entity
+and heal then listed it.
+
+- `ontology.reference_name(name, *, cited=True)` is the one test: a
+  bare number or a run of them, a reference, figure, table, equation,
+  section or chapter number ("eq. (2)" as well), and, with `cited`, a
+  name of at most `BRACKETED_WORDS` (3) words around a bracketed
+  reference ("Smith et al. [12]"). Extraction's `_drop_reason` and
+  `noise_reason`, the review's `_placeholder` and the heal pass's
+  `reference-number-entities` call it. `REFERENCE_NAME` and the two
+  private patterns go.
+- Extraction is stricter from now on. It drops an end named "Fig. 3"
+  or "Smith et al. [12]" where it wrote one before.
+- The heal pass asks with `cited=False`. Its repair ends every edge of
+  what it lists, and on the live store (counted read-only) 365 entities,
+  nearly all typed paper or document, are named "Surname [N]" or
+  "Surname et al. [N]": citations where a title belongs. Ending their
+  edges is the owner's decision, and it is not made here. With
+  `cited=False` the ailment lists 71 entities where it listed 55, none
+  dropped. The 16 new ones are prices, dates, an ISBN and a phone number
+  typed as spec, place, event or organization, which extraction had
+  refused already. `prax heal` is run by hand, so nothing is ended until
+  someone repairs.
+- The placeholder words (`store.PLACEHOLDER_NAMES`) are one list
+  already, shared by extraction and review. Moving them to the lexicon
+  is left.
+- Test: the shapes each pass refuses alike, the names it keeps, and a
+  citation refused as a new name but left to the heal pass.
+- The review now reads a bare number as no name, so an untyped
+  `date: 2004` was dropped as `placeholder-name` before
+  `attribute-not-relation` was asked (`test_typing_rules` said so). An
+  attribute is asked about first: both drop, and the attribute is the
+  better reason.

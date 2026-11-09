@@ -88,17 +88,6 @@ PLACEHOLDER_NAMES = frozenset(
 )
 
 
-# A bracketed reference number is never a name (the ontology says so in as
-# many words); neither is a figure, table or equation number on its own.
-REFERENCE_NAME = re.compile(
-    r"^(?:\[|\()?\s*"
-    r"(?:ref\.?|reference|fig\.?|figure|table|eq\.?|equation|section|sec\.?"
-    r"|chapter|ch\.?)?"
-    r"\s*\d{1,4}(?:\s*[-–,]\s*\d{1,4})?\s*(?:\]|\))?$",
-    re.IGNORECASE,
-)
-
-
 # Markup and line breaks a citation importer leaves in a title, as in
 # "<i>The Origins of Music</i>" or a title broken across the lines of
 # the XML it came from, indentation and all.
@@ -201,7 +190,7 @@ def _reference_entities(con: sqlite3.Connection) -> list[dict[str, Any]]:
         "SELECT id, name, type FROM entities WHERE length(name) <= 24"
     ).fetchall()
     return _with_edge_counts(
-        con, [r for r in short if REFERENCE_NAME.match((r["name"] or "").strip())]
+        con, [r for r in short if ontology.reference_name(r["name"] or "", cited=False)]
     )
 
 

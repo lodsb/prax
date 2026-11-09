@@ -600,3 +600,27 @@ def test_the_places_pass_fills_what_was_written_before(
     ).fetchall()
     assert rows[0][1] is not None and rows[1][1] is None and rows[1][2]
     assert store.maintain(con, only=["places"])["places"]["documents"] == 0
+
+
+def test_a_number_the_text_refers_by_is_no_name_at_any_pass() -> None:
+    """Structure review 2026-11-07, finding 24: extraction, the review and
+    the heal pass each had a pattern of their own, so "Fig. 3" was written
+    by the first and listed by the last."""
+    from prax.graph import review
+    from prax.store.repair import graph as repair
+
+    for name in ("12", "[12]", "3, 4", "fig. 3", "Eq. (2)", "Table 4"):
+        assert ontology.reference_name(name), name
+        assert ontology.reference_name(name, cited=False), name
+        t = extraction.Triple(
+            "A paper", "paper", "about", name, "concept", "EXTRACTED", "q"
+        )
+        assert extraction._drop_reason(t) == "a reference number for a name"
+        assert review._placeholder(name)
+    for name in ("ISMIR 2010", "DX7", "Figure 3 shows the rig", "Section"):
+        assert not ontology.reference_name(name), name
+    # a citation where a title belongs: refused as a new name, but the heal
+    # pass, whose repair ends every edge of what it lists, leaves it
+    assert ontology.reference_name("Smith et al. [12]")
+    assert not ontology.reference_name("Smith et al. [12]", cited=False)
+    assert not hasattr(repair, "REFERENCE_NAME")

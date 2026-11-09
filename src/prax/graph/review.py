@@ -176,7 +176,6 @@ _NOT_A_NAME = re.compile(r"not stated|unknown|/|\bn\.?d\.?\b|^\W*$", re.IGNORECA
 _NOT_A_THING_SHAPE = re.compile(
     r"^(comment: \d+ pages?|fig(ure)?\.? ?\d)", re.IGNORECASE
 )
-_REFNUM = re.compile(r"\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]")
 
 
 def _placeholder(name: str) -> bool:
@@ -185,7 +184,7 @@ def _placeholder(name: str) -> bool:
     "supporting document [34]", a bare URL, an empty pattern."""
     low = " ".join(name.lower().split())
     c = cues()
-    if _REFNUM.search(name) and len(_REFNUM.sub("", name).split()) <= 3:
+    if ontology.reference_name(name):
         return True
     return (
         low in store.PLACEHOLDER_NAMES
@@ -450,12 +449,13 @@ def decide_unmapped(
     title, own = (doc or ("", "paper"))[:2]
     if title and src.lower() in ("paper", "this paper", "the paper", "document"):
         src = title
+    # an attribute first: its value ("2004") is often no name either
+    if rel in ATTRIBUTES:
+        return "drop", [], "attribute-not-relation"
     if _placeholder(src) or _placeholder(dst):
         return "drop", [], "placeholder-name"
     if rel in ("unknown", ""):  # related_to stays: the queue is its evidence
         return "drop", [], "no-relation"
-    if rel in ATTRIBUTES:
-        return "drop", [], "attribute-not-relation"
     rule = UNMAPPED_RULES.get(rel)
     if rule is None:
         return _OPEN

@@ -49,9 +49,6 @@ _TAIL_HEADING = re.compile(
 TAIL_MARK = "\n\n[...]\n\n"
 MAX_TRIPLES = 20  # the models rarely need more; halves output tokens (docs/eval)
 CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
-# Names that are only a number or a bracketed reference ("[12]") are never
-# entities; small models produce them for "cites".
-_REFERENCE_NUMBER = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
 # What a small model writes for the document itself instead of its title.
 _SELF_NAMES = frozenset(
     {
@@ -87,7 +84,7 @@ def noise_reason(item: dict[str, Any]) -> str | None:
     hedges."""
     dst = str(item.get("dst", ""))
     if item.get("rel") == "cites" and (
-        _REFERENCE_NUMBER.match(dst) or _AUTHOR_YEAR.search(dst)
+        ontology.reference_name(dst) or _AUTHOR_YEAR.search(dst)
     ):
         return "a citation without a title"
     if _HEDGED.search(str(item.get("reason", ""))):
@@ -882,7 +879,7 @@ def _drop_reason(t: Triple) -> str | None:
         return "an end without a name"
     if t.confidence not in CONFIDENCES:
         return "a confidence that is not one"
-    if _REFERENCE_NUMBER.match(t.src) or _REFERENCE_NUMBER.match(t.dst):
+    if ontology.reference_name(t.src) or ontology.reference_name(t.dst):
         return "a reference number for a name"
     if _placeholder(t.src) or _placeholder(t.dst):
         return "a placeholder for a name"
