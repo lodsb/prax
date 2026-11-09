@@ -10493,3 +10493,26 @@ so `[a, b]` under `steps.adjudicate.platt` was a `TypeError`.
   P(yes), and the existing tests of each judge pass unchanged.
 - Test: `Platt.of` reads both shapes, an adjudicator given `[a, b]`
   calibrates as with `{a, b}`, `p_yes` reads the top tokens.
+
+## 2026-11-09: the bulk reading selection, said once
+
+Finding 45 of the structure review. `POST /readings/bulk` (the Admin
+page's "text checks" button and the Jobs page's bulk re-read) listed its
+15 filters three times: the request's fields, the test that any is set,
+and the 400's message. A fourth list was the call to
+`store.select_for_reading`. A filter the store took but the "any set"
+test missed was refused.
+
+- `api.process.ReadingSelection` holds the filters. `BulkReadingReq`
+  inherits it and adds the extractor, mode, limit, dry run and `by`.
+  `selection()` is the keywords for `select_for_reading`, `chosen()`
+  whether any is set (a list, a word, a flag or a number, 0 too: `thin`
+  and `maths` were `is not None` before), and the message names the
+  fields.
+- Flat, not nested as the review proposed: the request's JSON stays the
+  same, so the UI and the CLI change nothing.
+- Left: the CLI (`prax_cli.running.reread`) builds the body from its own
+  flags. It is a client of the door and imports none of it, so it cannot
+  share the model. It has no `--finding`.
+- Test: the store's keywords, but for `con`, `fixed_by` and `limit`, are
+  the selection's fields, and `chosen()` holds for a flag or a 0.

@@ -339,7 +339,7 @@ against the code on 2026-11-08.
       runtime, caught by extraction and ask.
 - [x] 48 (2026-11-09, the log; no `Judge` class, see there). The P(yes) judge written three times: one `Judge` in
       `graph.calibration` with Platt and the thread pool.
-- [ ] 45. The bulk reading selection listed four times: a nested
+- [x] 45 (2026-11-09, the log; flat, not nested). The bulk reading selection listed four times: a nested
       `ReadingSelection` model the CLI sends too.
 - [ ] 43. A step's facts in seven registries that disagree for pack
       steps: `SERVER_READINGS`, `models.STEPS` and `CORE_STEPS` derived.

@@ -282,11 +282,13 @@ def request_reading(doc_id: int, req: ReadingReq, request: Request) -> dict[str,
     )
 
 
-class BulkReadingReq(BaseModel):
-    # one of store.READINGS; none with ``finding``: the fix each document's
-    # finding names, with its mode (an arXiv id, marker's OCR)
-    extractor: str | None = None
-    mode: str | None = None  # store.MODES
+class ReadingSelection(BaseModel):
+    """Which documents a bulk reading is asked for: the keywords of
+    ``store.select_for_reading``, each narrowing the last. A filter is a
+    field here and nowhere else in the route (structure review finding 45:
+    the route listed them three times, and a filter missing from one list
+    was refused)."""
+
     ids: list[int] | None = None
     mime: str | None = None  # a type or a prefix: application/pdf, image/
     text_source: str | None = None  # a stamp prefix: what an old extractor read
@@ -302,6 +304,25 @@ class BulkReadingReq(BaseModel):
     unread_formulas: bool = False
     maths: float | None = None  # references to numbered equations per 10k characters
     finding: str | None = None  # what the checks found: maths-as-text, ocr-layer…
+
+    def selection(self) -> dict[str, Any]:
+        """The filters as ``select_for_reading`` takes them."""
+        return {name: getattr(self, name) for name in ReadingSelection.model_fields}
+
+    def chosen(self) -> bool:
+        """Whether any filter is set: a list, a word or a flag, or a
+        number (0 too)."""
+        return any(
+            v is not None and v is not False and v != [] and v != ""
+            for v in self.selection().values()
+        )
+
+
+class BulkReadingReq(ReadingSelection):
+    # one of store.READINGS; none with ``finding``: the fix each document's
+    # finding names, with its mode (an arXiv id, marker's OCR)
+    extractor: str | None = None
+    mode: str | None = None  # store.MODES
     limit: int | None = None
     dry_run: bool = False  # count, place nothing
     by: str = "human"
@@ -327,47 +348,13 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         if req.extractor not in store.READINGS:
             raise HTTPException(400, f"extractor must be one of {store.READINGS}")
         store.check_mode(req.extractor, req.mode)
-    if not (
-        req.ids
-        or req.mime
-        or req.text_source
-        or req.title
-        or req.unreadable
-        or req.thin is not None
-        or req.doctype
-        or req.unpolished
-        or req.read_figures
-        or req.unread_figures
-        or req.bare_captions
-        or req.read_formulas
-        or req.unread_formulas
-        or req.maths is not None
-        or req.finding
-    ):
+    if not req.chosen():
         raise HTTPException(
-            400,
-            "a selection: ids, mime, text_source, title, unreadable, thin,"
-            " doctype, unpolished, read_figures, unread_figures, bare_captions,"
-            " read_formulas,"
-            " unread_formulas, maths or finding",
+            400, "a selection: " + ", ".join(ReadingSelection.model_fields)
         )
     ids = store.select_for_reading(
         con,
-        ids=req.ids,
-        mime=req.mime,
-        text_source=req.text_source,
-        title=req.title,
-        unreadable=req.unreadable,
-        thin=req.thin,
-        doctype=req.doctype,
-        unpolished=req.unpolished,
-        read_figures=req.read_figures,
-        unread_figures=req.unread_figures,
-        bare_captions=req.bare_captions,
-        read_formulas=req.read_formulas,
-        unread_formulas=req.unread_formulas,
-        maths=req.maths,
-        finding=req.finding,
+        **req.selection(),
         # a finding is asked for by the reading it names: the crops
         # that ran and filled nothing are not asked again. A reading
         # no check names is the asker's own choice, over all of them

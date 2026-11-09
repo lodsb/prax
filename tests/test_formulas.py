@@ -224,3 +224,18 @@ def test_a_reading_request_through_the_door(data_dir: Path) -> None:
         rows = chunks if isinstance(chunks, list) else chunks["chunks"]
         assert sum(1 for c in rows if c["kind"] == "formula") == 2
         assert store.select_for_reading(store.connect(), unread_formulas=True) == []
+
+
+def test_the_bulk_selection_is_the_stores(data_dir: Path) -> None:
+    """Structure review 2026-11-07, finding 45: the route listed its
+    filters three times (fields, the "any set" test, the message), and a
+    filter the store took but one list missed was refused."""
+    import inspect
+
+    from prax.api.process import BulkReadingReq, ReadingSelection
+
+    taken = set(inspect.signature(store.select_for_reading).parameters)
+    assert taken - {"con", "fixed_by", "limit"} == set(ReadingSelection.model_fields)
+    assert BulkReadingReq(extractor="crops", bare_captions=True).chosen()
+    assert BulkReadingReq(thin=0).chosen() and BulkReadingReq(maths=0.0).chosen()
+    assert not BulkReadingReq(extractor="crops", ids=[], title="").chosen()
