@@ -855,3 +855,30 @@ def test_a_load_time_is_noted_and_kept(
     assert again.state["llama-server"]["load_s"] == 175.0
     status = _read_status(data_dir)
     assert status["roles"]["llama-server"]["load_s"] is not None
+
+
+def test_a_roles_state_changes_by_its_named_transitions(data_dir: Path) -> None:
+    # the four sets change only through the transitions (structure review
+    # finding 23); only a person's start, a restart or a loan to the role
+    # lifts a person's hold
+    sup = up.Supervisor([up.Role("llama-server", ["x"])], data_dir=data_dir)
+    name = "llama-server"
+
+    def sets() -> tuple[bool, bool, bool]:
+        return (name in sup.paused, name in sup.held, name in sup.idled)
+
+    sup._stop_role(name)
+    assert sets() == (True, True, False)
+    sup._start_roles([name])
+    assert sets() == (False, False, False)
+    sup._quieted(name)
+    assert sets() == (True, False, True)
+    sup._wake(name)  # work asked for it
+    assert sets() == (False, False, False)
+    sup._quieted(name)
+    sup._stop_role(name)  # a person's stop is not quiet
+    assert sets() == (True, True, False)
+    sup._restart_roles([name])
+    assert sets() == (False, False, False) and name in sup.restart_now
+    sup._lend_to(name)
+    assert name not in sup.restart_now

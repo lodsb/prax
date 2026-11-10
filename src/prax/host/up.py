@@ -460,6 +460,55 @@ class Supervisor:
                 else [str(name)]
             )
 
+    # -- a role's state: the transitions, each said once
+    #
+    # Four sets say it, and they are not exclusive: ``paused`` is any role
+    # told to stay down, ``held`` the ones a person stopped and ``idled``
+    # the ones stopped for being quiet (both are paused too), and
+    # ``restart_now`` a restart asked for, read once by the role's loop.
+    # Each change of them is one of the methods below (structure review
+    # finding 23: they were 22 hand-written adds and discards, and one
+    # that marked a role paused but not held started it again, 2026-10-12)
+
+    def _end_running(self, name: str) -> None:
+        """End the role's process when it has one that runs."""
+        proc = self.procs.get(name)
+        if proc is not None and proc.poll() is None:
+            self._end(name, proc)
+
+    def _hold(self, name: str) -> None:
+        """Stopped by a person: down until a person starts it."""
+        self.paused.add(name)
+        self.held.add(name)
+        self.idled.discard(name)  # stopped by a person, not for quiet
+
+    def _release(self, name: str) -> None:
+        """Started by a person: none of the reasons to stay down holds."""
+        self.idled.discard(name)
+        self.paused.discard(name)
+        self.held.discard(name)
+
+    def _quieted(self, name: str) -> None:
+        """Stopped for being quiet, until work asks for it."""
+        self.idled.add(name)
+        self.paused.add(name)
+
+    def _wake(self, name: str) -> None:
+        """Back from quiet or from a loan; a person's hold stays."""
+        self.idled.discard(name)
+        self.paused.discard(name)
+
+    def _pause(self, name: str) -> None:
+        """Down for a swap: the card lent to another, or given back."""
+        self.paused.add(name)
+
+    def _lend_to(self, name: str) -> None:
+        """The borrower of a swap and its companions: up, whatever held
+        them, and no restart pending."""
+        self.paused.discard(name)
+        self.held.discard(name)
+        self.restart_now.discard(name)
+
     def _stop_role(self, name: str) -> None:
         """A role, and the companions that move with it, stopped until a
         person starts them again."""
@@ -468,12 +517,8 @@ class Supervisor:
             return
         for one in self._party(name):
             self._say(f"{one}: asked to stop until started again")
-            self.paused.add(one)
-            self.held.add(one)
-            self.idled.discard(one)  # stopped by a person, not for quiet
-            proc = self.procs.get(one)
-            if proc is not None and proc.poll() is None:
-                self._end(one, proc)
+            self._hold(one)
+            self._end_running(one)
 
     def _start_roles(self, names: list[str]) -> None:
         for one in names:
@@ -481,9 +526,7 @@ class Supervisor:
                 self._say(f"no role named {one}")
             elif one in self.paused:
                 self._say(f"{one}: asked to start")
-                self.idled.discard(one)
-                self.paused.discard(one)
-                self.held.discard(one)
+                self._release(one)
             else:
                 self._say(f"{one}: not stopped")
 
@@ -492,13 +535,9 @@ class Supervisor:
             if name not in self.state:
                 self._say(f"no role named {name}")
                 continue
+            self._release(name)  # a restart of a paused role starts it
             self.restart_now.add(name)
-            self.idled.discard(name)
-            self.paused.discard(name)  # a restart of a paused role starts it
-            self.held.discard(name)
-            proc = self.procs.get(name)
-            if proc is not None and proc.poll() is None:
-                self._end(name, proc)
+            self._end_running(name)
 
     # -- a model server that has loaded, and one that has been quiet
 
@@ -626,8 +665,7 @@ class Supervisor:
                     if self._crowded(role):
                         continue  # the card is another member's: a swap, by the plan
                     self._say(f"{name}: work waits for it; loading again")
-                    self.idled.discard(name)
-                    self.paused.discard(name)
+                    self._wake(name)
                 continue
             with self.lock:
                 up = self.state[name]["state"] == "up"
@@ -651,11 +689,8 @@ class Supervisor:
                     f"{name}: nothing for {quiet / 60:.0f} min; stopped until"
                     " work asks for it"
                 )
-                self.idled.add(name)
-                self.paused.add(name)
-                proc = self.procs.get(name)
-                if proc is not None and proc.poll() is None:
-                    self._end(name, proc)
+                self._quieted(name)
+                self._end_running(name)
 
     # -- the groups: roles that compete for one resource (the card)
 
@@ -761,10 +796,8 @@ class Supervisor:
         fits = self._fits(role)
         if not fits:
             for name in was_up:
-                self.paused.add(name)
-                proc = self.procs.get(name)
-                if proc is not None and proc.poll() is None:
-                    self._end(name, proc)
+                self._pause(name)
+                self._end_running(name)
         self.groups[group] = {
             "holder": to,
             "was_up": was_up,
@@ -774,9 +807,7 @@ class Supervisor:
             "quiet_since": None,
         }
         for one in party:  # the borrower and its companions
-            self.paused.discard(one)
-            self.held.discard(one)
-            self.restart_now.discard(one)
+            self._lend_to(one)
         how = "beside" if fits else "instead of"
         others = ", ".join(was_up) or "nothing"
         self._say(f"{group}: {to} takes it {how} {others} (back when {back_when})")
@@ -823,15 +854,12 @@ class Supervisor:
         role = next((r for r in self.roles if r.name == holder), None)
         if role is not None and (role.on_demand or holder not in loan["was_up"]):
             for one in self._party(holder):
-                self.paused.add(one)
-                proc = self.procs.get(one)
-                if proc is not None and proc.poll() is None:
-                    self._end(one, proc)
+                self._pause(one)
+                self._end_running(one)
         for name in loan["was_up"]:
             if name in self.held:
                 continue  # stopped by a person while it was lent away
-            self.paused.discard(name)
-            self.idled.discard(name)  # one that waited, idle, for the card
+            self._wake(name)  # one that waited, idle, for the card
         back = ", ".join(loan["was_up"]) or "nothing"
         self._say(f"{group}: {holder} gives it back to {back} ({why})")
         self._record_swap("back", group, holder, list(loan["was_up"]), why)

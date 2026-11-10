@@ -10685,3 +10685,28 @@ did the opposite, keeping what held, with a diff of its own.
   reference list read again keeps its two citations, and an entry gone
   ends one; `sync_facts` keeps, adds on a changed quote, defers to
   another reading's fact, counts a repeat once, and ends only its own.
+
+## 2026-11-10: the supervisor's role transitions, each said once
+
+Finding 23 of the structure review. `prax up` keeps a role's state in
+four sets: `paused` (told to stay down), `held` (a person stopped it),
+`idled` (stopped for being quiet) and `restart_now` (a restart asked
+for). Stop, start, restart, idle, swap and give-back each changed two to
+four of them by hand, 22 adds and discards. The bug of 2026-10-12 was
+one of them: a role only marked paused, not held, was started again.
+
+- Each change is a named method of `Supervisor`: `_hold` (a person's
+  stop), `_release` (a person's start, and a restart's), `_quieted`
+  (stopped for quiet), `_wake` (back from quiet or a loan; a person's
+  hold stays), `_pause` (down for a swap) and `_lend_to` (the borrower
+  and its companions up). `_end_running` ends a role's process when it
+  runs. Each method changes exactly what its call sites changed, so the
+  behaviour is the same.
+- The sets stay, not the review's enum: they are not exclusive (a held
+  or idled role is paused too), the status file and the loop read them,
+  and an enum would need the same rules to translate back.
+  (`_idle` was taken already: the quiet check.)
+- The supervisor itself runs the code it started with; this reaches the
+  host when `prax up` is started again, not with a role's restart.
+- Test: the transitions in turn on one role, a person's stop and start,
+  quiet and wake, a restart and a loan.

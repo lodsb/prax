@@ -371,7 +371,7 @@ against the code on 2026-11-08.
       kept and ended.
 - [x] 20 (2026-11-10, the log; `schedule.NAMES` stays, held by a test). A door job registered in five places: one `DoorJob`
       registry in `api/passes.py`, every job thread through `run_as_job`.
-- [ ] 23. The supervisor's role state as four parallel sets changed at
+- [x] 23 (2026-11-10, the log; named transitions over the sets, no enum). The supervisor's role state as four parallel sets changed at
       22 sites: one `RoleState` with an enum and its transitions.
 - [ ] 2 (the rest), with the decision it needs. `retire_document` ends
       a document's edges with a raw UPDATE and no record, and the repairs
