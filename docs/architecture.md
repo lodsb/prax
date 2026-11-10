@@ -463,7 +463,7 @@ edge_premises    edge_id, premise_id   (what a rule-derived edge follows from)
 edge_conflicts   id, edge_a, edge_b, rel, producer, run, found_at, ended_at
                  (two facts of a functional relation that cannot both hold)
 edge_endings     edge_id, run, ended_at, restated_as, corrected_by
-                 (the edges a repair ended, so restore_run undoes it whole)
+                 (the edges a repair or a retirement ended, so restore_run undoes it whole)
 review_queue     triples the extractor could not fit, with reason, evidence, resolution
 entity_candidates a, b, type, score, producer, at, decided, decided_by, held
                  (the likely tier's pairs, kept until something decides them)
@@ -685,7 +685,7 @@ the audit of which repairs have earned their prevention.
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |
 | retire a producer's earlier reading of one document | happens in `extraction.apply()` through `store.retire_reading` when the same producer re-reads it under another ontology subset or version; `retire_run` for a whole producer or pass |
 | put a document in a domain (which ontology modules it is read against) | `store.set_domains` / `add_domain` / `remove_domain` (`meta.domains`; the document page's "domains…", `PUT /doc/{id}/domains`, the `set_domains` MCP tool) or the `domains:` rules in prax.yaml through the `domains` pass of `prax maintain`; extraction builds prompt, grammar and schema for `ontology.for_domains(doc.domains)` and stamps the subset's version; a document whose subset's version moved is re-selected by the extract step in scope `all`, and one whose set was changed by hand under an extraction at once (`extraction_stale`, first in the queue; the new reading retires the old) |
-| retire a document, or find the duplicate captures | `store.retire_document` / `unretire_document` ("retire…" on the document page, `POST /doc/{id}/retire`); `store.dedupe_captures` (the `dedupe` pass of `prax maintain`) by chunk fingerprint per URL; a new capture is compared with the earlier ones before it is registered (`prax.capture.inbox`) |
+| retire a document, or find the duplicate captures | `store.retire_document` / `unretire_document`, its edges ended under `meta.retired.run` and stated again by the undo ("retire…" on the document page, `POST /doc/{id}/retire`); `store.dedupe_captures` (the `dedupe` pass of `prax maintain`) by chunk fingerprint per URL; a new capture is compared with the earlier ones before it is registered (`prax.capture.inbox`) |
 | see what runs on the batch host | `GET /jobs`, the Jobs view; a pass wraps itself in `store.Job` (`jobs` table, migration 0009); `prax up --status` for the processes themselves |
 | keep the processes running, on any host | `run:` in `prax.yaml` and `prax up` (`prax.host.up`); `prax up --install` for the login entry (`prax.host.autostart`); `--stop <role>` / `--start <role>` to pause one (the card free for an hour) — a new role is a `Role` built in `prax.host.roles` with its command and health URL |
 | run something on the door at an hour | an entry name in `prax.host.schedule.NAMES`, a starter in `prax.api.passes` and its binding in the clock of `prax.api`; the endpoint's own code starts the job, the jobs table remembers |

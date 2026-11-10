@@ -10856,3 +10856,52 @@ The times are of a desktop running the test suite beside it.
 - Test: forty documents of another domain that match better leave a
   small domain's page of ten full, in hybrid and keyword mode. Against
   the old code the page was empty.
+
+## 2026-11-10: a retirement taken back with its facts
+
+Structure review finding 2, with the owner's answer to its question: an
+undo states the ended edges again under new ids and moves what held the
+old ids onto them (option a of four).
+
+`retire_document` ended a document's edges with a plain UPDATE and kept
+no record, and `unretire_document` brought the index back but not the
+edges: "a new extraction pass re-reads it", which for a page or a
+synced note never comes. The heal's `_repair_edges` and
+`_repair_entities` (six ailments) ended edges with no run, so no undo
+could reach them.
+
+- The record of an ending and its undo moved to `store.base`
+  (`_end_edges`, `END_BATCH`, `_restore_run`), because the documents
+  part comes before the graph in the store's order and a retirement
+  ends edges too. `graph.edges` imports them; `restore_run` is
+  `_restore_run` serialized and committed, its answer unchanged.
+- A retirement ends its edges under a run (`retire-<at>-<doc>-<hex>`,
+  or the clean-up's when a clean-up retires a set), kept as
+  `meta.retired.run`, a key `DocumentMeta` already declared.
+  `unretire_document` runs `_restore_run` over it and answers how many
+  edges it stated again (`edges`). A retirement from before today has no
+  run and brings no edges back, as before.
+- `_move_references`, run by every `restore_run`: for each ended edge
+  and its restatement, a live derivation's premise, an open conflict's
+  side, a face's live answer and an import's held edge move to the new
+  id, and a derivation that is stated again gets its old one's premises.
+  History stays: an ended derivation, a closed conflict, a taken-back
+  answer and `edge_endings` name the edge they named. The review items
+  hold names, not edge ids, so nothing there moves.
+- The clean-up pass passes its run to `retire_document` instead of
+  ending the edges first and writing the run into the meta after. Its
+  list of runs reads `cleanup-` runs only, since every retirement has a
+  run now, and `restore_set` counts what the unretires stated again.
+- The heal's two repairs end under `heal:edges:<at>` and
+  `heal:entities:<at>`, which `restore_run` takes back.
+- Not done: the finding's last sentence, the before-values of a
+  document decision in one run-record helper. Only the media decision
+  keeps them (`_set_sensitivity` with a run); a domains decision has no
+  run or bulk undo, so a helper would have one user.
+- An edge a duplicate's retirement moved to its keeper stays the
+  keeper's after an undo, as `undo_version` already says.
+- Tests (`tests/test_unretire.py`): an unretired document has its fact
+  again as a new edge with the old one's provenance, the old one ended;
+  premises, a conflict and an import's held edge follow the new id while
+  the ended derivation keeps its own; a retirement without a run brings
+  nothing; both heal repairs are undone by `restore_run`.

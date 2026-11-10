@@ -14,12 +14,15 @@ from ..base import (
     LIVE,
     MetaLike,
     NotFound,
+    _end_edges,
     _read_archive,
     _reading,
+    _restore_run,
     _serialized,
     document_hidden,
     meta_of,
     now,
+    run_name,
 )
 from .meta import _put_meta, _refresh_document_field, get_meta
 from .text import _write_chunks
@@ -28,7 +31,9 @@ from .text import _write_chunks
 # page saved by mistake) is retired, not deleted: the row and the archived
 # bytes stay, ``meta.retired`` says why and since when, its chunks and its
 # retrieval field go (so search and the batch jobs pass it by), and its
-# edges end (invariant 8). ``unretire_document`` brings the index back.
+# edges end (invariant 8) under a run of its own, ``meta.retired.run``.
+# ``unretire_document`` brings the index back and states those edges again
+# (``_restore_run``), what held them moved onto the new ones.
 
 
 def is_retired(meta: MetaLike) -> bool:
@@ -45,6 +50,7 @@ def retire_document(
     reason: str,
     duplicate_of: int | None = None,
     by: str = "human",
+    run: str | None = None,
 ) -> dict[str, Any]:
     """Take a document out of the index and the graph, keeping row, bytes
     and text artifact. Returns what went: chunks, edges, review items.
@@ -57,7 +63,11 @@ def retire_document(
     deleted; the union is what a person would have wanted from one
     document. Refused (ValueError): a ``duplicate_of`` that was itself
     retired into this document, near or far, which would leave a link to
-    either with no current copy (``current_of``)."""
+    either with no current copy (``current_of``).
+
+    The edges are ended under ``run`` (a clean-up's, which retires a set
+    under one) or a run of the retirement's own, kept as
+    ``meta.retired.run``, which ``unretire_document`` undoes."""
     meta = get_meta(con, doc_id)
     if duplicate_of is not None and get_meta(con, duplicate_of) is None:
         raise NotFound(f"no such document: {duplicate_of}")
@@ -69,11 +79,13 @@ def retire_document(
     if duplicate_of is not None and duplicate_of != doc_id:
         moved = _join_duplicate(con, doc_id, duplicate_of)
         meta = get_meta(con, doc_id)
+    run = run or run_name("retire", doc_id, unique=True)
     meta["retired"] = {
         "at": now(),
         "reason": reason,
         "of": duplicate_of,
         "by": by,
+        "run": run,
     }
     chunks = con.execute(
         "SELECT count(*) FROM chunks WHERE doc_id = ?", (doc_id,)
@@ -81,10 +93,19 @@ def retire_document(
     con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
     con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
     con.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
-    edges = con.execute(
-        f"UPDATE edges SET valid_to = {_NOW} WHERE source_doc = ? AND valid_to IS NULL",
-        (doc_id,),
-    ).rowcount
+    edges = len(
+        _end_edges(
+            con,
+            [
+                int(r[0])
+                for r in con.execute(
+                    "SELECT id FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+                    (doc_id,),
+                )
+            ],
+            run=run,
+        )
+    )
     items = con.execute(
         f"UPDATE review_queue SET resolution = 'dropped', resolved_at = {_NOW}"
         " WHERE source_doc = ? AND resolution IS NULL",
@@ -224,10 +245,16 @@ def _replacements(con: sqlite3.Connection, doc_id: int) -> list[int | None]:
 @_serialized
 def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """Bring a retired document back into the index (its text artifact is
-    re-chunked); the edges it lost stay history and a new extraction pass
-    re-reads it."""
+    re-chunked) and state the edges its retirement ended again, as new
+    edges (``_restore_run``: the ended ones stay history), with what held
+    the old ids moved onto them. An edge a duplicate's retirement moved to
+    its keeper stays there. A retirement from before its run was recorded
+    (2026-11-10) brings no edges back: a new extraction pass re-reads it."""
     meta = get_meta(con, doc_id)
-    meta.pop("retired", None)
+    retired = meta.pop("retired", None) or {}
+    restored = (
+        _restore_run(con, retired["run"]) if retired.get("run") else {"restated": 0}
+    )
     _put_meta(con, doc_id, meta)
     n = 0
     row = con.execute(
@@ -238,7 +265,7 @@ def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         n = _write_chunks(con, doc_id, text)
         _refresh_document_field(con, doc_id)
     con.commit()
-    return {"doc_id": doc_id, "chunks": n}
+    return {"doc_id": doc_id, "chunks": n, "edges": restored["restated"]}
 
 
 def fingerprint_text(text: str) -> frozenset[str]:

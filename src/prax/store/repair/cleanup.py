@@ -1,8 +1,8 @@
 """Cleaning up in bulk (stage X): a rule picks a set of documents, the
 preview says what it would take, a run retires it in one go and a
-restore brings it back with the facts it held. After the graph in the
-store's order, because the facts are ended and stated again as a repair's
-are (``end_edges``, ``restore_run``)."""
+restore brings it back with the facts it held: the set's run is the run
+each retirement ends its facts under, which each unretire states again
+(``retire_document``, ``unretire_document``)."""
 
 from __future__ import annotations
 
@@ -14,13 +14,10 @@ from prax.text import clutter
 
 from ..base import LIVE, NotFound, _reading, _serialized, meta_of, rows_in, run_name
 from ..documents import (
-    _put_meta,
-    get_meta,
     live_photo_clip,
     retire_document,
     unretire_document,
 )
-from ..graph import end_edges, restore_run
 
 
 def _origin(row: sqlite3.Row) -> str:
@@ -160,30 +157,11 @@ def retire_set(
     reason = f"clean-up: {clutter.RULES[rule]}" + (f" ({folder})" if folder else "")
     retired = edges = moved = 0
     for doc_id, keeper in picked:
-        ended = 0
-        if keeper is None:
-            # ended under the run first, so restore_run states them again
-            ended = len(
-                end_edges(
-                    con,
-                    [
-                        int(r[0])
-                        for r in con.execute(
-                            "SELECT id FROM edges WHERE source_doc = ?"
-                            " AND valid_to IS NULL",
-                            (doc_id,),
-                        )
-                    ],
-                    run=run,
-                )
-            )
-        got = retire_document(con, doc_id, reason=reason, duplicate_of=keeper, by=by)
-        meta = get_meta(con, doc_id)
-        meta["retired"]["run"] = run
-        _put_meta(con, doc_id, meta)
-        con.commit()
+        got = retire_document(
+            con, doc_id, reason=reason, duplicate_of=keeper, by=by, run=run
+        )
         retired += 1
-        edges += ended + int(got["edges"])
+        edges += int(got["edges"])
         moved += int(got.get("moved_edges") or 0)
     return {
         "run": run,
@@ -201,7 +179,8 @@ def cleanup_runs(con: sqlite3.Connection) -> list[dict[str, Any]]:
         "SELECT json_extract(meta, '$.retired.run') AS run,"
         " min(json_extract(meta, '$.retired.at')) AS at,"
         " min(json_extract(meta, '$.retired.reason')) AS reason, count(*) AS n"
-        " FROM documents WHERE json_extract(meta, '$.retired.run') IS NOT NULL"
+        " FROM documents"
+        " WHERE json_extract(meta, '$.retired.run') LIKE 'cleanup-%'"
         " GROUP BY run ORDER BY at DESC"
     ).fetchall()
     return [
@@ -233,7 +212,7 @@ def restore_set(con: sqlite3.Connection, run: str) -> dict[str, Any]:
             " VALUES (?, ?, ?)",
             [(int(e), run, r["at"]) for e in json.loads(r["ended"] or "[]")],
         )
-    for r in rows:
-        unretire_document(con, int(r["id"]))
-    got = restore_run(con, run)
-    return {"run": run, "restored": len(rows), "edges_restated": got["restated"]}
+    # the first document's unretire states the whole set's edges again
+    # (its run is the set's), the rest find them stated
+    restated = sum(int(unretire_document(con, int(r["id"]))["edges"]) for r in rows)
+    return {"run": run, "restored": len(rows), "edges_restated": restated}

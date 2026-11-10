@@ -16,12 +16,15 @@ from prax.text import dates, mimes, quotes
 
 from ..base import (
     _NOW,
+    END_BATCH,
     LIVE,
     NotFound,
     _committing,
+    _end_edges,
     _like_prefix,
     _read_archive,
     _reading,
+    _restore_run,
     _serialized,
     doc_visible,
     document_hidden,
@@ -570,38 +573,6 @@ def document_edges_of(
     return [dict(r) for r in rows]
 
 
-def _end_edges(
-    con: sqlite3.Connection,
-    edge_ids: list[int],
-    *,
-    run: str | None,
-    corrected_by: int | None = None,
-) -> list[int]:
-    """End these edges where they are still live and, with ``run``, record
-    each ending (``edge_endings``, with the edge that corrects it where
-    there is one), so ``restore_run`` undoes the run whole. The one place
-    an edge is ended by id; does not commit. Returns the ids it ended."""
-    live = [
-        int(r[0])
-        for r in rows_in(
-            con,
-            "SELECT id FROM edges WHERE id IN ({ids}) AND valid_to IS NULL",
-            edge_ids,
-        )
-    ]
-    for i in range(0, len(live), END_BATCH):
-        part = live[i : i + END_BATCH]
-        marks = ",".join("?" * len(part))
-        con.execute(f"UPDATE edges SET valid_to = {_NOW} WHERE id IN ({marks})", part)
-    if run is not None:
-        con.executemany(
-            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at, corrected_by)"
-            f" VALUES (?, ?, {_NOW}, ?)",
-            [(e, run, corrected_by) for e in live],
-        )
-    return live
-
-
 @_serialized
 def end_edge(
     con: sqlite3.Connection,
@@ -616,12 +587,6 @@ def end_edge(
     ended = _end_edges(con, [edge_id], run=run, corrected_by=corrected_by)
     con.commit()
     return bool(ended)
-
-
-# How many edges one commit of ``end_edges`` ends: a commit is an fsync,
-# and one per edge held the write lock 11.4 s for 1,711 duplicates (the
-# quality review of 2026-10-18); a batch keeps the lock brief either way.
-END_BATCH = 500
 
 
 @_serialized
@@ -996,70 +961,7 @@ def corrections_of(con: sqlite3.Connection, edge_id: int) -> dict[str, Any]:
     return out
 
 
-@_serialized
-def restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
-    """Undo a repair run: its own live edges are ended (``retire_run``),
-    and every edge it ended (``edge_endings``) is stated again as a new
-    edge with the old one's fact, document, evidence, producer, run and
-    world dates. The ended edge stays ended: when prax held what is
-    history. A fact that is live again by other means is not doubled."""
-    retired = con.execute(
-        f"UPDATE edges SET valid_to = {_NOW} WHERE run = ? AND valid_to IS NULL", (run,)
-    ).rowcount
-    rows = con.execute(
-        """
-        SELECT x.edge_id, e.*, s.name AS s_name, s.type AS s_type,
-               t.name AS t_name, t.type AS t_type
-        FROM edge_endings x JOIN edges e ON e.id = x.edge_id
-        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
-        WHERE x.run = ? AND x.restated_as IS NULL
-        """,
-        (run,),
-    ).fetchall()
-    restated = 0
-    for r in rows:
-        live = con.execute(
-            "SELECT id FROM edges WHERE src = ? AND rel = ? AND dst = ?"
-            " AND source_doc IS ? AND valid_to IS NULL",
-            (r["src"], r["rel"], r["dst"], r["source_doc"]),
-        ).fetchone()
-        if live is None:
-            cur = con.execute(
-                "INSERT INTO edges (src, rel, dst, confidence, source_doc, evidence,"
-                " ontology_version, producer, run, world_from, world_from_precision,"
-                " world_to, world_to_precision, evidence_start, evidence_end,"
-                " evidence_text_hash, valid_from, ingested_at)"
-                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, {_NOW}, {_NOW})",
-                (
-                    r["src"],
-                    r["rel"],
-                    r["dst"],
-                    r["confidence"],
-                    r["source_doc"],
-                    r["evidence"],
-                    r["ontology_version"],
-                    r["producer"],
-                    r["run"],
-                    r["world_from"],
-                    r["world_from_precision"],
-                    r["world_to"],
-                    r["world_to_precision"],
-                    # where its quote stood is part of the evidence (migration 48)
-                    r["evidence_start"],
-                    r["evidence_end"],
-                    r["evidence_text_hash"],
-                ),
-            )
-            new_id = int(cur.lastrowid or 0)
-            restated += 1
-        else:
-            new_id = int(live["id"])
-        con.execute(
-            "UPDATE edge_endings SET restated_as = ? WHERE edge_id = ? AND run = ?",
-            (new_id, r["edge_id"], run),
-        )
-    con.commit()
-    return {"retired": retired, "restated": restated}
+restore_run = _serialized(_committing(_restore_run))
 
 
 @_serialized

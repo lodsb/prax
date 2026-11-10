@@ -373,7 +373,7 @@ against the code on 2026-11-08.
       registry in `api/passes.py`, every job thread through `run_as_job`.
 - [x] 23 (2026-11-10, the log; named transitions over the sets, no enum). The supervisor's role state as four parallel sets changed at
       22 sites: one `RoleState` with an enum and its transitions.
-- [ ] 2 (the rest), with the decision it needs. `retire_document` ends
+- [x] 2 (the rest; 2026-11-10, the log; the owner's word: new ids, the references moved; no before-values helper, one user). With the decision it needs. `retire_document` ends
       a document's edges with a raw UPDATE and no record, and the repairs
       `_repair_entities` and `_repair_edges` end without a run. Undoing
       a retire would state the edges again under new ids (`restore_run`),

@@ -1,7 +1,8 @@
 """The connection, the lock, the archive and the index files.
 
-Nothing here knows about documents or the graph: it is what every other
-module of the store stands on. One process-wide re-entrant lock serializes
+Nothing here knows about documents or the graph beyond the record of an
+edge's ending, which both write: it is what every other module of the
+store stands on. One process-wide re-entrant lock serializes
 writes (invariant 4); reads in the door take a connection per thread
 (``thread_connection``). Originals and parsed text are content-addressed
 files under ``data/archive`` (invariant 2), and the vector index files are
@@ -411,6 +412,161 @@ def run_name(kind: str, *after: object, unique: bool = False, sep: str = "-") ->
     if unique:
         bits.append(secrets.token_hex(3))
     return "-".join(bits)
+
+
+# ------------------------------------------------------ an edge's ending
+# How an edge is ended with a record of it, and how a run's endings are
+# undone. Here, below the documents and the graph, because both end edges
+# this way: a repair or a revision of the graph's, and a document's
+# retirement (``documents.library``), whose undo states its edges again.
+
+
+def _end_edges(
+    con: sqlite3.Connection,
+    edge_ids: list[int],
+    *,
+    run: str | None,
+    corrected_by: int | None = None,
+) -> list[int]:
+    """End these edges where they are still live and, with ``run``, record
+    each ending (``edge_endings``, with the edge that corrects it where
+    there is one), so ``restore_run`` undoes the run whole. The one place
+    an edge is ended by id; does not commit. Returns the ids it ended."""
+    live = [
+        int(r[0])
+        for r in rows_in(
+            con,
+            "SELECT id FROM edges WHERE id IN ({ids}) AND valid_to IS NULL",
+            edge_ids,
+        )
+    ]
+    for i in range(0, len(live), END_BATCH):
+        part = live[i : i + END_BATCH]
+        marks = ",".join("?" * len(part))
+        con.execute(f"UPDATE edges SET valid_to = {_NOW} WHERE id IN ({marks})", part)
+    if run is not None:
+        con.executemany(
+            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at, corrected_by)"
+            f" VALUES (?, ?, {_NOW}, ?)",
+            [(e, run, corrected_by) for e in live],
+        )
+    return live
+
+
+# How many edges one commit of ``end_edges`` ends: a commit is an fsync,
+# and one per edge held the write lock 11.4 s for 1,711 duplicates (the
+# quality review of 2026-10-18); a batch keeps the lock brief either way.
+END_BATCH = 500
+
+
+def _restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
+    """Undo a repair run: its own live edges are ended (``retire_run``),
+    and every edge it ended (``edge_endings``) is stated again as a new
+    edge with the old one's fact, document, evidence, producer, run and
+    world dates. The ended edge stays ended: when prax held what is
+    history. A fact that is live again by other means is not doubled.
+    What still holds an ended edge's id moves to the edge that states it
+    again (``_move_references``). Does not commit."""
+    retired = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE run = ? AND valid_to IS NULL", (run,)
+    ).rowcount
+    rows = con.execute(
+        """
+        SELECT x.edge_id, e.*, s.name AS s_name, s.type AS s_type,
+               t.name AS t_name, t.type AS t_type
+        FROM edge_endings x JOIN edges e ON e.id = x.edge_id
+        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        WHERE x.run = ? AND x.restated_as IS NULL
+        """,
+        (run,),
+    ).fetchall()
+    restated = 0
+    moved: dict[int, int] = {}
+    for r in rows:
+        live = con.execute(
+            "SELECT id FROM edges WHERE src = ? AND rel = ? AND dst = ?"
+            " AND source_doc IS ? AND valid_to IS NULL",
+            (r["src"], r["rel"], r["dst"], r["source_doc"]),
+        ).fetchone()
+        if live is None:
+            cur = con.execute(
+                "INSERT INTO edges (src, rel, dst, confidence, source_doc, evidence,"
+                " ontology_version, producer, run, world_from, world_from_precision,"
+                " world_to, world_to_precision, evidence_start, evidence_end,"
+                " evidence_text_hash, valid_from, ingested_at)"
+                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, {_NOW}, {_NOW})",
+                (
+                    r["src"],
+                    r["rel"],
+                    r["dst"],
+                    r["confidence"],
+                    r["source_doc"],
+                    r["evidence"],
+                    r["ontology_version"],
+                    r["producer"],
+                    r["run"],
+                    r["world_from"],
+                    r["world_from_precision"],
+                    r["world_to"],
+                    r["world_to_precision"],
+                    # where its quote stood is part of the evidence (migration 48)
+                    r["evidence_start"],
+                    r["evidence_end"],
+                    r["evidence_text_hash"],
+                ),
+            )
+            new_id = int(cur.lastrowid or 0)
+            restated += 1
+        else:
+            new_id = int(live["id"])
+        con.execute(
+            "UPDATE edge_endings SET restated_as = ? WHERE edge_id = ? AND run = ?",
+            (new_id, r["edge_id"], run),
+        )
+        moved[int(r["edge_id"])] = new_id
+    _move_references(con, moved)
+    return {"retired": retired, "restated": restated}
+
+
+def _move_references(con: sqlite3.Connection, moved: dict[int, int]) -> int:
+    """Move what still holds an ended edge's id to the edge that states it
+    again (``moved``: old id -> new). The live holders move: a live derived
+    edge's premise, an open conflict, a face's live answer, an import's
+    held edge. A restated derived edge gets its old one's premises. History
+    stays as it was: an ended derivation, a closed conflict, a taken-back
+    answer and ``edge_endings`` still name the edge they named. Returns
+    the rows moved; does not commit."""
+    n = 0
+    for old, new in moved.items():
+        if old == new:
+            continue
+        n += con.execute(
+            "INSERT OR IGNORE INTO edge_premises (edge_id, premise_id)"
+            " SELECT ?, premise_id FROM edge_premises WHERE edge_id = ?",
+            (new, old),
+        ).rowcount
+    for old, new in moved.items():
+        if old == new:
+            continue
+        n += con.execute(
+            "UPDATE OR IGNORE edge_premises SET premise_id = ? WHERE premise_id = ?"
+            " AND edge_id IN (SELECT id FROM edges WHERE valid_to IS NULL)",
+            (new, old),
+        ).rowcount
+        for side in ("edge_a", "edge_b"):
+            n += con.execute(
+                f"UPDATE OR IGNORE edge_conflicts SET {side} = ?"
+                f" WHERE {side} = ? AND ended_at IS NULL",
+                (new, old),
+            ).rowcount
+        n += con.execute(
+            "UPDATE face_names SET edge_id = ? WHERE edge_id = ? AND ended_at IS NULL",
+            (new, old),
+        ).rowcount
+        n += con.execute(
+            "UPDATE import_held SET edge_id = ? WHERE edge_id = ?", (new, old)
+        ).rowcount
+    return n
 
 
 # how long a connection waits for another process's write transaction

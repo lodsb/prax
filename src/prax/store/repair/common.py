@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ..base import rows_in
+from ..base import rows_in, run_name
 from ..graph import (
     end_edges,
     resolve_review,
@@ -101,14 +101,29 @@ def _edges_of_entities(con: sqlite3.Connection, ids: list[int]) -> list[int]:
 
 
 def _repair_entities(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
-    """End every live edge these entities carry. The entities themselves
-    stay: an entity with no live edges is invisible, and its name is the
-    record of what the extraction did."""
-    return len(end_edges(con, _edges_of_entities(con, [r["id"] for r in rows])))
+    """End every live edge these entities carry, under a run of their own
+    (``heal:entities-…``) that ``restore_run`` undoes. The entities
+    themselves stay: an entity with no live edges is invisible, and its
+    name is the record of what the extraction did."""
+    return len(
+        end_edges(
+            con,
+            _edges_of_entities(con, [r["id"] for r in rows]),
+            run=run_name(ENTITIES_PRODUCER, sep=":"),
+        )
+    )
+
+
+ENTITIES_PRODUCER = "heal:entities"
+EDGES_PRODUCER = "heal:edges"
 
 
 def _repair_edges(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
-    return len(end_edges(con, [r["id"] for r in rows]))
+    """End these edges under a run of their own (``heal:edges-…``) that
+    ``restore_run`` undoes."""
+    return len(
+        end_edges(con, [r["id"] for r in rows], run=run_name(EDGES_PRODUCER, sep=":"))
+    )
 
 
 def _repair_review(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:

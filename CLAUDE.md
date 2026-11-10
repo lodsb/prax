@@ -171,8 +171,12 @@ revisit threshold, under "Decision thresholds" below.
    Upgrading a producer's work is `retire_run` plus a new pass. A repair
    that ends edges records them (`edge_endings`, migration 44), so
    `restore_run` undoes it whole: its own edges ended, what it ended
-   stated again as new edges; `unmerge_run` ends the edges its round
-   wrote. A repair that ends an edge and writes its correction says
+   stated again as new edges, and what held an ended edge's id (a live
+   derivation's premise, an open conflict, a face's answer, an import's
+   held edge) moved onto the new one. A retirement is undone the same
+   way: `retire_document` ends its edges under `meta.retired.run` and
+   `unretire_document` states them again. `unmerge_run` ends the edges
+   its round wrote. A repair that ends an edge and writes its correction says
    which corrects which (`edge_endings.corrected_by`, migration 46;
    `why` shows it both ways).
 9. **The ontology is small, versioned and modular.** *(enforced)* Entity and
