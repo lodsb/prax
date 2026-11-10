@@ -101,6 +101,8 @@ from .decisions import (  # noqa: F401
 from .edges import (  # noqa: F401
     CONFIDENCE_LEVELS,
     Edge,
+    Stated,
+    Synced,
     _entity_id,
     _invalidate_edge,
     _link,
@@ -134,6 +136,7 @@ from .edges import (  # noqa: F401
     retire_run,
     run_edges,
     select_for_extraction,
+    sync_facts,
     visible_edges,
     with_aliases,
 )

@@ -26,7 +26,7 @@ from ..documents import (
     set_reference_links,
     update_meta,
 )
-from .edges import Edge, document_node, find_edges, link, retire_reading
+from .edges import Edge, Stated, document_node, sync_facts
 
 Log = Callable[[str], None]
 
@@ -221,15 +221,11 @@ def link_references(
         title = lib.get(doc_id, {}).get("title")
         if not title:
             continue
-        retired = retire_reading(
-            con, doc_id, producer=REFERENCES_PRODUCER, except_version="", reviews=False
-        )
         # one node per document, whatever links it (``document_node``)
         try:
             me = document_node(con, doc_id)
         except KeyError:
             me = (title, "paper")
-        stats["retired"] += retired
         # the entries: the reference chunks where the chunker cut them,
         # the bibliography's text split where it has not (before a rechunk)
         chunks = reference_chunks(con, doc_id)
@@ -237,8 +233,8 @@ def link_references(
         found = resolve_references(
             con, doc_id, entries, lib, by_doi=by_doi, by_arxiv=by_arxiv
         )
-        linked = ambiguous = existing = 0
         links: list[dict[str, Any]] = []
+        facts: list[Stated] = []
         for target, how, score, ref in found:
             name = lib[target]["title"]
             if not name or name == title:
@@ -258,9 +254,6 @@ def link_references(
             except KeyError:
                 it = (name, "paper")
             edge = Edge(*me, "cites", *it)
-            if find_edges(con, edge):
-                existing += 1
-                continue
             confidence = (
                 "EXTRACTED"
                 if how in ("doi", "arxiv")
@@ -274,19 +267,23 @@ def link_references(
                 + (f" ({ref.year})" if ref.year else "")
                 + (f" by {how}" if how in ("doi", "arxiv") else f", score {score:.2f}")
             )
-            link(
-                con,
-                edge,
-                confidence=confidence,
-                source_doc=doc_id,
-                evidence=evidence,
-                producer=REFERENCES_PRODUCER,
-                run=run,
-            )
-            if how == "ambiguous":
-                ambiguous += 1
-            else:
-                linked += 1
+            facts.append(Stated(edge, doc_id, evidence, confidence=confidence))
+        # the same citations kept as they are, the new ones linked, the
+        # ones the list no longer holds ended; a triple already live from
+        # another reading (Crossref found it) is left as it is
+        got = sync_facts(
+            con, facts, producer=REFERENCES_PRODUCER, run=run, doc=doc_id, defer=True
+        )
+        stats["retired"] += got.ended
+        held = [
+            f
+            for f, state in zip(facts, got.states, strict=True)
+            if state in ("added", "kept")
+        ]
+        ambiguous = sum(f.confidence == "AMBIGUOUS" for f in held)
+        linked = len(held) - ambiguous
+        existing = got.count("existing")
+        stats["kept"] += got.count("kept")
         stamp = {
             "text_hash": text_hash,
             "entries": len(entries),

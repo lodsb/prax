@@ -10642,3 +10642,46 @@ hand.
 - Test: the registry against `schedule.NAMES`; the Jobs view's order and
   shape; a job thread sees the request's viewer and calls `done`; a
   second questions start joins the first, and the key is let go after.
+
+## 2026-11-10: a reading's facts, kept where they hold
+
+Finding 16 of the structure review. The markup pass and the reference
+matcher re-read a changed page or bibliography by ending every edge they
+had written from it (`retire_reading(except_version="")`) and linking
+each fact again. A re-read that found the same facts ended N edges and
+wrote N identical ones under new ids. What points at an edge (premises,
+a face's name, a correction) was left on an ended one, and
+`store.changes` reported facts that had not changed. A project's sync
+did the opposite, keeping what held, with a diff of its own.
+
+- `store.sync_facts(con, facts, *, producer, run, doc=None,
+  quotes_count=True, defer=False, end_run=None)` makes one reading's live
+  edges the facts it states now: a document's edges from a producer
+  (`doc`), or else a producer's edges in a run. A fact already live is
+  kept under its id, a new one linked, one no longer stated ended (never
+  deleted), its ending recorded under `end_run` when given. It returns a
+  `Synced`: a state per fact (`added`, `kept`, `existing`, `refused`)
+  and how many it ended. A fact is a `Stated` (edge, document, quote,
+  world date, confidence).
+- The same fact means the same ends by name and type, relation,
+  document, world date, confidence and ontology version, and the same
+  quote unless `quotes_count` is off. So a fact whose quote changed is
+  ended and stated again, as before; nothing a re-read says is lost.
+- `defer` leaves a fact live from another reading to it (`existing`), as
+  the two passes did with `find_edges`. Found by the new test: the
+  reading's own edge must not count as another's, or a changed quote
+  would be left on the old edge.
+- `_markup`, `link_references` and a project's `_keep_in_step` call it.
+  The project keeps its first words (`quotes_count=False`) and records
+  its endings under its run, as before; a changed world date or
+  ontology version now restates its link once.
+- The markup report gains `added` and `kept`; the references report
+  gains `kept`, and `retired` counts only what a re-read ended.
+- Not moved: the place pass (`graph.geo`) and the graph imports end and
+  restate under a recorded run, which `restore_run` undoes; and the
+  dozen single-fact "if `find_edges` skip, else `link`" sites. Both work
+  as they are; they can move to `sync_facts` when next touched.
+- Test: a re-read of the same markup keeps both facts under their ids; a
+  reference list read again keeps its two citations, and an entry gone
+  ends one; `sync_facts` keeps, adds on a changed quote, defers to
+  another reading's fact, counts a repeat once, and ends only its own.

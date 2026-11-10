@@ -349,15 +349,9 @@ Want = dict[tuple[int, int, int, str], tuple[str, str | None]]
 def _keep_in_step(con: sqlite3.Connection, run: str, want: Want) -> dict[str, int]:
     """Make one run's live edges what ``want`` says: ``{(source_doc,
     src_doc, dst_doc, rel): (words, world_from)}``, the evidence and the
-    date. An edge already there is kept, a new one linked, one no longer
-    wanted ended (never deleted)."""
-    existing = {
-        (int(e["source_doc"]), str(e["src"]), str(e["rel"]), str(e["dst"])): int(
-            e["id"]
-        )
-        for e in store.run_edges(con, producer=LINK_PRODUCER, run=run)
-        if e["source_doc"] is not None
-    }
+    date (``store.sync_facts``: an edge already there is kept with its
+    first words, a new one linked, one no longer wanted ended, never
+    deleted, its ending recorded under the run)."""
     nodes: dict[int, tuple[str, str]] = {}
 
     def node(doc_id: int) -> tuple[str, str]:
@@ -365,48 +359,25 @@ def _keep_in_step(con: sqlite3.Connection, run: str, want: Want) -> dict[str, in
             nodes[doc_id] = store.document_node(con, doc_id)
         return nodes[doc_id]
 
-    added = kept = 0
-    held: set[tuple[int, str, str, str]] = set()
+    facts: list[store.Stated] = []
     for (source_doc, src_doc, dst_doc, rel), (words, world_from) in want.items():
         try:
             src, src_type = node(src_doc)
             dst, dst_type = node(dst_doc)
         except KeyError:
             continue  # a document without a title is no node
-        key = (source_doc, src, rel, dst)
-        if key in held:
-            continue
-        held.add(key)
-        if key in existing:
-            kept += 1
-            continue
-        try:
-            store.link(
-                con,
+        facts.append(
+            store.Stated(
                 store.Edge(src, src_type, rel, dst, dst_type),
-                source_doc=source_doc,
-                evidence=words[:EVIDENCE_CHARS],
-                producer=LINK_PRODUCER,
-                run=run,
-                world_from=world_from,
+                source_doc,
+                words[:EVIDENCE_CHARS],
+                world_from,
             )
-        except ValueError:
-            # a date the store cannot read: the fact without the world's time
-            store.link(
-                con,
-                store.Edge(src, src_type, rel, dst, dst_type),
-                source_doc=source_doc,
-                evidence=words[:EVIDENCE_CHARS],
-                producer=LINK_PRODUCER,
-                run=run,
-            )
-        added += 1
-    ended = 0
-    for key, edge_id in existing.items():
-        if key not in held:
-            store.invalidate_edge(con, edge_id, run=run)
-            ended += 1
-    return {"added": added, "kept": kept, "ended": ended}
+        )
+    got = store.sync_facts(
+        con, facts, producer=LINK_PRODUCER, run=run, quotes_count=False, end_run=run
+    )
+    return {"added": got.count("added"), "kept": got.count("kept"), "ended": got.ended}
 
 
 def _texts(con: sqlite3.Connection, name: str) -> dict[str, tuple[int, str]]:

@@ -70,6 +70,7 @@ from .documents import (
 from .graph import (
     MARKUP_PRODUCER,
     Edge,
+    Stated,
     communities_input,
     corpus_rulings,
     derive_rules,
@@ -88,7 +89,7 @@ from .graph import (
     rename_display_language,
     replace_communities,
     replace_face_groups,
-    retire_reading,
+    sync_facts,
     unmark_corpus_ruling,
 )
 from .jobs import Job
@@ -566,12 +567,8 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             page = schemaorg.of_page(original, standards)
         except OSError:
             continue
-        # the markup queues no review items: the extraction's stay open
-        retired = retire_reading(
-            con, r["id"], producer=MARKUP_PRODUCER, except_version="", reviews=False
-        )
-        counts["ended"] += retired
         stamp: dict[str, Any] = {"hash": r["hash"], "at": now(), "facts": 0}
+        facts: list[Stated] = []
         if page is not None:
             stamp["type"] = page.own.kind if page.own else "Recipe"
             genre = ontology.genres().label_for(
@@ -601,21 +598,26 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
                 except ValueError:
                     counts["refused"] += 1
                     continue
-                if find_edges(con, edge):
-                    counts["existing"] += 1
-                    continue
-                link(
-                    con,
-                    edge,
-                    source_doc=r["id"],
-                    evidence=evidence,
-                    producer=MARKUP_PRODUCER,
-                    run=MARKUP_PRODUCER,
-                    world_from=world,
-                )
-                stamp["facts"] += 1
-                counts[edge.rel] += 1
+                facts.append(Stated(edge, r["id"], evidence, world))
             counts["pages"] += 1
+        # what the page states now: the same facts kept as they are, the
+        # new ones linked, the rest ended; a fact another reading states is
+        # left to it. The markup queues no review items, so the
+        # extraction's stay open
+        got = sync_facts(
+            con,
+            facts,
+            producer=MARKUP_PRODUCER,
+            run=MARKUP_PRODUCER,
+            doc=r["id"],
+            defer=True,
+        )
+        counts["ended"] += got.ended
+        for fact, state in zip(facts, got.states, strict=True):
+            if state in ("added", "kept"):
+                stamp["facts"] += 1
+                counts[fact.edge.rel] += 1
+            counts[state] += 1
         _write(con, _SET_MARKUP, [(json.dumps(stamp), r["id"])])
         if n % 100 == 0:
             job.update(done=n, total=len(rows), note=f"markup: {n} of {len(rows)}")

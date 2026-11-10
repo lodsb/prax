@@ -767,6 +767,148 @@ def retire_reading(
     return cur.rowcount
 
 
+@dataclass(frozen=True)
+class Stated:
+    """A fact a reading states: the edge, the document it is read from,
+    its quote, when it holds in the world and how sure it is."""
+
+    edge: Edge
+    source_doc: int
+    evidence: str | None = None
+    world_from: str | None = None
+    confidence: str = "EXTRACTED"
+
+
+@dataclass
+class Synced:
+    """What ``sync_facts`` did: per fact (in the order given) ``added``,
+    ``kept``, ``existing`` (live from another reading, left to it) or
+    ``refused`` (the store would not take it), and how many of the
+    earlier facts it ended."""
+
+    states: list[str]
+    ended: int = 0
+
+    def count(self, state: str) -> int:
+        return self.states.count(state)
+
+
+def _sync_facts(
+    con: sqlite3.Connection,
+    facts: Iterable[Stated],
+    *,
+    producer: str,
+    run: str,
+    doc: int | None = None,
+    quotes_count: bool = True,
+    defer: bool = False,
+    end_run: str | None = None,
+) -> Synced:
+    """Make one reading's live edges the facts it states now: a document's
+    edges from ``producer`` (``doc``), or else the edges ``producer`` wrote
+    in ``run``. A fact already live there is kept, as it was, under its
+    id; a new one is linked; one no longer stated is ended (never
+    deleted), its ending recorded under ``end_run`` when given, so
+    ``restore_run`` takes it back.
+
+    The same fact is the same ends by name and type, relation, document,
+    world date, confidence and ontology version, and the same quote
+    unless ``quotes_count`` is off (a project's link keeps its first
+    words). A re-read that finds the same facts writes nothing. Ending
+    each and stating it again under a new id, which the markup and
+    reference passes did until 2026-11-10, left what points at an edge
+    (premises, a face's name, a correction) on an ended one, and filled
+    the changes with facts that had not changed (structure review
+    finding 16).
+
+    ``defer`` leaves a fact that is live from another reading (any
+    producer, any document) to it, counted ``existing``. A world date the
+    store cannot read is dropped and the fact stated without it."""
+    scope = "e.source_doc = ?" if doc is not None else "e.run = ?"
+    args: tuple[Any, ...] = (doc if doc is not None else run, producer)
+    held: dict[tuple[Any, ...], list[int]] = {}
+    for r in con.execute(
+        "SELECT e.id, e.source_doc, s.name AS src, s.type AS src_type, e.rel,"
+        " t.name AS dst, t.type AS dst_type, e.evidence, e.world_from,"
+        " e.confidence, e.ontology_version FROM edges e"
+        " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+        f" WHERE {scope} AND e.producer = ? AND e.valid_to IS NULL ORDER BY e.id",
+        args,
+    ):
+        key = (
+            r["source_doc"],
+            r["src"],
+            r["src_type"],
+            r["rel"],
+            r["dst"],
+            r["dst_type"],
+            r["world_from"],
+            r["confidence"],
+            r["ontology_version"],
+            r["evidence"] if quotes_count else None,
+        )
+        held.setdefault(key, []).append(int(r["id"]))
+    version = ontology.current().version
+    # this reading's own edges are not another's: a changed quote is restated
+    ours_all = {i for ids in held.values() for i in ids}
+    kept: set[int] = set()
+    stated: set[tuple[Any, ...]] = set()
+    states: list[str] = []
+    for fact in facts:
+        e = fact.edge
+        begin = None
+        if fact.world_from:
+            try:
+                begin = _world_date(fact.world_from, "world_from")[0]
+            except ValueError:
+                begin = None
+        key = (
+            fact.source_doc,
+            e.src,
+            e.src_type,
+            e.rel,
+            e.dst,
+            e.dst_type,
+            begin,
+            fact.confidence,
+            version,
+            fact.evidence if quotes_count else None,
+        )
+        if key in stated:  # the same fact twice in one reading
+            states.append("existing")
+            continue
+        stated.add(key)
+        ours = held.get(key)
+        if ours:
+            kept.add(ours[0])
+            states.append("kept")
+            continue
+        if defer and set(find_edges(con, e)) - ours_all:
+            states.append("existing")
+            continue
+        try:
+            _link(
+                con,
+                e,
+                confidence=fact.confidence,
+                source_doc=fact.source_doc,
+                evidence=fact.evidence,
+                producer=producer,
+                run=run,
+                world_from=begin,
+            )
+        except ValueError:
+            states.append("refused")
+            continue
+        states.append("added")
+    stale = [i for ids in held.values() for i in ids if i not in kept]
+    ended = _end_edges(con, stale, run=end_run)
+    return Synced(states, ended=len(ended))
+
+
+sync_facts = _serialized(_committing(_sync_facts))
+
+
 def hidden_by_premise(
     con: sqlite3.Connection, edge_ids: list[int], hidden: frozenset[int]
 ) -> set[int]:

@@ -145,7 +145,23 @@ def test_a_reference_list_cites_the_library(con: sqlite3.Connection) -> None:
     # the same text again: nothing to do
     again = store.maintain(con, only=["references"])["references"]
     assert again.get("documents", 0) == 0 and again["unchanged"] == 1
-    # the text read again (one entry gone): the old edges retired, new ones written
+
+    def edges() -> tuple[set[int], int]:
+        live = {
+            r[0]
+            for r in con.execute(
+                "SELECT id FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+                (citing,),
+            )
+        }
+        every = con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ?", (citing,)
+        ).fetchone()[0]
+        return live, every
+
+    first, _ = edges()
+    # the text read again, its citations the same: kept under their ids,
+    # nothing ended and stated again (structure review finding 16)
     store.index_text(
         con,
         citing,
@@ -153,15 +169,17 @@ def test_a_reference_list_cites_the_library(con: sqlite3.Connection) -> None:
         text_source="t/2",
     )
     third = store.maintain(con, only=["references"])["references"]
-    assert third["documents"] == 1 and third["retired"] == 2 and third["linked"] == 2
-    live = con.execute(
-        "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NULL",
-        (citing,),
-    ).fetchone()[0]
-    kept = con.execute(
-        "SELECT count(*) FROM edges WHERE source_doc = ?", (citing,)
-    ).fetchone()[0]
-    assert (live, kept) == (2, 4)
+    assert third["documents"] == 1 and third["retired"] == 0 and third["linked"] == 2
+    assert third["kept"] == 2
+    assert edges() == (first, 2)
+    # an entry gone: its edge ended, the other kept
+    store.index_text(
+        con, citing, body + bib.replace(" doi:10.5555/WDF.2020", ""), text_source="t/3"
+    )
+    fourth = store.maintain(con, only=["references"])["references"]
+    assert fourth["retired"] == 1 and fourth["linked"] == 1
+    live, every = edges()
+    assert len(live) == 1 and live < first and every == 2
     assert by_doi and cited  # both named
 
 

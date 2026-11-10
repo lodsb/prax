@@ -365,7 +365,7 @@ against the code on 2026-11-08.
       ranking with a guessed over-fetch each: one `DocumentFilter`, the
       search's filters inside the legs as `senses` already are. Measured
       with `eval_retrieval.py` before and after.
-- [ ] 16. "State these facts for this document" per producer, two
+- [x] 16 (2026-11-10, the log; markup, references and projects; geo, imports and the single-fact sites not yet). "State these facts for this document" per producer, two
       strategies (diff-and-keep, end-and-restate): one
       `sync_facts(con, doc_id, producer, run, facts)` returning added,
       kept and ended.

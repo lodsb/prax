@@ -158,3 +158,84 @@ def test_the_markup_pass_leaves_the_review_queue_alone(con: sqlite3.Connection) 
     )
     store.maintain(con, only=["markup"])
     assert store.count_review(con) == 1
+
+
+def test_a_page_read_again_keeps_its_facts(con: sqlite3.Connection) -> None:
+    # a re-read of the same markup ends nothing and states nothing again
+    # (structure review finding 16)
+    doc = store.register(
+        con, _page(SITE, ARTICLE).encode(), mime="text/html", title="Pflaumen"
+    )["doc_id"]
+    store.maintain(con, only=["markup"])
+
+    def live() -> set[int]:
+        return {
+            r[0]
+            for r in con.execute(
+                "SELECT id FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+                (doc,),
+            )
+        }
+
+    first = live()
+    assert len(first) == 2  # authored_by, published_by
+    con.execute("UPDATE documents SET meta = json_remove(meta, '$.markup')")
+    again = store.maintain(con, only=["markup"])["markup"]
+    assert (again.get("ended", 0), again["kept"]) == (0, 2)
+    assert live() == first
+
+
+def test_facts_are_kept_ended_and_added_by_what_is_stated(
+    con: sqlite3.Connection,
+) -> None:
+    doc = store.ingest_text(con, "A text. " * 20, title="T")["doc_id"]
+    other = store.ingest_text(con, "B text. " * 20, title="U")["doc_id"]
+    a = store.Edge("T", "document", "authored_by", "Ada", "person")
+    b = store.Edge("T", "document", "authored_by", "Bea", "person")
+    c = store.Edge("T", "document", "authored_by", "Cy", "person")
+    # another reading's fact, and one of another document
+    elsewhere = store.link(con, c, source_doc=other, producer="hand")
+    first = store.sync_facts(
+        con,
+        [store.Stated(a, doc, "by Ada"), store.Stated(b, doc, "by Bea")],
+        producer="p",
+        run="r1",
+        doc=doc,
+    )
+    assert (first.states, first.ended) == (["added", "added"], 0)
+    ids = {
+        r[0]: r[1]
+        for r in con.execute(
+            "SELECT evidence, id FROM edges WHERE producer = 'p' AND valid_to IS NULL"
+        )
+    }
+    got = store.sync_facts(
+        con,
+        [
+            store.Stated(a, doc, "by Ada"),  # the same
+            store.Stated(b, doc, "Bea wrote it"),  # another quote
+            store.Stated(c, doc, "by Cy"),  # live from another reading
+            store.Stated(a, doc, "by Ada"),  # twice in one reading
+        ],
+        producer="p",
+        run="r2",
+        doc=doc,
+        defer=True,
+    )
+    assert got.states == ["kept", "added", "existing", "existing"]
+    assert got.ended == 1  # Bea's old quote
+    live = {
+        r[0]: r[1]
+        for r in con.execute(
+            "SELECT evidence, id FROM edges WHERE producer = 'p' AND valid_to IS NULL"
+        )
+    }
+    assert live["by Ada"] == ids["by Ada"] and set(live) == {"by Ada", "Bea wrote it"}
+    # nothing stated: the reading's facts end, nobody else's
+    assert store.sync_facts(con, [], producer="p", run="r3", doc=doc).ended == 2
+    assert (
+        con.execute("SELECT valid_to FROM edges WHERE id = ?", (elsewhere,)).fetchone()[
+            0
+        ]
+        is None
+    )
