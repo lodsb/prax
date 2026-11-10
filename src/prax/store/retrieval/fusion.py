@@ -147,13 +147,16 @@ def search(
     fetch = max(limit, int(depth)) if reranker else limit
     since = _published_bound(published_since, "published_since")
     before = _published_bound(published_before, "published_before")
-    if domain:
-        fetch *= 3
     if since or before:
         fetch *= 4
-    hits = _search_hits(con, query, fetch + STALE_SPARE, kind, mode, doctype, timing)
-    if domain:
-        hits = _filter_domain(con, hits, domain)
+    # the domain filter is kept inside the ranking, as a sense's domains
+    # are: after it, with three times the hits drawn, a search of a small
+    # domain came back short in most questions (computing, 1.3% of the
+    # library: 13 of 14 asked; structure review finding 14)
+    within = ontology.current().within(domain) if domain else None
+    hits = _search_hits(
+        con, query, fetch + STALE_SPARE, kind, mode, doctype, timing, within=within
+    )
     stamped = published_dates(con, hits)
     if since or before:
         hits = [
@@ -601,7 +604,14 @@ def _filter_domain(
     """Keep hits whose document is in ``domain`` or a module built on it
     (``Ontology.within``); a document without a domain set is in every
     module and stays."""
-    within = ontology.current().within(domain)
+    return _in_scope(con, hits, ontology.current().within(domain))
+
+
+def _in_scope(
+    con: sqlite3.Connection, hits: list[dict[str, Any]], within: Scope
+) -> list[dict[str, Any]]:
+    """Keep hits whose document is in one of the ``within`` domains, or
+    in none (``_filter_domain``)."""
     ids = {h["doc_id"] for h in hits}
     if not ids:
         return hits
@@ -641,7 +651,12 @@ def _search_hits(
     mode: str,
     doctype: str | None = None,
     timing: dict[str, float] | None = None,
+    *,
+    within: Scope | None = None,
 ) -> list[dict[str, Any]]:
+    """The fused hits. ``within`` keeps the documents of those domains
+    (and those with none): inside the keyword lists' ranking, and out of
+    the vector lists before the fusion."""
     emb = embeddings.serving() if mode != "fts" else None
     vectors_ready = (
         emb is not None
@@ -657,6 +672,11 @@ def _search_hits(
     # first and the model would cite itself. Nor is what the viewer may not
     # see (stage U): set aside the same way, before the lists are fused
     aside = _aside_documents(con) | hidden_documents(con)
+
+    def kept(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        hits = _without(hits, aside)
+        return _in_scope(con, hits, within) if within else hits
+
     # the query as terms with the library's own expansions of its acronyms;
     # the keyword side without the stopwords (the embedder sees them all):
     # one OR expression for recall, one AND expression for the tier that
@@ -678,7 +698,14 @@ def _search_hits(
     and_expr = _expr(plain, all_terms=True) if len(plain) > 1 else None
     if mode == "fts":  # the raw chunk list, expanded but not fused
         hits = _fts_sensed(
-            con, query, fetch + len(aside), kind, or_expr, sensed, snippets=True
+            con,
+            query,
+            fetch + len(aside),
+            kind,
+            or_expr,
+            sensed,
+            snippets=True,
+            within=within,
         )
         hits = _without(hits, aside)
         return _finish(con, hits, query, limit, doctype, expr=full_expr)
@@ -692,12 +719,20 @@ def _search_hits(
     }
     took = _Took(timing)
     with took("fts"):
-        lists = [_fts_sensed(con, query, depth, kind, or_expr, sensed)]
+        lists = [_fts_sensed(con, query, depth, kind, or_expr, sensed, within=within)]
     names = ["fts"]
     if and_expr and ALL_TERMS_WEIGHT > 0:
         with took("fts"):
             lists.append(
-                _fts_search(con, query, depth, kind, snippets=False, expr=and_expr)
+                _fts_search(
+                    con,
+                    query,
+                    depth,
+                    kind,
+                    snippets=False,
+                    expr=and_expr,
+                    within=within,
+                )
             )
         names.append("fts_all")
     rare = _rare_terms(con, plain) if RARE_TERMS_WEIGHT > 0 else []
@@ -708,13 +743,17 @@ def _search_hits(
     if rare and len(rare) < len(terms):
         rare_expr = _expr(rare, all_terms=True)
         lists.append(
-            _fts_search(con, query, depth, kind, snippets=False, expr=rare_expr)
+            _fts_search(
+                con, query, depth, kind, snippets=False, expr=rare_expr, within=within
+            )
         )
         names.append("fts_rare")
     if not vectors_ready:
         if kind is None:  # hybrid without vectors: the field too
-            _field_lists(con, query, depth, or_expr, sensed, lists, names, weights)
-        fused = _rrf([_without(x, aside) for x in lists], names, _drawn(fetch), weights)
+            _field_lists(
+                con, query, depth, or_expr, sensed, lists, names, weights, within
+            )
+        fused = _rrf([kept(x) for x in lists], names, _drawn(fetch), weights)
         fused = _domain_prior(con, fused, fetch, keywords)
         return _finish(con, fused, query, limit, doctype, expr=full_expr)
     assert emb is not None
@@ -723,7 +762,7 @@ def _search_hits(
     if mode == "vec":
         return _finish(
             con,
-            _without(_vec_search(con, vector, fetch + len(aside), kind), aside),
+            kept(_vec_search(con, vector, fetch + len(aside), kind)),
             query,
             limit,
             doctype,
@@ -734,11 +773,13 @@ def _search_hits(
     names.append("vec")
     if kind is None:  # the field has no chunk kind to filter by
         with took("field"):
-            _field_lists(con, query, depth, or_expr, sensed, lists, names, weights)
+            _field_lists(
+                con, query, depth, or_expr, sensed, lists, names, weights, within
+            )
         with took("dvec"):
             lists.append(_field_vec_search(con, emb.name, vector, depth))
         names.append("dvec")
-    fused = _rrf([_without(x, aside) for x in lists], names, _drawn(fetch), weights)
+    fused = _rrf([kept(x) for x in lists], names, _drawn(fetch), weights)
     fused = _domain_prior(con, fused, fetch, keywords)
     with took("finish"):
         return _finish(con, fused, query, limit, doctype, expr=full_expr)
@@ -853,12 +894,15 @@ def _field_lists(
     lists: list[list[dict[str, Any]]],
     names: list[str],
     weights: dict[str, float],
+    within: Scope | None = None,
 ) -> None:
     """The document field's keyword list, its senses counted where they
     live (``_by_score``)."""
-    hits = _field_fts_search(con, query, depth, expr=or_expr)
+    hits = _field_fts_search(con, query, depth, expr=or_expr, within=within)
     for scope, expr in sensed:
-        hits += _field_fts_search(con, query, depth, expr=expr, scope=scope)
+        hits += _field_fts_search(
+            con, query, depth, expr=expr, scope=scope, within=within
+        )
     lists.append(_by_score(hits, "doc_id", depth) if sensed else hits)
     names.append("field")
     weights["field"] = _field_weight(query)
@@ -873,12 +917,22 @@ def _fts_sensed(
     sensed: list[tuple[Scope, str | None]],
     *,
     snippets: bool = False,
+    within: Scope | None = None,
 ) -> list[dict[str, Any]]:
     """The chunk keyword list, its senses counted where they live."""
-    hits = _fts_search(con, query, depth, kind, snippets=snippets, expr=or_expr)
+    hits = _fts_search(
+        con, query, depth, kind, snippets=snippets, expr=or_expr, within=within
+    )
     for scope, expr in sensed:
         hits += _fts_search(
-            con, query, depth, kind, snippets=snippets, expr=expr, scope=scope
+            con,
+            query,
+            depth,
+            kind,
+            snippets=snippets,
+            expr=expr,
+            scope=scope,
+            within=within,
         )
     return _by_score(hits, "chunk_id", depth) if sensed else hits
 

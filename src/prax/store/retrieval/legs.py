@@ -99,6 +99,19 @@ def _in_domains(
     return clause, tuple(args)
 
 
+def _in_scopes(
+    con: sqlite3.Connection, *scopes: Scope | None
+) -> tuple[str, tuple[str, ...]]:
+    """``_in_domains`` of each scope given, all to hold: a sense's
+    domains and the search's own domain filter."""
+    where = ""
+    args: tuple[str, ...] = ()
+    for scope in scopes:
+        w, a = _in_domains(con, scope)
+        where, args = where + w, args + a
+    return where, args
+
+
 def _fts_search(
     con: sqlite3.Connection,
     query: str,
@@ -108,13 +121,15 @@ def _fts_search(
     snippets: bool = True,
     expr: str | None = None,
     scope: Scope | None = None,
+    within: Scope | None = None,
 ) -> list[dict[str, Any]]:
     """BM25 over chunks. ``snippets=False`` skips the snippet() call, which
     reads every matched chunk's text and dominates the cost of deep lists;
     ``_fts_snippets`` fills them in for the few hits that survive fusion.
     ``scope`` keeps the chunks of documents in those domains, inside the
     ranking: a sense like `apple` matches thousands of chunks elsewhere,
-    and a filter after the ranking would leave none."""
+    and a filter after the ranking would leave none. ``within`` is the
+    search's own domain filter, kept the same way and with ``scope``."""
     expr = expr or _fts_query(query)
     if expr is None:
         return []
@@ -123,15 +138,16 @@ def _fts_search(
         if snippets
         else "substr(c.text, 1, 160)"
     )
-    where, where_args = _in_domains(con, scope)
+    where, where_args = _in_scopes(con, scope, within)
     # a scope that is most of the library is dense among the best matches:
     # rank in the index, draw deeper, filter after. Inside the ranking it
     # joined every matched chunk first, and "signal synthesis" scoped to
     # research took 940 ms against 83 (2026-09-26). A small scope (the
     # kitchen, where `apple` has thousands of chunks elsewhere) keeps the
     # filter inside
-    wide = scope is not None and bool(scope) and _share(con, scope) >= WIDE_SCOPE
-    if kind is None and not snippets and (not scope or wide):
+    scopes = [s for s in (scope, within) if s]
+    wide = bool(scopes) and all(_share(con, s) >= WIDE_SCOPE for s in scopes)
+    if kind is None and not snippets and (not scopes or wide):
         # rank inside the keyword index alone, then join the survivors: the
         # joins to chunks and documents ran for every matched row before
         # the sort, and doubled a common query's cost (51 ms against 25 on
@@ -252,12 +268,13 @@ def _field_fts_search(
     limit: int,
     expr: str | None = None,
     scope: Scope | None = None,
+    within: Scope | None = None,
 ) -> list[dict[str, Any]]:
     """BM25 over the document field; hits carry no chunk yet."""
     expr = expr or _fts_query(query)
     if expr is None:
         return []
-    where, where_args = _in_domains(con, scope)
+    where, where_args = _in_scopes(con, scope, within)
     rows = con.execute(
         f"""
         SELECT f.rowid AS doc_id, d.title,

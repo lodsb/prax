@@ -10811,3 +10811,48 @@ of a doctype's SQL with `.replace("d.", "")`.
 - Test: a title with `%` in it is a literal under all three selectors; a
   finding of an earlier text is not a finding, and `fixed_by` narrows to
   the reading a finding names.
+
+## 2026-11-10: a search's domain filter inside the ranking
+
+Finding 14 of the structure review. `search(domain=…)` drew three times
+the hits it was asked for, fused them, and then kept the domain's. The
+legs already knew how to keep a scope inside the ranking, for the sense
+words (`_in_domains`, with `WIDE_SCOPE` choosing inside or after), but
+the search's own filter never reached them.
+
+Measured on a copy of the live store (33,224 documents; made read-only
+from the live file with SQLite's backup API, into the session's scratch
+directory), 15 queries a domain from two words of its own documents'
+titles, `limit` 10. A page is short when it holds fewer of the domain's
+documents than a search of 300 unfiltered hits found in the domain:
+
+| domain | share | short before | short after | median ms before / after |
+|---|---|---|---|---|
+| computing | 1.3% | 13 of 14 | 0 | 167 / 189 |
+| craft | 0.1% | 6 of 15 | 0 | 151 / 156 |
+| electronics | 0.6% | 8 of 15 | 0 | 157 / 159 |
+| kitchen | 0.3% | 4 of 15 | 0 | 120 / 130 |
+| research | 44.5% | 0 of 15 | 0 | 184 / 187 |
+| society | 0.9% | 11 of 15 | 0 | 150 / 155 |
+| studio | 6.4% | 4 of 15 | 0 | 173 / 156 |
+| workshop | 0.1% | 12 of 15 | 0 | 150 / 162 |
+
+Before, 58 of 119 pages were short, missing 208 documents; after, none.
+The times are of a desktop running the test suite beside it.
+
+- `search` passes the domain's modules (`Ontology.within`) to
+  `_search_hits` as `within`. The keyword legs (chunks, the and-terms,
+  the rare terms, the document field, and each sense's list) keep it
+  inside their ranking with any sense scope (`legs._in_scopes`). A scope
+  past `WIDE_SCOPE` is still ranked first and filtered after. The vector
+  lists, which cannot filter inside, lose the documents outside it
+  before the fusion (`fusion._in_scope`), so they take no fused slot.
+  The `fetch *= 3` and the filter after the fusion are gone.
+- A search without a domain runs the same code as before: `within` is
+  None, and `_in_scopes` of no scope is the empty clause.
+- Not changed: the published span (`fetch *= 4`, then filtered) and a
+  doctype (`limit * 4` in `_search_hits`, then filtered in `_finish`).
+  They can move inside the same way; neither was measured short.
+- Test: forty documents of another domain that match better leave a
+  small domain's page of ten full, in hybrid and keyword mode. Against
+  the old code the page was empty.

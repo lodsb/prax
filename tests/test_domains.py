@@ -335,6 +335,30 @@ def test_search_domain_filter(con: sqlite3.Connection, three_modules: Path) -> N
         store.search(con, "reverb", domain="cooking")
 
 
+def test_a_small_domain_fills_its_page_from_its_own_matches(
+    con: sqlite3.Connection, three_modules: Path
+) -> None:
+    # the domain filter sits inside the ranking: forty documents elsewhere
+    # that match better no longer leave a small domain's page short
+    # (structure review finding 14)
+    for n in range(40):
+        doc = store.ingest_text(
+            con, f"reverb reverb reverb hall {n} " * 20, title=f"R{n}"
+        )
+        store.set_domains(con, doc["doc_id"], ["research"])
+    family = set()
+    for n in range(12):
+        doc = store.ingest_text(
+            con, f"reverb at party {n} " + "and cake " * 40, title=f"F{n}"
+        )
+        store.set_domains(con, doc["doc_id"], ["family"])
+        family.add(doc["doc_id"])
+    got = store.search(con, "reverb", limit=10, domain="family")
+    assert len(got) == 10 and {h["doc_id"] for h in got} <= family
+    fts = store.search(con, "reverb", limit=10, domain="family", mode="fts")
+    assert len(fts) == 10 and {h["doc_id"] for h in fts} <= family
+
+
 @pytest.fixture()
 def client(three_modules: Path) -> TestClient:
     from prax.api import app
