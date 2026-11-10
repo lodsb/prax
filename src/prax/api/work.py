@@ -4,8 +4,6 @@ steps' models are asked for, and the vector index's merge and release."""
 
 from __future__ import annotations
 
-import logging
-import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -14,6 +12,7 @@ from pydantic import BaseModel
 from prax import store, work
 from prax.ml import embeddings
 
+from . import passes
 from ._base import _con
 from .passes import MAINTENANCE
 
@@ -203,22 +202,15 @@ def vectors_adopt(request: Request, model: str) -> dict[str, Any]:
         raise HTTPException(400, "no usearch")
     job = store.Job(_con(request), "adopt-vectors", note=model)
 
-    def run() -> None:
-        con = store.connect()
-        try:
-            with store.Job.existing(con, job.id) as mine:
-                got = store.adopt_vectors(con, model, job=mine)
-                lost = got["missing"]
-                mine.note(
-                    f"{got['chunks']:,} chunks, {got['documents']:,} documents"
-                    + (f", {lost:,} keys with no row" if lost else "")
-                )
-        except Exception:  # the job row carries the error
-            logging.getLogger("prax.adopt").exception("adopt failed")
-        finally:
-            con.close()
+    def work(own: Any, mine: store.Job) -> None:
+        got = store.adopt_vectors(own, model, job=mine)
+        lost = got["missing"]
+        mine.note(
+            f"{got['chunks']:,} chunks, {got['documents']:,} documents"
+            + (f", {lost:,} keys with no row" if lost else "")
+        )
 
-    threading.Thread(target=run, name="adopt-vectors", daemon=True).start()
+    passes.run_as_job(job, work)
     return {"job": job.id, "model": model}
 
 

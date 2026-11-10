@@ -369,7 +369,7 @@ against the code on 2026-11-08.
       strategies (diff-and-keep, end-and-restate): one
       `sync_facts(con, doc_id, producer, run, facts)` returning added,
       kept and ended.
-- [ ] 20. A door job registered in five places: one `DoorJob`
+- [x] 20 (2026-11-10, the log; `schedule.NAMES` stays, held by a test). A door job registered in five places: one `DoorJob`
       registry in `api/passes.py`, every job thread through `run_as_job`.
 - [ ] 23. The supervisor's role state as four parallel sets changed at
       22 sites: one `RoleState` with an enum and its transitions.

@@ -4,8 +4,6 @@ a client), and the citations pass as a job."""
 from __future__ import annotations
 
 import json
-import logging
-import threading
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -14,6 +12,7 @@ from pydantic import BaseModel
 from prax import store
 from prax.graph import ontology
 
+from . import passes
 from ._base import _con
 
 router = APIRouter()
@@ -84,39 +83,32 @@ def import_citations(req: CitationsReq, request: Request) -> dict[str, Any]:
         return {"selected": len(ids), "source": req.source, "dry_run": True}
     job = store.Job(con, "citations", total=len(ids), note=req.source)
 
-    def run() -> None:
-        own = store.connect()
-        try:
-            with store.Job.existing(own, job.id) as mine:
-                fetch = citations.HttpFetcher()
-                source = citations.source_named(req.source, fetch)
-                rep = citations.Report()
-                step = 25
-                for start in range(0, len(ids), step):
-                    citations.import_citations(
-                        own,
-                        ids[start : start + step],
-                        source=source,
-                        resolve_titles=req.resolve_titles,
-                        report=rep,
-                    )
-                    mine.update(
-                        done=min(start + step, len(ids)),
-                        note=f"{rep.documents} resolved, {rep.linked} edges,"
-                        f" {len(rep.errors)} errors, {fetch.calls} requests",
-                    )
-                mine.note(
-                    f"done: {rep.documents} resolved, {rep.unresolved} unresolved,"
-                    f" {rep.linked} cites edges, {rep.existing} existing,"
-                    f" {rep.library_refs} to library documents,"
-                    f" {len(rep.errors)} errors, {fetch.calls} requests"
-                )
-        except Exception:
-            logging.getLogger("prax.citations").exception("citations failed")
-        finally:
-            own.close()
+    def work(own: Any, mine: store.Job) -> None:
+        fetch = citations.HttpFetcher()
+        source = citations.source_named(req.source, fetch)
+        rep = citations.Report()
+        step = 25
+        for start in range(0, len(ids), step):
+            citations.import_citations(
+                own,
+                ids[start : start + step],
+                source=source,
+                resolve_titles=req.resolve_titles,
+                report=rep,
+            )
+            mine.update(
+                done=min(start + step, len(ids)),
+                note=f"{rep.documents} resolved, {rep.linked} edges,"
+                f" {len(rep.errors)} errors, {fetch.calls} requests",
+            )
+        mine.note(
+            f"done: {rep.documents} resolved, {rep.unresolved} unresolved,"
+            f" {rep.linked} cites edges, {rep.existing} existing,"
+            f" {rep.library_refs} to library documents,"
+            f" {len(rep.errors)} errors, {fetch.calls} requests"
+        )
 
-    threading.Thread(target=run, name="citations", daemon=True).start()
+    passes.run_as_job(job, work)
     return {"selected": len(ids), "source": req.source, "dry_run": False, "job": job.id}
 
 

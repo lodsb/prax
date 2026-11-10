@@ -407,3 +407,80 @@ def test_the_banner_names_the_pass_that_runs(client: TestClient) -> None:
     assert (banner["name"], banner["done"], banner["total"]) == ("maintain", 3400, 9962)
     store.job_finish(con, job.id, status="done")
     assert client.get("/changes").json()["maintenance"] is None
+
+
+def test_a_door_job_is_registered_once() -> None:
+    # the clock's names, the banner's and the Jobs view's are read from
+    # one list; a name the clock knows with no starter was skipped silently
+    from prax.api import passes
+
+    on_clock = {j.name for j in passes.JOBS if j.clock is not None}
+    assert on_clock == set(schedule.NAMES)
+    assert tuple(j.name for j in passes.JOBS) == passes.MAINTENANCE
+    assert set(passes.clock_starters(None)) == set(schedule.NAMES)
+
+
+def test_the_jobs_view_keeps_its_order_and_shape(client: TestClient) -> None:
+    got = client.get("/maintenance").json()["passes"]
+    names = [p["name"] for p in got]
+    tail = ["resolve", "figures", "fixes", "questions", "backup", "heal"]
+    assert names == ["maintain", *store.PASSES, *store.ON_REQUEST, *tail]
+    by = {p["name"]: p for p in got}
+    assert set(by["resolve"]) == {"name", "what", "at", "last", "start"}
+    assert by["resolve"]["start"]["path"] == "/graph/resolve"
+    assert by["heal"]["where"] == "the health panel"
+    assert by["heal"]["start"] is None
+
+
+def test_a_job_thread_keeps_the_viewer_and_says_when_it_is_done(
+    client: TestClient,
+) -> None:
+    import threading
+
+    from prax.api import passes
+
+    seen: list[Any] = []
+    finished = threading.Event()
+    viewer = store.Viewer(name="reader")
+    token = store.VIEWER.set(viewer)
+    try:
+        job = store.Job(client.app.state.con, "test-job")
+        passes.run_as_job(
+            job, lambda own, mine: seen.append(store.VIEWER.get()), done=finished.set
+        )
+    finally:
+        store.VIEWER.reset(token)
+    assert finished.wait(10)
+    assert seen == [viewer]
+
+
+def test_the_questions_job_lets_go_of_its_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+    import time
+
+    from prax.answering import questions
+    from prax.api import passes
+
+    gate = threading.Event()
+
+    def refresh_all(con: Any, **kw: Any) -> dict[str, int]:
+        gate.wait(10)
+        return {"refreshed": 0, "checked": 0}
+
+    monkeypatch.setattr(questions, "refresh_all", refresh_all)
+    con = client.app.state.con
+    first = passes.start_questions(con, only="p", briefing=False)
+    # a second start while the first runs joins it
+    assert passes.start_questions(con, only="p", briefing=False) == {
+        "job": first["job"],
+        "running": True,
+    }
+    gate.set()
+    for _ in range(100):
+        with passes._answering_lock:
+            if "p" not in passes._answering:
+                break
+        time.sleep(0.05)
+    assert "p" not in passes._answering

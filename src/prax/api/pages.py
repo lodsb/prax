@@ -3,8 +3,6 @@ the questions pass as a job, and the registry of what it is answering."""
 
 from __future__ import annotations
 
-import logging
-import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,6 +13,7 @@ from prax.answering import questions
 from prax.text import blocks
 
 from ._base import _con, ui_url
+from .passes import _answering, _answering_lock, start_questions
 
 router = APIRouter()
 
@@ -329,23 +328,13 @@ def questions_create(req: QuestionReq, request: Request) -> dict[str, Any]:
 def questions_run(req: QuestionsRunReq, request: Request) -> dict[str, Any]:
     """Check every question (or one) and ask again what is due, as a job;
     with ``briefing`` the day's page after."""
-    return _start_questions(
+    return start_questions(
         _con(request),
         only=req.slug,
         force=req.force,
         briefing=req.briefing,
         release=req.release,
     )
-
-
-# what the questions pass has in hand: the ``only`` of each running job
-# ("" for every question, a slug, a slug#id) and its job id, so a page
-# and a listing can say "asking…" instead of leaving a click unanswered,
-# and a second click while the first runs joins that job instead of
-# starting another (a run is a model call; a page once took twenty-six
-# in four minutes from one person's clicks)
-_answering: dict[str, int] = {}
-_answering_lock = threading.Lock()
 
 
 def _asking_page(slug: str) -> bool:
@@ -359,45 +348,6 @@ def _asking(slug: str, block_ids: list[str]) -> list[str]:
         if "" in _answering or slug in _answering:
             return list(block_ids)
         return [b for b in block_ids if f"{slug}#{b}" in _answering]
-
-
-def _start_questions(
-    con: Any,
-    *,
-    only: str | None = None,
-    force: bool = False,
-    briefing: bool = True,
-    release: bool = False,
-) -> dict[str, Any]:
-    key = only or ""
-    with _answering_lock:
-        running = _answering.get(key)
-        if running is not None:
-            return {"job": running, "running": True}
-        job = store.Job(con, "questions", note=only or "every question")
-        _answering[key] = job.id
-
-    def run() -> None:
-        con = store.connect()
-        try:
-            with store.Job.existing(con, job.id) as mine:
-                rep = questions.refresh_all(
-                    con, force=force, only=only, job=mine, release=release
-                )
-                note = f"{rep['refreshed']} of {rep['checked']} asked again"
-                if briefing:
-                    b = questions.briefing(con, job=mine)
-                    note += f"; briefing: {b['documents']} documents"
-                mine.update(note=note)
-        except Exception:  # the job row carries the error
-            logging.getLogger("prax.questions").exception("the questions failed")
-        finally:
-            con.close()
-            with _answering_lock:
-                _answering.pop(key, None)
-
-    threading.Thread(target=run, name="questions", daemon=True).start()
-    return {"job": job.id}
 
 
 def _answer_new_blocks(con: Any, slug: str, text: str) -> int | None:
@@ -415,5 +365,5 @@ def _answer_new_blocks(con: Any, slug: str, text: str) -> int | None:
         return None  # (a held block is the person's until released)
     if _asking_page(slug):
         return None
-    got: int | None = _start_questions(con, only=slug, briefing=False)["job"]
+    got: int | None = start_questions(con, only=slug, briefing=False)["job"]
     return got

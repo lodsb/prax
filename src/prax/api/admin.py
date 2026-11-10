@@ -108,17 +108,23 @@ def maintenance(request: Request) -> dict[str, Any]:
         return e.at.strftime("%H:%M") if e else None
 
     notes = store.pass_notes()
-    passes: list[dict[str, Any]] = [
-        {
-            "name": "maintain",
-            "what": "every pass below that the nightly runs, one job",
-            "at": at("maintain"),
-            "last": last("maintain"),
-            "start": {"path": "/maintain", "body": {}},
+    first, *rest = passes.JOBS
+
+    def entry(job: passes.DoorJob) -> dict[str, Any]:
+        got: dict[str, Any] = {
+            "name": job.name,
+            "what": job.what,
+            "at": at(job.name),
+            "last": last(job.name),
+            "start": job.start,
         }
-    ]
+        if job.where:
+            got["where"] = job.where
+        return got
+
+    jobs = [entry(first)]
     for name in (*store.PASSES, *store.ON_REQUEST):
-        passes.append(
+        jobs.append(
             {
                 "name": name,
                 "what": notes.get(name, ""),
@@ -132,67 +138,8 @@ def maintenance(request: Request) -> dict[str, Any]:
                 else {"path": "/maintain", "body": {"only": [name]}},
             }
         )
-    passes += [
-        {
-            "name": "resolve",
-            "what": "the safe merges: equal names in a type, a type and its"
-            " subtype, the concept/method twins; the likely pairs stay a"
-            " person's",
-            "at": at("resolve"),
-            "last": last("resolve"),
-            "start": {
-                "path": "/graph/resolve",
-                "body": {
-                    "apply": True,
-                    "twins": True,
-                    "subtypes": True,
-                    "likely": False,
-                },
-            },
-        },
-        {
-            "name": "figures",
-            "what": "a slice of the documents whose pictures the vision model"
-            " has not read",
-            "at": at("figures"),
-            "last": last("figures"),
-            "start": {"path": "/figures", "body": {}},
-        },
-        {
-            "name": "fixes",
-            "what": "a slice of the readings the text checks name as fixes:"
-            " marker for a scan read from its OCR layer, the crops for a"
-            " caption with no picture",
-            "at": at("fixes"),
-            "last": last("fixes"),
-            "start": {"path": "/fixes", "body": {}},
-        },
-        {
-            "name": "questions",
-            "what": "the standing questions asked again where the library"
-            " learned something, then the day's briefing",
-            "at": at("questions"),
-            "last": last("questions"),
-            "start": {"path": "/questions/run", "body": {}},
-        },
-        {
-            "name": "backup",
-            "what": "what cannot be rebuilt, copied to the backup path",
-            "at": at("backup"),
-            "last": last("backup"),
-            "start": None,
-        },
-        {
-            "name": "heal",
-            "what": "the recurring ailments, each repaired as a job: the health"
-            " panel lists them",
-            "at": None,
-            "last": last("heal"),
-            "start": None,
-            "where": "the health panel",
-        },
-    ]
-    return {"passes": passes, "running": store.running_of(con, MAINTENANCE)}
+    jobs += [entry(job) for job in rest]
+    return {"passes": jobs, "running": store.running_of(con, MAINTENANCE)}
 
 
 class FiguresReq(BaseModel):

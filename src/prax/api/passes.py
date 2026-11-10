@@ -2,49 +2,54 @@
 its clock (``prax.host.schedule``): maintenance, a resolution round, a
 backup, the night's slices of unread figures and of the fixes the text
 checks name. Each is ``run_as_job``: a
-thread with its own connection, the job row carrying progress and error."""
+thread with its own connection, the job row carrying progress and error.
+``JOBS`` at the end is the one list of them: the clock's starters, the
+banner's names and the Jobs view are read from it."""
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import sqlite3
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from prax import models, store
 
-# the passes the store does to itself, as the jobs they run under: the
-# banner's list, and the Jobs view's (GET /maintenance)
-MAINTENANCE = (
-    "maintain",
-    "heal",
-    "resolve",
-    "backup",
-    "figures",
-    "fixes",
-    "questions",
-)
-
 
 def run_as_job(
-    job: store.Job, work: Callable[[sqlite3.Connection, store.Job], object]
+    job: store.Job,
+    work: Callable[[sqlite3.Connection, store.Job], object],
+    *,
+    done: Callable[[], None] | None = None,
 ) -> int:
     """Run ``work`` in a thread of its own, on a connection of its own,
     under ``job`` (already made, so the caller can answer with its id at
-    once): the job row carries its progress, and its error if it fails."""
+    once): the job row carries its progress, and its error if it fails.
+    The thread runs in a copy of the caller's context, so a viewer the
+    request set (``store.VIEWER``) holds in the job too; ``done`` is
+    called at the end whatever happened."""
 
     def run() -> None:
-        own = store.connect()
         try:
-            with store.Job.existing(own, job.id) as mine:
-                work(own, mine)
-        except Exception:  # the job row carries the error
-            logging.getLogger(f"prax.{job.name}").exception("%s failed", job.name)
+            own = store.connect()
+            try:
+                with store.Job.existing(own, job.id) as mine:
+                    work(own, mine)
+            except Exception:  # the job row carries the error
+                logging.getLogger(f"prax.{job.name}").exception("%s failed", job.name)
+            finally:
+                own.close()
         finally:
-            own.close()
+            if done is not None:
+                done()
 
-    threading.Thread(target=run, name=job.name, daemon=True).start()
+    context = contextvars.copy_context()
+    threading.Thread(
+        target=context.run, args=(run,), name=job.name, daemon=True
+    ).start()
     return int(job.id)
 
 
@@ -244,3 +249,141 @@ def start_fixes(con: Any, documents: int | None = None) -> dict[str, Any]:
             )
         job.update(note=f"asked for {said}")
         return {"job": job.id, "requested": asked, "skipped": skipped, "waiting": held}
+
+
+# what the questions pass has in hand: the ``only`` of each running job
+# ("" for every question, a slug, a slug#id) and its job id, so a page
+# and a listing can say "asking…" instead of leaving a click unanswered,
+# and a second click while the first runs joins that job instead of
+# starting another (a run is a model call; a page once took twenty-six
+# in four minutes from one person's clicks)
+_answering: dict[str, int] = {}
+_answering_lock = threading.Lock()
+
+
+def start_questions(
+    con: Any,
+    *,
+    only: str | None = None,
+    force: bool = False,
+    briefing: bool = True,
+    release: bool = False,
+) -> dict[str, Any]:
+    """The standing questions asked again where the library learned
+    something, then the day's briefing (``schedule: questions``); one job
+    a key at a time, a second start joining the running one."""
+    from prax.answering import questions
+
+    key = only or ""
+    with _answering_lock:
+        running = _answering.get(key)
+        if running is not None:
+            return {"job": running, "running": True}
+        job = store.Job(con, "questions", note=only or "every question")
+        _answering[key] = job.id
+
+    def work(own: sqlite3.Connection, mine: store.Job) -> None:
+        rep = questions.refresh_all(
+            own, force=force, only=only, job=mine, release=release
+        )
+        note = f"{rep['refreshed']} of {rep['checked']} asked again"
+        if briefing:
+            b = questions.briefing(own, job=mine)
+            note += f"; briefing: {b['documents']} documents"
+        mine.update(note=note)
+
+    def release_key() -> None:
+        with _answering_lock:
+            _answering.pop(key, None)
+
+    try:
+        run_as_job(job, work, done=release_key)
+    except Exception:
+        release_key()
+        raise
+    return {"job": job.id}
+
+
+@dataclass(frozen=True)
+class DoorJob:
+    """A pass the door runs on itself as a job. ``clock`` begins it at
+    its hour (``schedule:``, ``prax.host.schedule.NAMES``) from the
+    entry's options; ``start`` is the request that begins it from the
+    Jobs view, or None where that is not safe from a page; ``where`` says
+    where else it is started."""
+
+    name: str
+    what: str
+    clock: Callable[[Any, dict[str, Any]], Any] | None = None
+    start: dict[str, Any] | None = None
+    where: str | None = None
+
+
+# the Jobs view's order, after "maintain" and the passes it holds
+JOBS = (
+    DoorJob(
+        "maintain",
+        "every pass below that the nightly runs, one job",
+        clock=lambda con, o: start_maintain(con, o.get("only")),
+        start={"path": "/maintain", "body": {}},
+    ),
+    DoorJob(
+        "resolve",
+        "the safe merges: equal names in a type, a type and its subtype,"
+        " the concept/method twins; the likely pairs stay a person's",
+        clock=lambda con, o: start_resolve(
+            con, twins=o.get("twins", True), subtypes=o.get("subtypes", True)
+        ),
+        start={
+            "path": "/graph/resolve",
+            "body": {"apply": True, "twins": True, "subtypes": True, "likely": False},
+        },
+    ),
+    DoorJob(
+        "figures",
+        "a slice of the documents whose pictures the vision model has not read",
+        clock=lambda con, o: start_figures(con, o.get("documents")),
+        start={"path": "/figures", "body": {}},
+    ),
+    DoorJob(
+        "fixes",
+        "a slice of the readings the text checks name as fixes: marker for a"
+        " scan read from its OCR layer, the crops for a caption with no picture",
+        clock=lambda con, o: start_fixes(con, o.get("documents")),
+        start={"path": "/fixes", "body": {}},
+    ),
+    DoorJob(
+        "questions",
+        "the standing questions asked again where the library learned"
+        " something, then the day's briefing",
+        clock=lambda con, o: start_questions(con, briefing=o.get("briefing", True)),
+        start={"path": "/questions/run", "body": {}},
+    ),
+    DoorJob(
+        "backup",
+        "what cannot be rebuilt, copied to the backup path",
+        clock=lambda con, o: start_backup(
+            con, o.get("dest"), archive=o.get("archive", True)
+        ),
+    ),
+    DoorJob(
+        "heal",
+        "the recurring ailments, each repaired as a job: the health panel lists them",
+        where="the health panel",
+    ),
+)
+
+# the passes the store does to itself, as the jobs they run under: the
+# banner's list, and the Jobs view's (GET /maintenance)
+MAINTENANCE = tuple(j.name for j in JOBS)
+
+
+def clock_starters(con: Any) -> dict[str, Callable[[dict[str, Any]], Any]]:
+    """What the door's clock begins each scheduled job with, on ``con``."""
+
+    def bound(
+        clock: Callable[[Any, dict[str, Any]], Any],
+    ) -> Callable[[dict[str, Any]], Any]:
+        return lambda options: clock(con, options)
+
+    return {j.name: bound(j.clock) for j in JOBS if j.clock is not None}

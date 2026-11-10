@@ -107,6 +107,11 @@ def tick(
     started = []
     for entry in entries() if entries_ is None else entries_:
         if entry.name not in start:
+            # every name the clock knows has a starter (prax.api.passes
+            # .JOBS, a test holds them together); a gap is said, not skipped
+            logging.getLogger("prax.schedule").warning(
+                "the clock has nothing to start %s with", entry.name
+            )
             continue
         last = store.last_job(con, entry.name)
         if last and last["status"] == "running":

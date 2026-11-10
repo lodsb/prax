@@ -10611,3 +10611,34 @@ whose docstring said nothing read its rows to decide anything.
 - Test: a list under "Cited Literature" or "7. References" is found and
   one under "Acknowledgements" is not; the move is held by the
   invariants' tests of the parts' order and re-exports.
+
+## 2026-11-10: a door job, registered once
+
+Finding 20 of the structure review. A job the door runs on itself was
+named in five places: `schedule.NAMES`, `passes.MAINTENANCE`, the
+clock's dict of starters in `api/__init__.py`, the hand-written list of
+`admin.maintenance` (the Jobs view) and its start route. The clock
+skipped a scheduled name with no starter and said nothing. Three jobs
+(questions, citations, adopt-vectors) each wrote `run_as_job` again by
+hand.
+
+- `api.passes.JOBS` is the list: a `DoorJob` with its name, what it
+  does, how the clock begins it (`clock(con, options)`), the request that
+  begins it from the Jobs view (`start`, None where a page should not)
+  and `where` else it starts. `MAINTENANCE`, the clock's starters
+  (`passes.clock_starters(con)`) and the tail of the Jobs view are read
+  from it. The view's JSON is unchanged, in the same order.
+- `schedule.NAMES` stays in `prax.host.schedule`, which must load
+  without the api package. A test holds it equal to the jobs with a
+  clock, and `schedule.tick` now logs a warning for a name it has no
+  starter for.
+- `run_as_job` runs its thread in a copy of the caller's context, so a
+  viewer a request set holds in the job too (all these routes are the
+  administrator's today, so this closes a trap rather than a leak). It
+  takes a `done` callback.
+- The questions starter moved from `api.pages` to `passes.start_questions`
+  with its guard (`_answering`, one job a key); the guard is released by
+  `done`. The citations import and adopt-vectors are `run_as_job` too.
+- Test: the registry against `schedule.NAMES`; the Jobs view's order and
+  shape; a job thread sees the request's viewer and calls `done`; a
+  second questions start joins the first, and the key is let go after.

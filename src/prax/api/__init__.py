@@ -36,20 +36,14 @@ from . import (
     importing,
     maths,
     pages,
+    passes,
     places,
     process,
     wall,
     work,
 )
 from ._base import _con, max_upload
-from .pages import _answering, _answering_lock, _start_questions
-from .passes import (
-    start_backup,
-    start_figures,
-    start_fixes,
-    start_maintain,
-    start_resolve,
-)
+from .passes import _answering, _answering_lock
 from .ui import UI_DIR, UIFiles
 
 __all__ = ["_answering", "_answering_lock", "_con", "app", "max_upload"]
@@ -113,25 +107,7 @@ def _clock(stop: threading.Event, every: float) -> None:
     try:
         while not stop.wait(every):
             try:
-                schedule.tick(
-                    con,
-                    {
-                        "maintain": lambda o: start_maintain(con, o.get("only")),
-                        "backup": lambda o: start_backup(
-                            con, o.get("dest"), archive=o.get("archive", True)
-                        ),
-                        "questions": lambda o: _start_questions(
-                            con, briefing=o.get("briefing", True)
-                        ),
-                        "figures": lambda o: start_figures(con, o.get("documents")),
-                        "fixes": lambda o: start_fixes(con, o.get("documents")),
-                        "resolve": lambda o: start_resolve(
-                            con,
-                            twins=o.get("twins", True),
-                            subtypes=o.get("subtypes", True),
-                        ),
-                    },
-                )
+                schedule.tick(con, passes.clock_starters(con))
             except Exception:
                 logging.getLogger("prax.schedule").exception("the clock failed")
     finally:
