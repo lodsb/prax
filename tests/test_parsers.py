@@ -927,3 +927,32 @@ def test_a_reading_under_its_line_is_placed_one_way() -> None:
     for module in (figures, formulas):
         assert not hasattr(module, "_read_by"), module
     assert not hasattr(figures, "carry_readings")
+
+
+def test_the_selectors_read_a_title_and_a_finding_alike(
+    con: sqlite3.Connection,
+) -> None:
+    # one clause each for a title's words and a finding of the current
+    # text, under every selector (structure review finding 11)
+    a = store.ingest_text(con, "one", title="Harmony 100% Pure")["doc_id"]
+    b = store.ingest_text(con, "two", title="Harmony in 1000 steps")["doc_id"]
+    assert store.select_documents(con, title="100%") == [a]
+    assert store.select_for_reading(con, title="100%") == [a]
+    listed = store.list_documents(con, title="100%")
+    assert [d["id"] for d in listed["items"]] == [a]
+    text_hash = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (b,)
+    ).fetchone()[0]
+    found = {"check": "maths-as-text", "fix": {"extractor": "marker"}}
+    store.update_meta(
+        con, b, keys={"quality": {"text_hash": text_hash, "findings": [found]}}
+    )
+    store.update_meta(
+        con, a, keys={"quality": {"text_hash": "an earlier text", "findings": [found]}}
+    )
+    # a finding of the text a document held before says nothing of this one
+    assert store.select_for_reading(con, finding="maths-as-text") == [b]
+    assert store.select_for_reading(
+        con, finding="maths-as-text", fixed_by="marker"
+    ) == [b]
+    assert store.select_for_reading(con, finding="maths-as-text", fixed_by="x") == []

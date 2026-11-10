@@ -10784,3 +10784,30 @@ had not asked would read 128 numbers as 384.
 - Test: a retired document's vector is taken out by the compaction; a
   gone face's vector likewise, with the face file's dimension read from
   its name and its delta's.
+
+## 2026-11-10: the clauses that choose documents, written once
+
+Finding 11 of the structure review. Four selectors choose documents
+(`select_for_reading`, `list_documents`, `select_documents`,
+`thin_documents`), and each wrote its own clause for a title's words, a
+prefix of the MIME type or the text source, and "the checks of the text
+the document holds now found this". `select_for_reading` re-wrote the
+last of these beside `_CURRENT_QUALITY`, and stripped the `d.` alias out
+of a doctype's SQL with `.replace("d.", "")`.
+
+- In `store.documents.readings`: `title_contains(words)` (any case, a
+  literal: `100%` is not a pattern), `starts_with(expr, prefix)` (a
+  column or a JSON path) and `current_finding(checks, *, fixed_by)`. Each
+  returns its SQL and arguments over the alias `d`.
+- `select_for_reading` reads `documents d`, so a doctype's SQL is used as
+  written. `thin_documents` leaves out a scan through `current_finding`.
+  `list_documents` and `select_documents` take their title and prefix
+  clauses from the same place. `select_documents` keeps its OR of
+  filters: its one production caller (`evaluation.build_fixture_store`)
+  and the tests ask it for one filter at a time.
+- The review's full `DocumentFilter` dataclass was not built: its own
+  check found shared clauses got most of the gain. `cleanup_set` has no
+  clause in common with these.
+- Test: a title with `%` in it is a literal under all three selectors; a
+  finding of an earlier text is not a finding, and `fixed_by` narrows to
+  the reading a finding names.

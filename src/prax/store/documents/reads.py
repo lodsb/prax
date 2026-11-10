@@ -24,16 +24,16 @@ from ..base import (
     Document,
     SearchHit,
     _guards,
-    _like_prefix,
     _read_archive,
     _reading,
     domain_clause,
     hidden_documents,
+    live,
     meta_of,
     rows_in,
 )
 from .meta import _untried
-from .readings import _CURRENT_QUALITY
+from .readings import _CURRENT_QUALITY, starts_with, title_contains
 
 
 @_reading
@@ -58,19 +58,21 @@ def select_documents(
     args: list[Any] = []
     if pending:
         clauses.append("parsed_at IS NULL")
-    if text_source_prefix is not None:
-        clauses.append("json_extract(meta, '$.text_source') LIKE ? ESCAPE '!'")
-        args.append(_like_prefix(text_source_prefix))
-    if title:
-        clauses.append("title LIKE ? ESCAPE '!'")
-        args.append("%" + _like_prefix(title)[:-1] + "%")
+    for clause, given in (
+        [starts_with("json_extract(d.meta, '$.text_source')", text_source_prefix)]
+        if text_source_prefix is not None
+        else []
+    ) + ([title_contains(title)] if title else []):
+        clauses.append(clause)
+        args.extend(given)
     if not clauses:
         return []
-    sql = f"SELECT id FROM documents WHERE ({' OR '.join(clauses)}) AND {LIVE}"
+    sql = f"SELECT d.id FROM documents d WHERE ({' OR '.join(clauses)}) AND {live('d')}"
     if mime_prefix is not None:
-        sql += " AND mime LIKE ? ESCAPE '!'"
-        args.append(_like_prefix(mime_prefix))
-    sql += " ORDER BY id"
+        clause, given = starts_with("d.mime", mime_prefix)
+        sql += f" AND {clause}"
+        args.extend(given)
+    sql += " ORDER BY d.id"
     if limit is not None:
         sql += " LIMIT ?"
         args.append(limit)
@@ -349,14 +351,16 @@ def list_documents(
             )
             args.append(value)
     if title:
-        clauses.append("lower(d.title) LIKE ? ESCAPE '!'")
-        args.append("%" + _like_prefix(title.lower())[:-1] + "%")
+        clause, given = title_contains(title)
+        clauses.append(clause)
+        args.extend(given)
     if source:
         clauses.append("json_extract(d.meta, '$.source') = ?")
         args.append(source)
     if mime_prefix:
-        clauses.append("d.mime LIKE ? ESCAPE '!'")
-        args.append(_like_prefix(mime_prefix))
+        clause, given = starts_with("d.mime", mime_prefix)
+        clauses.append(clause)
+        args.extend(given)
     if since:
         if not _MOMENT.fullmatch(since):
             raise ValueError(f"since: a date or a UTC moment, not {since!r}")

@@ -360,7 +360,7 @@ against the code on 2026-11-08.
 - [x] 9 (2026-11-10, the log). The vector index family written three times; only the chunk
       index is compacted: one `IndexFile` per kind, `compact_vectors`
       and `merge_vectors` over all three.
-- [ ] 11 with 14. "Which documents" built by four selectors; a search's
+- [ ] 11 with 14 (11 done 2026-11-10, the log: shared clauses, no `DocumentFilter`; 14 open). "Which documents" built by four selectors; a search's
       domain, doctype, published span and aside pages filtered after
       ranking with a guessed over-fetch each: one `DocumentFilter`, the
       search's filters inside the legs as `senses` already are. Measured

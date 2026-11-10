@@ -21,6 +21,7 @@ from ..base import (
     _serialized,
     archive_path,
     live,
+    marks,
     meta_of,
     now,
     rows_in,
@@ -262,6 +263,48 @@ def count_pages(con: sqlite3.Connection, ids: list[int]) -> int:
     return done
 
 
+# The clauses that choose documents, for every selector (``select_for_reading``,
+# ``list_documents``, ``select_documents``, ``thin_documents``): each
+# was written at each selector, and they had drifted (structure review
+# finding 11). Each returns the SQL and its arguments.
+
+
+def title_contains(words: str, alias: str = "d") -> tuple[str, list[Any]]:
+    """A title holding ``words``, any case, as a literal (``100%`` is not
+    a pattern)."""
+    return (
+        f"lower(coalesce({alias}.title, '')) LIKE ? ESCAPE '!'",
+        ["%" + _like_prefix(words.lower())[:-1] + "%"],
+    )
+
+
+def starts_with(expr: str, prefix: str) -> tuple[str, list[Any]]:
+    """A column or a JSON path (``d.mime``, ``json_extract(d.meta,
+    '$.text_source')``) that starts with ``prefix``, as a literal."""
+    return f"coalesce({expr}, '') LIKE ? ESCAPE '!'", [_like_prefix(prefix)]
+
+
+def current_finding(
+    checks: str | tuple[str, ...], *, fixed_by: str | None = None, alias: str = "d"
+) -> tuple[str, list[Any]]:
+    """The checks of the text the document holds now found one of
+    ``checks`` (``meta.quality``, stage AO): a finding of an earlier text
+    says nothing of this one. With ``fixed_by``, only a finding that
+    names that reading as its fix."""
+    wanted = (checks,) if isinstance(checks, str) else checks
+    sql = (
+        f"coalesce(json_extract({alias}.meta, '$.quality.text_hash'), '')"
+        f" = {alias}.text_hash"
+        f" AND EXISTS (SELECT 1 FROM json_each({alias}.meta, '$.quality.findings') f"
+        f" WHERE json_extract(f.value, '$.check') IN ({marks(len(wanted))})"
+    )
+    args: list[Any] = list(wanted)
+    if fixed_by:
+        sql += " AND json_extract(f.value, '$.fix.extractor') = ?"
+        args.append(fixed_by)
+    return sql + ")", args
+
+
 def thin_documents(
     con: sqlite3.Connection,
     *,
@@ -280,14 +323,12 @@ def thin_documents(
     and left out: they see its pictures and name marker's OCR as its fix,
     where this sees only bytes a page. This finds the rest, a scan whose
     first pages carry text (the quality review of 2026-10-18, 22)."""
+    scan, args = current_finding(("ocr-layer", "no-layer"))
     rows = con.execute(
         "SELECT id, text_hash FROM documents d WHERE mime = 'application/pdf'"
         "   AND text_hash IS NOT NULL"
-        f"   AND {LIVE}"
-        "   AND NOT EXISTS (SELECT 1 FROM json_each(d.meta, '$.quality.findings') f"
-        "     WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
-        "     AND json_extract(f.value, '$.check') IN ('ocr-layer', 'no-layer'))"
-        " ORDER BY id"
+        f"   AND {LIVE} AND NOT ({scan}) ORDER BY id",
+        args,
     ).fetchall()
     # what the parses recorded: a PDF without a count is not weighed
     # (``uncounted_pages``), rather than every one opened on every check
@@ -352,47 +393,37 @@ def select_for_reading(
     where the finding names that reading as its fix, so a reading that ran
     and could not help is not asked again); every filter given must
     hold. Retired documents are never selected."""
-    sql = f"SELECT id FROM documents WHERE {LIVE}"
+    sql = f"SELECT d.id FROM documents d WHERE {live('d')}"
     args: list[Any] = []
+    clauses: list[tuple[str, list[Any]]] = []
     if ids:
-        sql += f" AND id IN ({','.join('?' * len(ids))})"
-        args.extend(int(i) for i in ids)
+        clauses.append((f"d.id IN ({marks(len(ids))})", [int(i) for i in ids]))
     if mime:
-        sql += " AND coalesce(mime, '') LIKE ? ESCAPE '!'"
-        args.append(_like_prefix(mime))
+        clauses.append(starts_with("d.mime", mime))
     if title:
-        sql += " AND lower(coalesce(title, '')) LIKE ? ESCAPE '!'"
-        args.append("%" + _like_prefix(title.lower())[:-1] + "%")
+        clauses.append(title_contains(title))
     if text_source:
-        sql += (
-            " AND coalesce(json_extract(meta, '$.text_source'), '') LIKE ? ESCAPE '!'"
+        clauses.append(
+            starts_with("json_extract(d.meta, '$.text_source')", text_source)
         )
-        args.append(_like_prefix(text_source))
     if doctype:
         if doctype not in DOCTYPES:
             raise ValueError(f"doctype must be one of {sorted(DOCTYPES)}")
-        sql += " AND " + DOCTYPES[doctype].replace("d.", "")
+        clauses.append((DOCTYPES[doctype], []))
     if finding:
-        # what the checks found in the text the document holds now: a
-        # finding of an earlier text says nothing of this one
-        sql += (
-            " AND json_extract(meta, '$.quality.text_hash') = text_hash"
-            " AND EXISTS (SELECT 1 FROM json_each(meta, '$.quality.findings') f"
-            " WHERE json_extract(f.value, '$.check') = ?"
-        )
-        args.append(finding)
-        if fixed_by:
-            sql += " AND json_extract(f.value, '$.fix.extractor') = ?"
-            args.append(fixed_by)
-        sql += ")"
+        clauses.append(current_finding(finding, fixed_by=fixed_by))
+    for clause, given in clauses:
+        sql += f" AND {clause}"
+        args.extend(given)
     if unpolished:
         # a video with an automatic transcript whose text the polish has
         # not written yet
         sql += (
-            " AND json_extract(meta, '$.video.captions') = 'asr'"
-            " AND coalesce(json_extract(meta, '$.text_source'), '') NOT LIKE 'polish/%'"
+            " AND json_extract(d.meta, '$.video.captions') = 'asr'"
+            " AND coalesce(json_extract(d.meta, '$.text_source'), '')"
+            " NOT LIKE 'polish/%'"
         )
-    sql += " ORDER BY id"
+    sql += " ORDER BY d.id"
     chosen = [r[0] for r in con.execute(sql, args)]
     if unreadable:
         keep = set(unreadable_documents(con))
@@ -788,11 +819,10 @@ def tried_on_this_text(con: sqlite3.Connection, extractor: str) -> frozenset[int
     marker read came out shorter than its OCR layer kept its finding and
     would have been read again every night. A new text, or a reading a
     person asks for, tries again."""
-    marks = ",".join("?" * len(UNCHANGED))
     rows = con.execute(
         "SELECT r.doc_id FROM readings r JOIN documents d ON d.id = r.doc_id"
         " WHERE r.extractor = ?"
-        f" AND (r.state = 'error' OR r.outcome IN ({marks}))"
+        f" AND (r.state = 'error' OR r.outcome IN ({marks(len(UNCHANGED))}))"
         " AND r.finished_at >= coalesce(d.parsed_at, '')"
         " AND r.id = (SELECT max(id) FROM readings"
         "  WHERE doc_id = r.doc_id AND extractor = r.extractor"
