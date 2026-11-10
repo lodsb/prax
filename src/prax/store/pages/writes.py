@@ -259,14 +259,16 @@ def _rename_page(
     """A rename: the page's entity in the graph goes with it, so its edges
     stay its own (merged into a namesake if one exists). The one write of
     ``_write_page`` that still commits on its own: ``rename_entity`` commits
-    a merge in batches, so a retitled page is not taken back whole."""
+    a merge in batches, so a retitled page is not taken back whole. Every
+    node of the page under the old name goes, whatever type a write gave
+    it (``entities.doc_id``)."""
     con.execute("UPDATE documents SET title = ? WHERE id = ?", (title, doc_id))
-    page_type = "project" if kind == "project" else "page"
-    row = con.execute(
-        "SELECT id FROM entities WHERE name = ? AND type = ?", (old, page_type)
-    ).fetchone()
-    if row is not None:
-        rename_entity(con, row["id"], title)
+    for (entity,) in con.execute(
+        "SELECT id FROM entities WHERE doc_id = ? AND name = ?"
+        " AND canonical_id IS NULL ORDER BY id",
+        (doc_id, old),
+    ).fetchall():
+        rename_entity(con, int(entity), title)
 
 
 def _page_link(
@@ -303,7 +305,7 @@ def _annotate(
     except KeyError:
         raise NotFound(f"no such document to annotate: {target}") from None
     edge = Edge(*page, rel, target_name, target_type)
-    if kind == "synthesis" and target_type != "page":
+    if kind == "synthesis" and target_type not in ("page", "project"):
         _set_promote(con, target, by="page", reason=f"source of synthesis {slug}")
     _page_link(con, edge, doc_id, slug, revision)
 
@@ -317,13 +319,12 @@ def _link_project(
     revision: int,
 ) -> None:
     project = con.execute(
-        "SELECT d.title FROM pages p JOIN documents d ON d.id = p.doc_id"
-        " WHERE p.slug = ? AND p.kind = 'project'",
+        "SELECT doc_id FROM pages WHERE slug = ? AND kind = 'project'",
         (slugify(part_of),),
     ).fetchone()
     if project is None:
         raise NotFound(f"no project page {part_of!r}")
-    edge = Edge(*page, "part_of", project[0], "project")
+    edge = Edge(*page, "part_of", *document_node(con, int(project[0])))
     _page_link(con, edge, doc_id, slug, revision)
 
 
@@ -632,8 +633,8 @@ def add_to_project(
     if project is None:
         raise NotFound(f"no project page {project_slug!r}")
     name, node_type = document_node(con, doc_id)
-    is_page = node_type == "page"
-    edge = Edge(name, node_type, "part_of", project["title"], "project")
+    is_page = node_type in ("page", "project")
+    edge = Edge(name, node_type, "part_of", *document_node(con, project["doc_id"]))
     if find_edges(con, edge):
         return None
     if not is_page and promote:

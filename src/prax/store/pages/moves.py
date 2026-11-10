@@ -20,6 +20,7 @@ from ..graph import (
     Edge,
     _invalidate_edge,
     _link,
+    document_node,
 )
 from .texts import (
     PAGE_AUTHORS,
@@ -29,7 +30,6 @@ from .texts import (
 from .tree import (
     _aliases,
     _is_project_page,
-    _page_node,
     _parent_of,
     _refuse_cycle,
     _refuse_elsewhere,
@@ -206,7 +206,7 @@ def _rehome(
     """A moved page's ``part_of`` edges made the one to ``project``: one
     live edge to it stays, any other ends, and one is linked when none was
     there. Returns the ended edges' ids."""
-    name, node_type = _page_node(con, doc_id)
+    name, node_type = document_node(con, doc_id)
     ended: list[int] = []
     kept = False
     target = int(project["doc_id"]) if project is not None else None
@@ -220,7 +220,9 @@ def _rehome(
         slug, revision = run.rsplit("@", 1)
         _link(
             con,
-            Edge(name, node_type, "part_of", str(project["title"]), "project"),
+            Edge(
+                name, node_type, "part_of", *document_node(con, int(project["doc_id"]))
+            ),
             confidence="EXTRACTED",
             source_doc=doc_id,
             evidence=f"page {slug} {_MOVED}, revision {revision}",

@@ -449,7 +449,9 @@ documents_fts    FTS5 over the document field (title, kind, creators, venue, sum
 document_embeddings  doc_id, model, embedded_at        (which document has a field vector)
 vectors-<model>.usearch       HNSW index keyed by chunk id, f16, cosine (a file, not a table)
 vectors-doc-<model>.usearch   HNSW index of the document field, keyed by document id
-entities         id, name, type, canonical_id (resolution merges), created_at
+entities         id, name, type, canonical_id (resolution merges), created_at,
+                 doc_id (the document a node of a document type is, migration 69:
+                 kept when an edge first reaches it, read by node_document)
 entity_labels    entity_id, label, lang, kind (pref | alt), was (the name it had
                  before a pass renamed it), from_entity (the merge it came from),
                  source_doc, producer, run, confidence, at

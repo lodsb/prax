@@ -69,7 +69,6 @@ from .tree import (  # noqa: F401
     _is_project_page,
     _lifecycle,
     _members,
-    _page_node,
     _parent_of,
     _project_edges,
     _projects_of,

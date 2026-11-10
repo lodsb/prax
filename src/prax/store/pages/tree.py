@@ -14,9 +14,6 @@ from ..base import (
     hidden_documents,
     personal_sql,
 )
-from ..graph import (
-    _doc_ids_by_title,
-)
 from ..retrieval import staleness
 from .texts import (
     _slug_of,
@@ -46,33 +43,23 @@ def _children(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     return [dict(r) for r in rows if not document_hidden(con, int(r["doc_id"]))]
 
 
-def _page_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
-    """A page as a node of the graph: its title, and ``project`` or ``page``."""
-    row = con.execute(
-        "SELECT d.title, p.kind FROM pages p JOIN documents d ON d.id = p.doc_id"
-        " WHERE p.doc_id = ?",
-        (doc_id,),
-    ).fetchone()
-    return str(row["title"]), "project" if row["kind"] == "project" else "page"
-
-
 def _project_edges(con: sqlite3.Connection, doc_id: int) -> list[sqlite3.Row]:
     """The live ``part_of`` edges from a page to a project page, whoever
     wrote them (``write_page``, a project's member, a ``link`` by hand),
-    each with the project page's id and slug. The project end is matched
-    by its page's title and not its type: ``link`` to a project page's
-    document id names it as a ``page`` (``document_node``), where the
-    project's own writes name it a ``project``; the nlbank agent's three
-    edges of 2026-11-03 were the first."""
-    name, node_type = _page_node(con, doc_id)
+    each with the project page's id and slug. Both ends are found by the
+    document their node is (``entities.doc_id``, migration 69), whatever
+    type an older write gave the node: before 2026-11-10 ``link`` to a
+    project page's document id named it a ``page`` where the project's own
+    writes named it a ``project`` (the nlbank agent's three edges of
+    2026-11-03 were the first)."""
     return con.execute(
-        "SELECT x.id, x.source_doc, p.doc_id, p.slug, d.title FROM edges x"
-        " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
-        " JOIN documents d ON d.title = t.name"
-        " JOIN pages p ON p.doc_id = d.id AND p.kind = 'project'"
-        " WHERE s.name = ? AND s.type = ? AND t.type IN ('project', 'page')"
-        " AND x.rel = 'part_of' AND x.valid_to IS NULL ORDER BY x.id",
-        (name, node_type),
+        "SELECT x.id, x.source_doc, p.doc_id, p.slug, d.title FROM entities s"
+        " JOIN edges x ON x.src = s.id AND x.rel = 'part_of' AND x.valid_to IS NULL"
+        " JOIN entities t ON t.id = x.dst"
+        " JOIN pages p ON p.doc_id = t.doc_id AND p.kind = 'project'"
+        " JOIN documents d ON d.id = p.doc_id"
+        " WHERE s.doc_id = ? ORDER BY x.id",
+        (doc_id,),
     ).fetchall()
 
 
@@ -104,7 +91,7 @@ def _projects_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
 PROJECT_MEMBERS = 500  # members a project page's read lists
 
 
-def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
+def _members(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """What is part of a project: the documents and pages with a live
     ``part_of`` edge to it, the viewer's to see, ``PROJECT_MEMBERS`` at
     most, ``count`` all of them."""
@@ -113,21 +100,21 @@ def _members(con: sqlite3.Connection, title: str) -> dict[str, Any]:
         {
             (str(r["name"]), str(r["type"])): r
             for r in con.execute(
-                "SELECT DISTINCT s.name, s.type, x.source_doc FROM edges x"
-                " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
-                " WHERE x.rel = 'part_of' AND x.valid_to IS NULL"
-                " AND t.name = ? AND t.type IN ('project', 'page') ORDER BY s.name",
-                (title,),
+                "SELECT DISTINCT s.name, s.type, s.doc_id, x.source_doc"
+                " FROM entities t JOIN edges x ON x.dst = t.id"
+                " JOIN entities s ON s.id = x.src"
+                " WHERE t.doc_id = ? AND x.rel = 'part_of' AND x.valid_to IS NULL"
+                " ORDER BY s.name",
+                (doc_id,),
             )
             # a fact a hidden document states is hidden with it, as in a walk
             if doc_visible(r["source_doc"], hidden)
         }.values()
     )
-    first = _doc_ids_by_title(con, [str(r["name"]) for r in rows])
     items = [
-        {"title": str(r["name"]), "type": r["type"], "doc_id": first.get(r["name"])}
+        {"title": str(r["name"]), "type": r["type"], "doc_id": r["doc_id"]}
         for r in rows
-        if first.get(r["name"]) not in hidden
+        if r["doc_id"] not in hidden
     ]
     return {"count": len(items), "items": items[:PROJECT_MEMBERS]}
 
@@ -157,21 +144,19 @@ PAGE_SOURCES = 200  # sources of one page looked at for staleness
 
 def _annotated(con: sqlite3.Connection, doc_id: int) -> list[int]:
     """The documents a page annotates or synthesizes, by its edges: each
-    target's title to the first document of that title, looked up a batch
-    at a time: one lookup an edge was 48 ms on the live store before
-    migration 68 indexed the titles, and a page of 14,499 links took
-    minutes to open (2026-10-29)."""
-    names = [
-        str(r[0])
+    target node's document (``entities.doc_id``), in one query. A lookup by
+    title an edge was 48 ms on the live store before migration 68 indexed
+    the titles, and a page of 14,499 links took minutes to open
+    (2026-10-29)."""
+    return [
+        int(r[0])
         for r in con.execute(
-            "SELECT DISTINCT t.name FROM edges x JOIN entities t ON t.id = x.dst"
+            "SELECT DISTINCT t.doc_id FROM edges x JOIN entities t ON t.id = x.dst"
             " WHERE x.source_doc = ? AND x.valid_to IS NULL"
-            " AND x.rel IN ('annotates', 'synthesizes')",
+            " AND x.rel IN ('annotates', 'synthesizes') AND t.doc_id IS NOT NULL",
             (doc_id,),
         )
     ]
-    first = _doc_ids_by_title(con, names)
-    return [first[n] for n in names if n in first]
 
 
 def _lifecycle(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any]:

@@ -19,7 +19,6 @@ from prax.ml import rerank as rerank_mod
 from prax.text import dates, status
 
 from ..base import (
-    LIVE,
     SearchHit,
     _has_vectors,
     _index_path,
@@ -509,45 +508,45 @@ def staleness(
                 doc_id,
                 {"state": "superseded", "since": since, "by": "versions"},
             ).update(replaced_by=[{"doc_id": newer[-1], "title": title}], later=newer)
-    titles: dict[str, list[int]] = {}
-    for h in hits:
-        if h.get("title"):
-            titles.setdefault(str(h["title"]), []).append(int(h["doc_id"]))
-    if not titles:
+    docs = sorted({int(h["doc_id"]) for h in hits if h.get("doc_id") is not None})
+    if not docs:
         return out
     hidden = hidden_documents(con)
-    tmarks = ",".join("?" * len(titles))
-    # from the titles (the name index), the entities merged into them
-    # (idx_entities_canonical_id) and the live edges into either
-    # (idx_edges_dst), in that order: every search asks this, and a plan
-    # left to choose began from the edges and scanned them all (58 ms on
-    # the library of 2026-10-04, 0.2 ms this way)
+    dmarks = ",".join("?" * len(docs))
+    # from the hits' nodes (entities.doc_id, migration 69), the entities
+    # merged into them (idx_entities_canonical_id) and the live edges into
+    # either (idx_edges_dst), in that order: every search asks this, and a
+    # plan left to choose began from the edges and scanned them all (58 ms
+    # on the library of 2026-10-04, 0.2 ms this way). The replacing end is
+    # the document its node is, while that document is live.
     rows = con.execute(
         f"""
-        WITH t AS MATERIALIZED (SELECT id, name FROM entities WHERE name IN ({tmarks})),
+        WITH t AS MATERIALIZED (
+            SELECT id, doc_id FROM entities WHERE doc_id IN ({dmarks})
+        ),
         ids AS MATERIALIZED (
-            SELECT id, name FROM t
+            SELECT id, doc_id FROM t
             UNION ALL
-            SELECT e.id, t.name FROM t CROSS JOIN entities e ON e.canonical_id = t.id
+            SELECT e.id, t.doc_id FROM t CROSS JOIN entities e ON e.canonical_id = t.id
         )
-        SELECT x.rel, x.world_from, x.source_doc, c.name AS src, ids.name AS dst
+        SELECT x.rel, x.world_from, x.source_doc, c.name AS src, ids.doc_id AS dst,
+               CASE WHEN {live("od")} THEN od.id END AS src_doc
         FROM ids CROSS JOIN edges x ON x.dst = ids.id AND x.valid_to IS NULL
         JOIN entities s0 ON s0.id = x.src
         JOIN entities c ON c.id = COALESCE(s0.canonical_id, s0.id)
-        WHERE x.rel IN ('supersedes', 'invalidates') AND c.name != ids.name
+        LEFT JOIN documents od ON od.id = c.doc_id
+        WHERE x.rel IN ('supersedes', 'invalidates')
+          AND c.doc_id IS NOT ids.doc_id
         ORDER BY x.id
         """,
-        tuple(titles),
+        tuple(docs),
     ).fetchall()
+    seen_docs = {int(h["doc_id"]) for h in hits if h.get("doc_id") is not None}
     for r in rows:
         if r["source_doc"] is not None and int(r["source_doc"]) in hidden:
             continue  # what only a hidden document says is not said
-        other = con.execute(
-            "SELECT id FROM documents WHERE title = ?"
-            f" AND {LIVE} ORDER BY id DESC LIMIT 1",
-            (r["src"],),
-        ).fetchone()
-        for doc_id in titles.get(str(r["dst"]), []):
+        other = (r["src_doc"],) if r["src_doc"] is not None else None
+        for doc_id in [int(r["dst"])] if int(r["dst"]) in seen_docs else []:
             entry = out.setdefault(
                 doc_id,
                 {

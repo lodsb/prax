@@ -19,6 +19,7 @@ from ..base import (
     END_BATCH,
     LIVE,
     NotFound,
+    _claim_node,
     _committing,
     _end_edges,
     _like_prefix,
@@ -31,6 +32,7 @@ from ..base import (
     domain_clause,
     domain_sets,
     hidden_documents,
+    node_name_of,
     rows_in,
 )
 
@@ -276,6 +278,10 @@ def _link(
     )
     src = _entity_id(con, edge.src, edge.src_type)
     dst = _entity_id(con, edge.dst, edge.dst_type)
+    # which document a node of a document type is, kept the first time an
+    # edge reaches it (migration 69, ``node_document``)
+    _claim_node(con, src, edge.src_type, edge.src, source_doc)
+    _claim_node(con, dst, edge.dst_type, edge.dst, source_doc)
     cur = con.execute(
         "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
         " ontology_version, evidence, producer, run, valid_from,"
@@ -361,12 +367,6 @@ def run_edges(
 
 
 @_reading
-def media_node_name(title: str, doc_id: int) -> str:
-    """A picture's or a recording's name in the graph: its file and its
-    number (``document_node``)."""
-    return f"{title} (#{doc_id})"
-
-
 def _node_name(con: sqlite3.Connection, doc_id: int) -> tuple[str, bool, sqlite3.Row]:
     """A document's node name (``document_node``), whether it is a
     picture's or a recording's, and its row; NotFound as there."""
@@ -377,12 +377,8 @@ def _node_name(con: sqlite3.Connection, doc_id: int) -> tuple[str, bool, sqlite3
     ).fetchone()
     if row is None or not row["title"] or document_hidden(con, doc_id):
         raise NotFound(f"no such document: {doc_id}")
-    title = str(row["title"])
-    if not row["text_hash"] and (
-        mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])
-    ):
-        return media_node_name(title, doc_id), True, row
-    return title, False, row
+    name, media = node_name_of(row, doc_id)
+    return name, media, row
 
 
 def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
@@ -407,9 +403,27 @@ def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
     return sorted(with_aliases(con, canon))
 
 
+def node_document(con: sqlite3.Connection, name: str, etype: str) -> int | None:
+    """The document a node is, the reverse of ``document_node``: the one
+    kept on the entity of that name and type (migration 69), or on the one
+    it was merged into. None for a node that is no document's, or one the
+    viewer may not see (the wall)."""
+    row = con.execute(
+        "SELECT e.doc_id, c.doc_id AS survivor FROM entities e"
+        " LEFT JOIN entities c ON c.id = e.canonical_id"
+        " WHERE e.name = ? AND e.type = ?",
+        (name, etype),
+    ).fetchone()
+    doc = None if row is None else row["doc_id"] or row["survivor"]
+    if doc is None or document_hidden(con, int(doc)):
+        return None
+    return int(doc)
+
+
 def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     """A library document as a node of the graph, ``(name, type)``: its
-    title, and the type its entity already has (a page is a ``page``; else
+    title, and the type its entity already has (a project page is a
+    ``project`` and any other page a ``page``, whatever wrote to it; else
     the document type the most edges reach it as; else the one type its
     domains let a document be, which its extraction will name it by: a
     research document is a ``paper``; else ``document``). A picture or a
@@ -422,8 +436,9 @@ def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     title, media, row = _node_name(con, doc_id)
     if media:
         return title, "document"
-    if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)).fetchone():
-        return title, "page"
+    page = con.execute("SELECT kind FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()
+    if page is not None:
+        return title, "project" if page["kind"] == "project" else "page"
     onto = ontology.current()
     best: tuple[int, str] | None = None
     for r in con.execute(

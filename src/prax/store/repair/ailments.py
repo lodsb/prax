@@ -61,6 +61,7 @@ from .graph import (
     _functional_conflicts,
     _mangled_names,
     _not_venues,
+    _page_node_twins,
     _placeholder_entities,
     _reference_entities,
     _repair_damaged_names,
@@ -68,10 +69,12 @@ from .graph import (
     _repair_duplicate_facts,
     _repair_names,
     _repair_not_venues,
+    _repair_page_node_twins,
     _repair_part_of,
     _repair_spacing_twins,
     _repair_stale_document_nodes,
     _repair_stray_versions,
+    _repair_unlinked_document_nodes,
     _repair_wire_labels,
     _repair_wire_names,
     _self_edges,
@@ -80,6 +83,7 @@ from .graph import (
     _split_names,
     _stale_document_nodes,
     _stray_version_modules,
+    _unlinked_document_nodes,
     _unnamed_entities,
     _wire_labels,
     _wire_names,
@@ -219,6 +223,37 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_stale_document_nodes,
         repair=_repair_stale_document_nodes,
+    ),
+    Ailment(
+        name="unlinked-document-nodes",
+        what=(
+            "a node of a document type that a document answers to by its title,"
+            " with no document kept on it (entities.doc_id, migration 69): a"
+            " cited title named before its document came"
+        ),
+        fix=(
+            "keep the document on the node, by the rule an edge's write keeps"
+            " it: the document with that title whose facts the node carries,"
+            " else the live one of the lowest id"
+        ),
+        find=_unlinked_document_nodes,
+        repair=_repair_unlinked_document_nodes,
+        locks_itself=True,
+    ),
+    Ailment(
+        name="page-node-twins",
+        what=(
+            "a page with a node of each page type: until 2026-11-10 a project"
+            " page was a 'project' to its own writes and a 'page' to a link by"
+            " its document id"
+        ),
+        fix=(
+            "fold the other node into the one document_node names the page by"
+            " (a project page's 'project'), its name kept as a label; one"
+            " signed run unmerge_run takes back"
+        ),
+        find=_page_node_twins,
+        repair=_repair_page_node_twins,
     ),
     Ailment(
         name="wire-names",

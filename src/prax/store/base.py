@@ -1,8 +1,8 @@
 """The connection, the lock, the archive and the index files.
 
 Nothing here knows about documents or the graph beyond the record of an
-edge's ending, which both write: it is what every other module of the
-store stands on. One process-wide re-entrant lock serializes
+edge's ending and which document a node is, which both write: it is what
+every other module of the store stands on. One process-wide re-entrant lock serializes
 writes (invariant 4); reads in the door take a connection per thread
 (``thread_connection``). Originals and parsed text are content-addressed
 files under ``data/archive`` (invariant 2), and the vector index files are
@@ -35,6 +35,7 @@ from prax.errors import NotFound  # noqa: F401  the store's miss, store.NotFound
 from prax.graph import ontology
 from prax.ml import faces as faces_ml
 from prax.ml import vectors
+from prax.text import mimes
 
 VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file
 
@@ -753,6 +754,132 @@ def _reading(fn: Callable[P, R]) -> Callable[P, R]:
     return _guarded(fn, lock=False)
 
 
+# ---------------------------------------------------- a document's node
+# Which document an entity of a document type is (migration 69): kept on
+# the entity when an edge first reaches it, and read back by
+# ``node_document``, in place of a lookup by title at each reader. Here
+# because the migration's upgrade links the nodes written before it.
+
+
+def media_node_name(title: str, doc_id: int) -> str:
+    """A picture's or a recording's name in the graph: its file and its
+    number (``document_node``)."""
+    return f"{title} (#{doc_id})"
+
+
+_MEDIA_NODE = re.compile(r" \(#(\d+)\)$")
+
+
+def node_name_of(row: sqlite3.Row | dict[str, Any], doc_id: int) -> tuple[str, bool]:
+    """A document's node name from its ``title``, ``mime`` and ``text_hash``,
+    and whether it is a picture's or a recording's (``media_node_name``):
+    one with no text of its own is named by its file and its number."""
+    title = str(row["title"])
+    if not row["text_hash"] and (
+        mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])
+    ):
+        return media_node_name(title, doc_id), True
+    return title, False
+
+
+def _node_doc(
+    con: sqlite3.Connection,
+    name: str,
+    *,
+    entity_id: int | None = None,
+    source_doc: int | None = None,
+) -> int | None:
+    """The document a node of a document type called ``name`` is, by one
+    rule: ``source_doc`` when that is its node name (a document's own
+    facts); a picture's or a recording's by the number in its name; else,
+    of the documents with that title, one whose facts the entity already
+    carries, else the live one of the lowest id, else the lowest id. None
+    when no document has the name."""
+    if source_doc is not None:
+        row = con.execute(
+            "SELECT title, mime, text_hash FROM documents WHERE id = ?",
+            (source_doc,),
+        ).fetchone()
+        if (
+            row is not None
+            and row["title"]
+            and node_name_of(row, source_doc)[0] == (name)
+        ):
+            return source_doc
+    media = _MEDIA_NODE.search(name)
+    if media:
+        doc = int(media.group(1))
+        row = con.execute(
+            "SELECT title, mime, text_hash FROM documents WHERE id = ?", (doc,)
+        ).fetchone()
+        if row is not None and row["title"] and node_name_of(row, doc) == (name, True):
+            return doc
+    titled = [
+        (int(r[0]), bool(r[1]))
+        for r in con.execute(
+            f"SELECT id, {LIVE} FROM documents WHERE title = ? ORDER BY id", (name,)
+        )
+    ]
+    if len(titled) > 1 and entity_id is not None:
+        ids = [i for i, _ in titled]
+        own = con.execute(
+            f"SELECT min(source_doc) FROM edges WHERE src = ?"
+            f" AND source_doc IN ({marks(len(ids))})",
+            (entity_id, *ids),
+        ).fetchone()[0]
+        if own is not None:
+            return int(own)
+    live_ones = [i for i, alive in titled if alive]
+    either = live_ones or [i for i, _ in titled]
+    return either[0] if either else None
+
+
+def _claim_node(
+    con: sqlite3.Connection,
+    entity_id: int,
+    etype: str,
+    name: str,
+    source_doc: int | None = None,
+) -> None:
+    """Link an entity of a document type to its document (``_node_doc``)
+    when it has no document yet; what ``_link`` does for both ends of an
+    edge. An entity of another type is no document's. Does not commit."""
+    onto = ontology.current()
+    if etype not in onto.entity_types or not onto.is_a(etype, "document"):
+        return
+    row = con.execute(
+        "SELECT doc_id FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    if row is None or row[0] is not None:
+        return
+    doc = _node_doc(con, name, entity_id=entity_id, source_doc=source_doc)
+    if doc is not None:
+        con.execute("UPDATE entities SET doc_id = ? WHERE id = ?", (doc, entity_id))
+
+
+def _claim_document_nodes(con: sqlite3.Connection) -> int:
+    """Link every entity of a document type that has no document yet
+    (``_claim_node``): migration 69's upgrade, and the heal's repair of a
+    node written before it. Returns how many it linked; does not
+    commit."""
+    onto = ontology.current()
+    types = [t for t in onto.entity_types if onto.is_a(t, "document")]
+    if not types:
+        return 0
+    rows = con.execute(
+        f"SELECT id, name FROM entities WHERE doc_id IS NULL"
+        f" AND type IN ({marks(len(types))})",
+        types,
+    ).fetchall()
+    n = 0
+    for r in rows:
+        doc = _node_doc(con, str(r["name"]), entity_id=int(r["id"]))
+        if doc is not None:
+            con.execute("UPDATE entities SET doc_id = ? WHERE id = ?", (doc, r["id"]))
+            n += 1
+    return n
+
+
 # ---------------------------------------------------------------- the wall
 # Who is reading (stage U). The door sets the viewer for a request made
 # with a named token; none is set for the administrator's token, for the
@@ -1363,6 +1490,7 @@ def init_db(con: sqlite3.Connection) -> int:
             f"the store is at schema version {current}, this code knows {latest}:"
             " update prax before opening it"
         )
+    before = current
     for number, path in known:
         if number <= current:
             continue
@@ -1375,8 +1503,16 @@ def init_db(con: sqlite3.Connection) -> int:
             con.execute("ROLLBACK")
             raise
         current = number
+    if before < DOCUMENT_NODES <= current:
+        _claim_document_nodes(con)
+        con.commit()
     _drop_legacy_vec_table(con)
     return current
+
+
+# the migration that gave an entity its document: the nodes written before
+# it are linked by ``_claim_document_nodes`` as the store passes it
+DOCUMENT_NODES = 69
 
 
 def _drop_legacy_vec_table(con: sqlite3.Connection) -> None:

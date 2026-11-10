@@ -69,7 +69,6 @@ from .communities import (  # noqa: F401
 from .context import (  # noqa: F401
     _CONFIDENCE_BY_RANK,
     ASK_FACT_RELS_SKIPPED,
-    _doc_ids_by_title,
     _docs_by_zotero_key,
     document_context,
     document_facts,
@@ -129,7 +128,7 @@ from .edges import (  # noqa: F401
     hidden_by_premise,
     invalidate_edge,
     link,
-    media_node_name,
+    node_document,
     provenance_summary,
     restore_run,
     retire_reading,

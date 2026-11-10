@@ -10905,3 +10905,65 @@ could reach them.
   premises, a conflict and an import's held edge follow the new id while
   the ended derivation keeps its own; a retirement without a run brings
   nothing; both heal repairs are undone by `restore_run`.
+
+## 2026-11-10: which document a node is, kept on the node
+
+Structure review finding 17, with the owner's answer: a page's node is
+typed by its kind, and the link from a node to its document is a column.
+
+A document's node was found from the document by `document_node` and
+back from the node by its title, in seven places with four rules for a
+title several documents share (the lowest id, the highest live one,
+every namesake). A project page was a `project` to its own writes and a
+`page` to a `link` by its document id, so one project page could be two
+entities, bridged by matching its title. A picture's node,
+`IMG_0001.JPG (#32778)`, matched no title at all.
+
+- Migration 69: `entities.doc_id`, indexed where set. `_link` keeps it
+  for both ends of every edge whose type is a document type and that
+  has none yet (`store.base._claim_node`), by one rule (`_node_doc`):
+  the edge's own document when the node carries its node name; a
+  picture's by the number in its name; else, of the documents with that
+  title, one whose facts the node already carries, else the live one of
+  the lowest id. Kept once: a rename keeps it, a later namesake does not
+  move it.
+- `init_db` links the nodes written before it right after applying 69
+  (`_claim_document_nodes`, the same rule). The rule, `media_node_name`
+  and `node_name_of` live in `store.base` for that reason.
+- `store.node_document(name, type)` reads it back (or the survivor's,
+  for a merged node). The readers that went by title now go by the
+  column: a project's members and the projects a page is in
+  (`pages.tree`, the join that bridged the two types is gone), what a
+  page annotates, a document context's cited documents, a project's
+  members there and its document neighbours, the facts an ask bundle
+  takes from a document's own node (which now finds a picture's too),
+  the staleness of a search's hits (from the hits' own nodes, not every
+  entity of the hit's title), and the briefing pages in the path index.
+  `_doc_ids_by_title` and `pages.tree._page_node` are gone.
+- `document_node` names a project page `project` and any other page a
+  `page`. A rename of a page renames every node the page has under the
+  old name. A page or project member counts as a page for the promote
+  flag.
+- Two heal ailments, run only when `prax heal` is asked:
+  `unlinked-document-nodes` keeps the document on a node a cited title
+  named before its document came (the edge that first reaches it after
+  does too), and `page-node-twins` folds a page's node of the other type
+  into the one `document_node` names, under one run `unmerge_run` takes
+  back.
+- On a copy of the live store (read-only backup, the scratch directory):
+  the upgrade took 3.4 s and kept a document on 43,175 of the 104,676
+  nodes of a document type, for 29,840 documents; most of the rest are
+  cited papers the library does not hold (48,088 of 62,209 `paper`
+  nodes). Afterwards `unlinked-document-nodes` finds none and
+  `page-node-twins` four. The staleness of 30 hits takes 1.0 ms
+  (median of 50; 2.2 ms the worst), and the one document the graph
+  marks stale is still found with what replaced it.
+- Not changed: two documents with one title still share one node (the
+  `UNIQUE (name, type)` of the entities); the column says which of them
+  it is. Telling them apart is the stratification's step 5.
+- Tests (`tests/test_document_nodes.py`): a project page is one node
+  through a write, a membership and a link by id, and its members carry
+  their documents; the document is kept and read back, and kept through
+  a retitle; of two namesakes the node keeps the one whose facts reached
+  it first; the upgrade links the older nodes by the rule; both ailments
+  find and repair.

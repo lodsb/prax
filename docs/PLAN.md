@@ -381,7 +381,7 @@ against the code on 2026-11-08.
       would see; what an undo of each should mean is the user's call.
       The "before" values of a document decision (sensitivity, domains)
       in one run-record helper.
-- [ ] 17. A document's node: `document_node` one way, titles the other,
+- [x] 17 (2026-11-10, the log; the owner's word: pages and projects typed, the column; twins and unlinked nodes are heal ailments). A document's node: `document_node` one way, titles the other,
       pages naming themselves "page" or "project". `document_node`
       decides pages too, and `node_document(name, type)` is the reverse,
       best backed by an `entities.doc_id` column (a migration).

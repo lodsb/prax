@@ -605,7 +605,12 @@ reference `docs/ask.md`.
   writes is skipped when the survivor already answers to that name. `store.link` lands on the entity that answers to a
   name when none carries it, so a rename does not start the split over.
   `entities.name` is still the identity; making it a display label is
-  `docs/stratification.md` step 5, to be done whole.
+  `docs/stratification.md` step 5, to be done whole. Which document a node
+  of a document type is lives on the entity (`entities.doc_id`, migration
+  69): kept when an edge first reaches it (`store.base._claim_node`) and
+  read back by `store.node_document`, so nothing goes from a node to its
+  document by a title. `document_node` is the other way, and a page's node
+  is a `project` for a project page and a `page` for any other.
 - The library is written in one language, `graph.language` (English by
   default, `prax.text.language.canonical`): its summaries, the common names in
   its graph, and what the graph shows. One setting rather than two,

@@ -15,7 +15,15 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import glyphs, language, names
 
-from ..base import LIVE, _serialized, hidden_documents, rows_in, run_name
+from ..base import (
+    LIVE,
+    _node_doc,
+    _serialized,
+    hidden_documents,
+    media_node_name,
+    rows_in,
+    run_name,
+)
 from ..graph import (
     Edge,
     _refresh_name,
@@ -26,7 +34,6 @@ from ..graph import (
     entities_with_degree,
     entity_named_in,
     functional_breaches,
-    media_node_name,
     merge_entities,
     part_of_ancestry,
     part_of_suspects,
@@ -1240,4 +1247,107 @@ def _repair_stale_document_nodes(
         except (KeyError, ValueError):  # a merge the store refuses: left
             continue
         done += how != "unchanged"
+    return done
+
+
+# Which document a node is (migration 69, structure review finding 17):
+# kept when an edge first reaches the node and read back by
+# ``node_document``. A node with none is one a cited title named before
+# its document came, or one an interrupted upgrade did not reach.
+
+
+def _unlinked_document_nodes(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The unmerged entities of a document type with no document kept
+    (``entities.doc_id``) that a document answers to by ``_node_doc``'s
+    rule, each with that document."""
+    onto = ontology.current()
+    types = [t for t in onto.entity_types if onto.is_a(t, "document")]
+    found: list[dict[str, Any]] = []
+    for r in rows_in(
+        con,
+        "SELECT id, name, type FROM entities WHERE doc_id IS NULL"
+        " AND canonical_id IS NULL AND type IN ({ids}) ORDER BY id",
+        types,
+    ):
+        doc = _node_doc(con, str(r["name"]), entity_id=int(r["id"]))
+        if doc is not None:
+            found.append({**dict(r), "doc_id": doc})
+            if len(found) >= CAP:
+                break
+    return found
+
+
+@_serialized
+def _repair_unlinked_document_nodes(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """Keep each node's document, where none was kept since it was found."""
+    done = 0
+    for row in rows:
+        done += con.execute(
+            "UPDATE entities SET doc_id = ? WHERE id = ? AND doc_id IS NULL",
+            (row["doc_id"], row["id"]),
+        ).rowcount
+    con.commit()
+    return done
+
+
+PAGE_TWINS_PRODUCER = "heal:page-node-twins"
+
+
+def _page_node_twins(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """A page's nodes of the other page type beside the one
+    ``document_node`` names it by: until 2026-11-10 a project page was a
+    ``project`` to its own writes and a ``page`` to a ``link`` by its
+    document id, two entities for one page. Each row is the other node
+    and the one it folds ``into``."""
+    found: list[dict[str, Any]] = []
+    for page in con.execute(
+        "SELECT p.doc_id, p.kind, d.title FROM pages p"
+        " JOIN documents d ON d.id = p.doc_id ORDER BY p.doc_id"
+    ).fetchall():
+        nodes = {
+            str(r["type"]): r
+            for r in con.execute(
+                "SELECT id, name, type FROM entities WHERE doc_id = ?"
+                " AND canonical_id IS NULL AND type IN ('page', 'project')",
+                (page["doc_id"],),
+            )
+        }
+        want = "project" if page["kind"] == "project" else "page"
+        if want not in nodes:
+            continue
+        for etype, r in nodes.items():
+            if etype != want:
+                found.append(
+                    {
+                        **dict(r),
+                        "doc_id": int(page["doc_id"]),
+                        "into": int(nodes[want]["id"]),
+                    }
+                )
+        if len(found) >= CAP:
+            break
+    return found
+
+
+def _repair_page_node_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Fold each twin into the node ``document_node`` names its page by,
+    across the two page types, under one run ``unmerge_run`` takes back
+    (``merge_entities``, which commits)."""
+    run = run_name(PAGE_TWINS_PRODUCER, sep=":")
+    done = 0
+    for row in rows:
+        try:
+            merge_entities(
+                con,
+                int(row["id"]),
+                int(row["into"]),
+                across_types=True,
+                producer=PAGE_TWINS_PRODUCER,
+                run=run,
+            )
+        except (KeyError, ValueError):  # merged or gone since it was found
+            continue
+        done += 1
     return done

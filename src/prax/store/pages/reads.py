@@ -82,7 +82,7 @@ def get_page(
         "aliases": _aliases(con, doc_id),
     }
     if row["kind"] == "project":
-        out["members"] = _members(con, str(row["title"]))
+        out["members"] = _members(con, doc_id)
     if current != asked:
         out["asked_as"] = asked
     if not text:

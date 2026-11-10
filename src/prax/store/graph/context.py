@@ -17,23 +17,9 @@ from ..base import (
     _scrubbed,
     hidden_documents,
     meta_of,
-    rows_in,
 )
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
 from .edges import doc_node_ids
-
-
-def _doc_ids_by_title(con: sqlite3.Connection, titles: list[str]) -> dict[str, int]:
-    """Each title to the first document of that title (its lowest id), a
-    batch at a time; ``idx_documents_title`` (migration 68) serves it."""
-    out: dict[str, int] = {}
-    for r in rows_in(
-        con,
-        "SELECT id, title FROM documents WHERE title IN ({ids}) ORDER BY id",
-        titles,
-    ):
-        out.setdefault(r["title"], r["id"])
-    return out
 
 
 def _docs_by_zotero_key(con: sqlite3.Connection, key: str) -> list[dict[str, Any]]:
@@ -77,7 +63,7 @@ def document_facts(
         JOIN entities t0 ON t0.id = x.dst
         JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
         WHERE x.source_doc IN ({marks}) AND x.valid_to IS NULL
-          AND s.name = d.title AND x.rel NOT IN ({skip})
+          AND s.doc_id = x.source_doc AND x.rel NOT IN ({skip})
         ORDER BY x.source_doc, x.rel, t.name
         """,
         (*doc_ids, *ASK_FACT_RELS_SKIPPED),
@@ -151,27 +137,27 @@ def document_context(
         )
 
     # citations: what this document cites, and what cites it (source_doc is
-    # the citing document); titles resolved to library documents where present
+    # the citing document); a cited node resolved to the library document it
+    # is (``entities.doc_id``) where there is one
     # each with the surest confidence any producer gave it: Crossref's
     # and a printed id's edges are EXTRACTED, a title match INFERRED
     # (the score in its evidence), a tie between twins AMBIGUOUS
     cites_rows = con.execute(
         f"""
-        SELECT t.name, min(CASE x.confidence WHEN 'EXTRACTED' THEN 0
-                           WHEN 'INFERRED' THEN 1 ELSE 2 END) AS rank
+        SELECT t.name, min(t.doc_id) AS doc_id,
+               min(CASE x.confidence WHEN 'EXTRACTED' THEN 0
+                   WHEN 'INFERRED' THEN 1 ELSE 2 END) AS rank
         FROM edges x JOIN entities t ON t.id = x.dst
         WHERE x.rel = 'cites' AND x.valid_to IS NULL AND x.src IN ({at_node})
         GROUP BY t.name ORDER BY t.name
         """,
         node,
     ).fetchall()
-    cited_titles = [r["name"] for r in cites_rows]
-    in_library = _doc_ids_by_title(con, cited_titles) if cited_titles else {}
     cites = sorted(
         (
             {
                 "title": r["name"],
-                "doc_id": in_library.get(r["name"]),
+                "doc_id": r["doc_id"],
                 "confidence": _CONFIDENCE_BY_RANK[r["rank"]],
             }
             for r in cites_rows
@@ -290,10 +276,7 @@ def document_context(
             dict(r)
             for r in con.execute(
                 f"""
-                SELECT DISTINCT s.name AS title, s.type,
-                       (SELECT id FROM documents WHERE title = s.name
-                        ORDER BY id LIMIT 1)
-                           AS doc_id
+                SELECT DISTINCT s.name AS title, s.type, s.doc_id
                 FROM edges x JOIN entities s ON s.id = x.src
                 WHERE x.rel = 'part_of' AND x.valid_to IS NULL AND x.dst IN ({at_node})
                 ORDER BY s.name
@@ -373,7 +356,8 @@ def _linked_documents(
             continue
         seen.add((side, r["rel"], name))
         other = con.execute(
-            "SELECT id FROM documents WHERE title = ? ORDER BY id LIMIT 1", (name,)
+            "SELECT doc_id FROM entities WHERE id = ? AND doc_id IS NOT NULL",
+            (other,),
         ).fetchone()
         out[side].append(
             {

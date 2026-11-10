@@ -50,7 +50,7 @@ def _rows(
         for r in con.execute(
             "SELECT DISTINCT COALESCE(s.canonical_id, s.id) FROM pages p"
             " JOIN documents d ON d.id = p.doc_id"
-            " JOIN entities s ON s.name = d.title AND s.type = 'page'"
+            " JOIN entities s ON s.doc_id = d.id"
             " WHERE json_extract(d.meta, '$.page.kind') = 'briefing'"
         )
     ]
