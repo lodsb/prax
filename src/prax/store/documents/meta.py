@@ -8,6 +8,7 @@ import copy
 import json
 import sqlite3
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, cast
 
 from prax.graph import ontology
@@ -286,7 +287,7 @@ def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NOT NULL"
             " AND json_extract(meta, '$.published') IS NULL"
-            f" AND {_untried('published')}"
+            f" AND {_due('published')}"
             f" AND {LIVE}"
             " ORDER BY id DESC LIMIT ?",
             (limit,),
@@ -302,7 +303,7 @@ def world_dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
         r[0]
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NOT NULL"
-            " AND json_extract(meta, '$.world_dates.text_hash') IS NOT text_hash"
+            f" AND {_due('worlddates')}"
             f" AND {LIVE}"
             " ORDER BY id DESC LIMIT ?",
             (limit,),
@@ -415,9 +416,68 @@ def _tried_key(step: str) -> str:
     return f"{step}_tried"
 
 
-def _untried(step: str) -> str:
-    """The SQL that keeps the documents ``step`` has not marked tried."""
-    return f"json_extract(meta, '$.{_tried_key(step)}') IS NULL"
+@dataclass(frozen=True)
+class Stamp:
+    """Where a step records that it read a document, and so when it reads
+    the document again (structure review finding 1). ``key`` is the record
+    in the meta. A step that keeps what it read keeps it there with the
+    hash of the text it read (``on_text``: a new text is read again), the
+    version of its reading (``version``, the record's key for it: an older
+    one is read again), or both. A step that read a text and kept nothing
+    leaves a mark instead (``tried``, ``step_tried``), which a new text
+    clears (``TRIED_ON_TEXT``) and its own result replaces."""
+
+    key: str
+    on_text: bool = False
+    version: str | None = None
+    tried: bool = False
+
+
+# Every step whose record says whether a document waits for it: the one
+# place a due query or a count of the waiting is built from (``_due``). A
+# new step names its record here rather than writing the test again in a
+# shape of its own.
+STAMPS: dict[str, Stamp] = {
+    "photos": Stamp("photo", version="v"),
+    "faces": Stamp("faces", version="v"),
+    "geocode": Stamp("place", version="v"),
+    "worlddates": Stamp("world_dates", on_text=True),
+    "sections": Stamp("sections", on_text=True),
+    "quality": Stamp("quality", on_text=True, version="version"),
+    **{step: Stamp(f"{step}_tried", tried=True) for step in TRIED_STEPS},
+}
+
+
+def _due(step: str, alias: str | None = None) -> str:
+    """The SQL that keeps the documents ``step`` reads (``STAMPS``): no
+    record, a record of another text, or one of an older version, whose
+    test takes the step's current version as one ``?``; for a step that
+    marks a document tried, no mark. ``NOT`` it is what the step has read."""
+    stamp = STAMPS[step]
+    meta = f"{alias}.meta" if alias else "meta"
+    text = f"{alias}.text_hash" if alias else "text_hash"
+    if stamp.tried:
+        return f"json_extract({meta}, '$.{stamp.key}') IS NULL"
+    tests = []
+    if stamp.on_text:
+        tests.append(f"json_extract({meta}, '$.{stamp.key}.text_hash') IS NOT {text}")
+    if stamp.version:
+        tests.append(
+            f"coalesce(json_extract({meta}, '$.{stamp.key}.{stamp.version}'), 0) < ?"
+        )
+    return "(" + " OR ".join(tests) + ")"
+
+
+def _of_this_text(step: str, alias: str | None = None) -> str:
+    """The SQL that keeps the documents whose record of ``step`` was read
+    from the text they hold now (an ``on_text`` step of ``STAMPS``): what
+    it found of an earlier text says nothing of this one."""
+    stamp = STAMPS[step]
+    if not stamp.on_text:
+        raise ValueError(f"{step} does not record the text it read")
+    meta = f"{alias}.meta" if alias else "meta"
+    text = f"{alias}.text_hash" if alias else "text_hash"
+    return f"json_extract({meta}, '$.{stamp.key}.text_hash') = {text}"
 
 
 def step_tried(
@@ -869,8 +929,7 @@ def sections_needed(con: sqlite3.Connection, *, limit: int = 200) -> list[int]:
     rows = con.execute(
         "SELECT id FROM documents WHERE text_len >= ?"
         f" AND {LIVE} AND text_hash IS NOT NULL"
-        " AND (json_extract(meta, '$.sections.text_hash') IS NULL"
-        "      OR json_extract(meta, '$.sections.text_hash') != text_hash)"
+        f" AND {_due('sections')}"
         " ORDER BY text_len DESC LIMIT ?",
         (sec.MIN_DOCUMENT, max(1, limit)),
     ).fetchall()

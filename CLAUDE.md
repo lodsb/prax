@@ -503,6 +503,10 @@ reference `docs/ask.md`.
   keyed by chunk id in the usearch file. Changing the model means
   re-embedding into a new file. Another dimension means a new file and
   `VEC_DIM`.
+- Which documents a step reads again is said once: the step names its
+  record in `store.STAMPS` (the record's text hash, its version, or a
+  `_tried` mark), and every due query is built from it (`_due`,
+  `docs/meta.md`).
 - A reading is a row of the `readings` queue, not a field on the
   document. A document may wait for several at once: the crops of its
   vector figures, the readings of its pictures, the formulas of a marker

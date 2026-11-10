@@ -28,7 +28,7 @@ from ..base import (
     now,
 )
 from .meta import (
-    TRIED_STEPS,
+    STAMPS,
     _document_meta,
     _is_indexed,
     _put_meta,
@@ -164,7 +164,7 @@ def register_references(
 # changes, and a new text clears them. Until 2026-11-07 none was cleared, so
 # a scan that failed on its OCR layer was never asked again after marker
 # read it properly (the structure review of that day).
-TRIED_ON_TEXT = tuple(f"{step}_tried" for step in TRIED_STEPS)
+TRIED_ON_TEXT = tuple(s.key for s in STAMPS.values() if s.tried)
 
 
 def _index_text(

@@ -385,7 +385,7 @@ against the code on 2026-11-08.
       pages naming themselves "page" or "project". `document_node`
       decides pages too, and `node_document(name, type)` is the reverse,
       best backed by an `entities.doc_id` column (a migration).
-- [ ] 1 (the rest). One done-or-tried stamp per step for every kind of
+- [x] 1 (the rest; 2026-11-10, the log; the owner's word: one rule, the keys stay, no migration). One done-or-tried stamp per step for every kind of
       due query, in place of the meta keys: a migration and the meta-path
       indexes rebuilt.
 

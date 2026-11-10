@@ -36,6 +36,15 @@ A step that read a document and kept nothing marks it with
 published, summary, titles). The step's own result and a new text
 (`index_text`) clear the mark.
 
+Which documents a step reads again is said once, in `store.STAMPS`: a
+step's record (`photo`, `faces`, `place`, `world_dates`, `sections`,
+`quality`, or its `_tried` mark) and whether it carries the hash of the
+text it read (a new text is read again), the version of its reading (an
+older one is read again), or both. Every due query and count of the
+waiting is built from it (`_due`, and `_of_this_text` for "read from the
+text it holds now"); `tests/test_step_stamps.py` fails on such a test
+written by hand. A new step names its record there.
+
 To add a key: declare it in `store.DocumentMeta` with its shape and
 writer, and add its row here.
 

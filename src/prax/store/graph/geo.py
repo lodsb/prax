@@ -45,7 +45,7 @@ from typing import Any
 from prax.text import mimes
 
 from ..base import LIVE, _reading, _serialized, now
-from ..documents import _put_meta, _refresh_document_field, get_meta
+from ..documents import _due, _put_meta, _refresh_document_field, get_meta
 from .edges import Edge, document_edges_of, document_node, end_edges, link
 from .labels import add_label
 from .lookups import entity_answering
@@ -75,7 +75,7 @@ def places_due(
         " json_extract(meta, '$.photo.gps.lon') AS lon FROM documents"
         " WHERE json_extract(meta, '$.photo.gps.lat') IS NOT NULL"
         f" AND {LIVE}"
-        " AND coalesce(json_extract(meta, '$.place.v'), 0) < ?"
+        f" AND {_due('geocode')}"
         " ORDER BY id",
         (version,),
     ):
@@ -93,11 +93,11 @@ def place_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
     nowhere the reading knows (at sea, far from a town), and wait."""
     row = con.execute(
         "SELECT"
-        " sum(coalesce(json_extract(meta, '$.place.v'), 0) >= ?"
+        f" sum(NOT {_due('geocode')}"
         "     AND json_extract(meta, '$.place.name') IS NOT NULL),"
-        " sum(coalesce(json_extract(meta, '$.place.v'), 0) >= ?"
+        f" sum(NOT {_due('geocode')}"
         "     AND json_extract(meta, '$.place.name') IS NULL),"
-        " sum(coalesce(json_extract(meta, '$.place.v'), 0) < ?)"
+        f" sum({_due('geocode')})"
         " FROM documents WHERE json_extract(meta, '$.photo.gps.lat') IS NOT NULL"
         f" AND {LIVE}",
         (version, version, version),

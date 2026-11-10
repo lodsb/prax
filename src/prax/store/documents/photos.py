@@ -31,7 +31,7 @@ from ..base import (
     is_digest,
     now,
 )
-from .meta import _put_meta, _refresh_document_field, get_meta
+from .meta import _due, _put_meta, _refresh_document_field, get_meta
 from .places import _place_file, place_roots
 
 # the copies a photo has, by the key ``meta.photo`` keeps each one's hash
@@ -67,7 +67,7 @@ def photos_due(
     rows = con.execute(
         "SELECT id, hash, mime, held FROM documents d"
         f" WHERE mime LIKE 'image/%' AND {LIVE}"
-        " AND coalesce(json_extract(meta, '$.photo.v'), 0) < ?"
+        f" AND {_due('photos')}"
         " AND (held = 1 OR EXISTS (SELECT 1 FROM places p WHERE p.sha256 = d.hash"
         "  AND p.gone IS NULL AND p.root IN (SELECT value FROM json_each(?))))"
         " ORDER BY id",
@@ -94,11 +94,11 @@ def photo_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
     """How many pictures are read at ``version``, failed at it, and wait."""
     row = con.execute(
         "SELECT"
-        " sum(coalesce(json_extract(meta, '$.photo.v'), 0) >= ?"
+        f" sum(NOT {_due('photos')}"
         "     AND json_extract(meta, '$.photo.error') IS NULL),"
-        " sum(coalesce(json_extract(meta, '$.photo.v'), 0) >= ?"
+        f" sum(NOT {_due('photos')}"
         "     AND json_extract(meta, '$.photo.error') IS NOT NULL),"
-        " sum(coalesce(json_extract(meta, '$.photo.v'), 0) < ?)"
+        f" sum({_due('photos')})"
         " FROM documents WHERE mime LIKE 'image/%'"
         " AND mime NOT IN (" + ",".join("?" * len(mimes.DOCUMENT_IMAGES)) + ")"
         f" AND {LIVE}",
@@ -225,7 +225,7 @@ def faces_due(
         "SELECT id FROM documents"
         " WHERE json_extract(meta, '$.photo.preview') IS NOT NULL"
         f" AND {LIVE}"
-        " AND coalesce(json_extract(meta, '$.faces.v'), 0) < ? ORDER BY id",
+        f" AND {_due('faces')} ORDER BY id",
         (version,),
     )
     out: list[int] = []
@@ -243,10 +243,10 @@ def face_counts(con: sqlite3.Connection, version: int) -> dict[str, int]:
     and the pictures that wait."""
     row = con.execute(
         "SELECT"
-        " sum(coalesce(json_extract(meta, '$.faces.v'), 0) >= ?),"
-        " sum(coalesce(json_extract(meta, '$.faces.v'), 0) >= ?"
+        f" sum(NOT {_due('faces')}),"
+        f" sum(NOT {_due('faces')}"
         "     AND json_extract(meta, '$.faces.n') > 0),"
-        " sum(coalesce(json_extract(meta, '$.faces.v'), 0) < ?)"
+        f" sum({_due('faces')})"
         " FROM documents WHERE json_extract(meta, '$.photo.preview') IS NOT NULL"
         f" AND {LIVE}",
         (version, version, version),

@@ -26,7 +26,7 @@ from ..base import (
     now,
     rows_in,
 )
-from .meta import DOCTYPES, _put_meta, get_meta, sure_labels, update_meta
+from .meta import DOCTYPES, _of_this_text, _put_meta, get_meta, sure_labels, update_meta
 from .places import original_file
 
 # A reading request: a person (or an agent) asks for a named extractor on
@@ -293,8 +293,7 @@ def current_finding(
     names that reading as its fix."""
     wanted = (checks,) if isinstance(checks, str) else checks
     sql = (
-        f"coalesce(json_extract({alias}.meta, '$.quality.text_hash'), '')"
-        f" = {alias}.text_hash"
+        f"{_of_this_text('quality', alias)}"
         f" AND EXISTS (SELECT 1 FROM json_each({alias}.meta, '$.quality.findings') f"
         f" WHERE json_extract(f.value, '$.check') IN ({marks(len(wanted))})"
     )
@@ -481,7 +480,7 @@ NOT_MATHS_GENRES = ("manual", "datasheet")
 # retired document
 _CURRENT_QUALITY = (
     " FROM documents d, json_each(d.meta, '$.quality.findings') f"
-    " WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
+    f" WHERE {_of_this_text('quality', 'd')}"
     f" AND {live('d')}"
 )
 

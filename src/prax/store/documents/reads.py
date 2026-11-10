@@ -32,7 +32,7 @@ from ..base import (
     meta_of,
     rows_in,
 )
-from .meta import _untried
+from .meta import _due
 from .readings import _CURRENT_QUALITY, starts_with, title_contains
 
 
@@ -857,7 +857,7 @@ def _summary_where(
 ) -> tuple[str, tuple[Any, ...]]:
     where = f" WHERE json_extract(meta, '$.summary') IS NOT NULL AND {LIVE}"
     if untried_only:
-        where += f" AND {_untried('summary')}"
+        where += f" AND {_due('summary')}"
     if ids is None:
         return where, ()
     return where + f" AND id IN ({','.join('?' * len(ids))})", tuple(ids)

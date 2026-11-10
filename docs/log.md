@@ -10967,3 +10967,44 @@ entities, bridged by matching its title. A picture's node,
   a retitle; of two namesakes the node keeps the one whose facts reached
   it first; the upgrade links the older nodes by the rule; both ailments
   find and repair.
+
+## 2026-11-10: which documents a step reads again, said once
+
+Structure review finding 1, the rest, with the owner's answer to how:
+one rule over the records where they are, no migration. The review
+proposed one `meta.steps.<step>` stamp for every step, moved there by a
+migration. Read closer, most stamps are not loose: `meta.photo` holds the
+reading's facts with its `v`, `by` and `at`, `meta.quality` its findings
+with the text's hash and the checks' version, `meta.sections` its
+summaries with the hash they were read from. Moving the stamps out would
+split each record in two.
+
+- `store.STAMPS` (`documents.meta`): each step's record and what makes
+  a document due again: the text's hash (`world_dates`, `sections`), the
+  reading's version (`photo`, `faces`, `place`), both (`quality`), or a
+  `_tried` mark (genres, published, summary, titles; a new text clears
+  them, `TRIED_ON_TEXT`, now derived from the registry).
+- `_due(step, alias=None)` builds the test every due query and count of
+  the waiting uses: `photos_due` and `photo_counts`, `faces_due` and
+  `face_counts`, `places_due` and `place_counts`, `world_dates_needed`,
+  `sections_needed`, `dates_needed`, `genres_needed`, the summaries'
+  `untried_only` and the quality pass. A versioned step's test takes its
+  current version as one parameter. `_of_this_text(step)` is the other
+  question, "read from the text it holds now", for the text checks'
+  current findings and the field counts. `_untried` is gone.
+- What is not here: the readings queue (its own table, with its own
+  "tried on this text" rule) and the face vectors (keyed by face, in the
+  faces table).
+- The review's two smaller points were done on 2026-11-08 already
+  (`sections_tried`, `untried_only`). The counts the review found used
+  only by tests now share the due queries' test, so they cannot drift.
+- On the copy of the live store, each step's due query picks the same
+  documents as before, set for set: photos 18,388, faces 18,385, geocode
+  18,388, worlddates 554, sections 17,569, quality 589, genres 18,382
+  (of the documents with a text).
+- Tests (`tests/test_step_stamps.py`): a record of another text or an
+  older version is due and a current one is not; a tried mark keeps a
+  document back; every record in the registry is a declared meta key; and
+  no module but `documents.meta` writes a test on a registered record's
+  version, text hash or mark (run over the code before this change, the
+  pattern finds 17 such lines).

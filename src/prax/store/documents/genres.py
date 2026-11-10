@@ -35,7 +35,7 @@ from ..base import (
     meta_of,
     now,
 )
-from .meta import _put_meta, _untried, get_meta, sure_labels
+from .meta import _due, _put_meta, get_meta, sure_labels
 
 GENRE_OPENING = 1500  # characters of the text a labeller reads beside the summary
 
@@ -254,8 +254,7 @@ def genres_needed(
     are never taken."""
     limit = max(1, limit)
     rows = con.execute(
-        "SELECT id" + _GENRE_OPEN + f" AND {_untried('genres')}"
-        " ORDER BY id DESC LIMIT ?",
+        "SELECT id" + _GENRE_OPEN + f" AND {_due('genres')} ORDER BY id DESC LIMIT ?",
         (limit,),
     ).fetchall()
     out = [int(r[0]) for r in rows]
@@ -267,7 +266,7 @@ def genres_needed(
             f" AND {LIVE}"
             # tried by the new run and nothing kept: the old labels stay,
             # and it is not handed out again (set_genres clears the mark)
-            f" AND {_untried('genres')}"
+            f" AND {_due('genres')}"
             " ORDER BY id DESC LIMIT ?",
             (current, limit - len(out)),
         ).fetchall()

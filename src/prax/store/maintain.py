@@ -54,6 +54,8 @@ from .base import (
 )
 from .documents import (
     HISTORY_KEEP,
+    _due,
+    _of_this_text,
     _put_meta,
     assign_domains,
     bounded_histories,
@@ -448,7 +450,7 @@ def _attachment(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         "with a language": "SELECT COUNT(*) FROM documents"
         f" WHERE json_extract(meta,'$.lang') IS NOT NULL{live}",
         "with section summaries": "SELECT COUNT(*) FROM documents"
-        f" WHERE json_extract(meta,'$.sections.text_hash') = text_hash{live}",
+        f" WHERE {_of_this_text('sections')}{live}",
         "long enough for sections": "SELECT COUNT(*) FROM documents"
         f" WHERE text_len >= 60000{live}",
         "with an ingredient list": "SELECT COUNT(DISTINCT doc_id) FROM chunks"
@@ -677,8 +679,7 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     rows = con.execute(
         "SELECT id, hash, mime, text_hash, meta FROM documents"
         f" WHERE text_hash IS NOT NULL AND {LIVE}"
-        " AND (COALESCE(json_extract(meta, '$.quality.text_hash'), '') != text_hash"
-        " OR COALESCE(json_extract(meta, '$.quality.version'), 0) < ?) ORDER BY id",
+        f" AND {_due('quality')} ORDER BY id",
         (quality.VERSION,),
     ).fetchall()
     found: Counter[str] = Counter()
