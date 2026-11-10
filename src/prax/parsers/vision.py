@@ -24,12 +24,9 @@ pinned to Claude, the name the earlier descriptions carry.
 
 from __future__ import annotations
 
-import base64
 import re
 from collections.abc import Callable
 from typing import Any
-
-from prax.ml import usage
 
 DEFAULT_MODEL = "claude-sonnet-5"  # Haiku misread a schematic; Sonnet read it
 MAX_BYTES = 5 * 1024 * 1024  # the API's limit per image
@@ -91,14 +88,6 @@ def media_type(data: bytes) -> str | None:
         if data.startswith(magic):
             return mt
     return None
-
-
-def _client() -> Any:
-    if CLIENT_FACTORY is not None:
-        return CLIENT_FACTORY()
-    import anthropic
-
-    return anthropic.Anthropic(timeout=180.0, max_retries=3)
 
 
 def model_name() -> str:
@@ -181,28 +170,12 @@ def read(
             text = _read_server(models.runtime(spec), data, mt, prompt, max_tokens)
             return text, spec.runtime_name
         model = spec.model or DEFAULT_MODEL
-    response = _client().messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mt,
-                            "data": base64.b64encode(data).decode("ascii"),
-                        },
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ],
+    from prax import models
+
+    claude = models.ClaudeRuntime(
+        model, client=CLIENT_FACTORY() if CLIENT_FACTORY is not None else None
     )
-    text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
-    usage.record(model, getattr(response, "usage", None))
+    text, _used = claude.chat("", prompt, max_tokens=max_tokens, images=[(mt, data)])
     return text, model
 
 

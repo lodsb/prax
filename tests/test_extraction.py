@@ -666,3 +666,54 @@ def test_a_number_the_text_refers_by_is_no_name_at_any_pass() -> None:
     # lists it, test_heal)
     assert ontology.reference_name("Smith et al. [12]")
     assert not hasattr(repair, "REFERENCE_NAME")
+
+
+def test_every_claude_request_is_built_and_counted_once() -> None:
+    # one runtime builds every request to Claude, and what a call used is
+    # counted once: by the ledger's accumulator, or by the caller's result
+    # (structure review finding 5)
+    from prax import models
+    from prax.graph import resolution
+    from prax.ml import usage
+
+    sent: list[dict[str, Any]] = []
+
+    class Messages:
+        def create(self, **params: Any) -> Any:
+            sent.append(params)
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text='{"answers": []}')],
+                usage=SimpleNamespace(
+                    input_tokens=100,
+                    output_tokens=10,
+                    cache_read_input_tokens=0,
+                    cache_creation_input_tokens=40,
+                ),
+            )
+
+    client = SimpleNamespace(messages=Messages())
+    usage.clear()
+    # a text step records what it used for the worker's next post
+    rt = models.ClaudeRuntime("claude-opus-5", client=client)
+    _text, used = rt.chat("be brief", "hello", images=[("image/png", b"\x89PNG")])
+    assert used["cache_creation_input_tokens"] == 40
+    assert usage.take() == {
+        "claude-opus-5": {
+            "input_tokens": 100,
+            "output_tokens": 10,
+            "cache_creation_input_tokens": 40,
+        }
+    }
+    content = sent[-1]["messages"][0]["content"]
+    assert [c["type"] for c in content] == ["image", "text"]
+    assert sent[-1]["system"] == "be brief"
+    # the adjudicator carries its usage in its result, with the cache's
+    # tokens, and leaves the accumulator alone; low effort, no system
+    judge = resolution.ClaudeAdjudicator(model="claude-opus-5", client=client)
+    pair = resolution.Candidate(1, 2, "a", "b", "concept", "likely", 0.9)
+    judge.decide([pair])
+    assert judge.usage["cache_creation_input_tokens"] == 40
+    assert usage.take() == {}
+    assert "system" not in sent[-1]
+    assert sent[-1]["output_config"]["effort"] == "low"
+    assert sent[-1]["output_config"]["format"]["type"] == "json_schema"

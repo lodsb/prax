@@ -438,10 +438,10 @@ class ClaudeAdjudicator:
         return pricing.cost_usd(self.model, self.usage)
 
     def decide(self, candidates: list[Candidate]) -> list[bool | None]:
-        if self.client is None:
-            import anthropic
+        from prax import models
 
-            self.client = anthropic.Anthropic()
+        # the decisions carry their usage home (``do_adjudicate``)
+        runtime = models.ClaudeRuntime(self.model, effort="low", client=self.client)
         out: list[bool | None] = []
         for start in range(0, len(candidates), self.batch):
             part = candidates[start : start + self.batch]
@@ -449,26 +449,16 @@ class ClaudeAdjudicator:
                 f'{i}. [{c.type}] "{c.keep_name}"  vs  "{c.drop_name}"'
                 for i, c in enumerate(part, 1)
             )
-            output_config: dict[str, Any] = {
-                "format": {"type": "json_schema", "schema": ANSWER_SCHEMA}
-            }
-            if pricing.supports_effort(self.model):
-                output_config["effort"] = "low"
-            response = self.client.messages.create(
-                model=self.model,
+            text, used = runtime.chat(
+                "",
+                adjudicate_prompt({c.type for c in part}) + lines,
                 max_tokens=6000,
-                output_config=output_config,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": adjudicate_prompt({c.type for c in part}) + lines,
-                    }
-                ],
+                schema=ANSWER_SCHEMA,
+                record=False,
             )
-            for key in ("input_tokens", "output_tokens", "cache_read_input_tokens"):
-                got = getattr(response.usage, key, None) or 0
-                self.usage[key] = self.usage.get(key, 0) + int(got)
-            text = next(b.text for b in response.content if b.type == "text")
+            self.client = runtime.client
+            for key, got in used.items():
+                self.usage[key] = self.usage.get(key, 0) + got
             out.extend(answers_by_number(text, len(part)))
         return out
 

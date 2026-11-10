@@ -353,7 +353,7 @@ against the code on 2026-11-08.
 
 **A stage each.**
 
-- [ ] 5 (the rest). Claude called four ways; the cost reaches the ledger
+- [x] 5 (the rest; 2026-11-10, the log; the backend choice by kind stays at four sites). Claude called four ways; the cost reaches the ledger
       since 2026-11-07. `ClaudeRuntime.chat` with `schema`, `images`,
       `cache_system` and `effort`; the extractor, the adjudicator and the
       vision reading each one call.

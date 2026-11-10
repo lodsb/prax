@@ -44,6 +44,7 @@ import re
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
@@ -772,9 +773,14 @@ def server_status(s: ModelSpec) -> dict[str, Any]:
 
 @dataclass
 class ClaudeRuntime:
-    """Claude as a plain chat runtime for text-in, text-out steps (titles,
-    ask). Grammars are llama.cpp's; extraction with Claude uses its JSON
-    schema through ``extraction.ClaudeExtractor`` instead."""
+    """Claude: every request prax makes to it is built and sent here — a
+    text step's chat (titles, ask, the readings), the extractor's JSON
+    schema with its prompt cached (``extraction.ClaudeExtractor``), the
+    adjudicator's (``resolution.ClaudeAdjudicator``) and a picture's
+    reading (``parsers.vision``). One client, with a timeout and three
+    retries; what a call used is recorded for the ledger
+    (``prax.ml.usage``) unless the caller carries it home in its result.
+    Grammars are llama.cpp's and refused."""
 
     model: str
     effort: str | None = None
@@ -783,6 +789,85 @@ class ClaudeRuntime:
     @property
     def name(self) -> str:
         return self.model
+
+    def params(
+        self,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = 2000,
+        stop: list[str] | None = None,
+        schema: dict[str, Any] | None = None,
+        images: Sequence[tuple[str, bytes]] = (),
+        cache_system: bool = False,
+        effort: str | None = None,
+    ) -> dict[str, Any]:
+        """The request: ``schema`` a JSON schema the answer follows,
+        ``images`` ``(media type, bytes)`` put before the text,
+        ``cache_system`` the system prompt cached across calls (it must be
+        the same text each time), ``effort`` this call's in place of the
+        model's. The extractor's batch path sends the same dict."""
+        from prax.ml.pricing import supports_effort
+
+        params: dict[str, Any] = {"model": self.model, "max_tokens": max_tokens}
+        if system:
+            params["system"] = (
+                [
+                    {
+                        "type": "text",
+                        "text": system,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ]
+                if cache_system
+                else system
+            )
+        content: Any = user
+        if images:
+            content = [
+                *(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": base64.b64encode(data).decode("ascii"),
+                        },
+                    }
+                    for media_type, data in images
+                ),
+                {"type": "text", "text": user},
+            ]
+        params["messages"] = [{"role": "user", "content": content}]
+        if stop:
+            params["stop_sequences"] = stop
+        output: dict[str, Any] = {}
+        if schema is not None:
+            output["format"] = {"type": "json_schema", "schema": schema}
+        effort = effort or self.effort
+        if effort and supports_effort(self.model):
+            output["effort"] = effort
+        if output:
+            params["output_config"] = output
+        return params
+
+    def create(self, params: dict[str, Any], *, record: bool = True) -> Any:
+        """Send a request (``params``) and return the API's message.
+        ``record`` puts what it used in the ledger's accumulator; a caller
+        whose result carries its usage home (an extraction, an
+        adjudication) says False, or it would be counted twice."""
+        if self.client is None:
+            import anthropic
+
+            self.client = anthropic.Anthropic(timeout=_CLAUDE_TIMEOUT, max_retries=3)
+        response = self.client.messages.create(**params)
+        if record:
+            # paid: what it used goes home with the worker's next post
+            # (``Pass.post``), whichever step called
+            from prax.ml import usage
+
+            usage.record(self.model, getattr(response, "usage", None))
+        return response
 
     def chat(
         self,
@@ -794,38 +879,46 @@ class ClaudeRuntime:
         temperature: float = 0.0,
         repeat_penalty: float = 1.0,
         stop: list[str] | None = None,
+        schema: dict[str, Any] | None = None,
+        images: Sequence[tuple[str, bytes]] = (),
+        cache_system: bool = False,
+        effort: str | None = None,
+        record: bool = True,
     ) -> tuple[str, dict[str, int]]:
+        """The answer's text and what it used (``claude_usage``)."""
         if grammar:
             raise ValueError("a grammar needs a llama.cpp runtime, not Claude")
-        if self.client is None:
-            import anthropic
+        response = self.create(
+            self.params(
+                system,
+                user,
+                max_tokens=max_tokens,
+                stop=stop,
+                schema=schema,
+                images=images,
+                cache_system=cache_system,
+                effort=effort,
+            ),
+            record=record,
+        )
+        text = "".join(
+            b.text for b in response.content if getattr(b, "type", "") == "text"
+        )
+        return text, claude_usage(getattr(response, "usage", None))
 
-            self.client = anthropic.Anthropic(timeout=_CLAUDE_TIMEOUT, max_retries=3)
-        from prax.ml.pricing import supports_effort
 
-        params: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": max_tokens,
-            "system": system,
-            "messages": [{"role": "user", "content": user}],
-        }
-        if stop:
-            params["stop_sequences"] = stop
-        if self.effort and supports_effort(self.model):
-            params["output_config"] = {"effort": self.effort}
-        response = self.client.messages.create(**params)
-        text = "".join(b.text for b in response.content if b.type == "text")
-        u = response.usage
-        # paid: what it used goes home with the worker's next post
-        # (``Pass.post``), whichever step called and whatever it does with
-        # the tokens returned here
-        from prax.ml import usage
+CLAUDE_USAGE = (
+    "input_tokens",
+    "output_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+)
 
-        usage.record(self.model, u)
-        return text, {
-            "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
-            "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
-        }
+
+def claude_usage(u: Any) -> dict[str, int]:
+    """What a Claude call used, as the price table reads it: the four
+    counts, the two of the prompt cache included."""
+    return {k: int(getattr(u, k, 0) or 0) for k in CLAUDE_USAGE}
 
 
 @cache

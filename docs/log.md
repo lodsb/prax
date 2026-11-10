@@ -10710,3 +10710,37 @@ one of them: a role only marked paused, not held, was started again.
   host when `prax up` is started again, not with a role's restart.
 - Test: the transitions in turn on one role, a person's stop and start,
   quiet and wake, a restart and a loan.
+
+## 2026-11-10: every request to Claude built in one place
+
+Finding 5 of the structure review, the rest. Since 2026-11-07 a text
+step's call reaches the ledger (`ClaudeRuntime.chat` records it). Three
+callers still built their own client and request: the extractor, the
+adjudicator (a bare `anthropic.Anthropic()`, no timeout, the SDK's 600 s
+and its default retries) and the vision reading. The adjudicator summed
+three of the four usage counts and dropped the prompt cache's writes.
+
+- `models.ClaudeRuntime.params(system, user, *, max_tokens, stop,
+  schema, images, cache_system, effort)` builds a request: a JSON schema
+  for the answer, pictures before the text, the system prompt cached, an
+  effort for this call. `create(params, *, record=True)` sends it on the
+  one client (180 s, three retries) and records what it used.
+  `chat` is the two together and returns the text and `claude_usage`
+  (the four counts, the cache's two included).
+- `record=False` is for a caller whose result carries its usage home:
+  the extraction (`Extraction.usage`) and the adjudication
+  (`do_adjudicate`'s `usage`). Recording there too would count the call
+  twice.
+- `ClaudeExtractor.params` is the runtime's, with the prompt cached and
+  the schema: the same dict as before, key for key, so the batch path
+  and the cache prefix are unchanged. `ClaudeAdjudicator.decide` is one
+  `chat` a batch at low effort; its usage now counts the cache's writes.
+  The vision reading's Claude branch is one `chat` with the picture;
+  `vision._client` and `extraction.CALL_TIMEOUT` are gone
+  (`vision.CLIENT_FACTORY` stays for the tests).
+- Not done: choosing a backend by `spec.kind` is still written at four
+  sites (extraction, ask, adjudicate, vision). Each builds a different
+  object, so one chooser would only move the `if`.
+- Test: a chat with a picture records its four counts once; the
+  adjudicator keeps its usage with the cache's writes and records none,
+  sends no system prompt and asks for low effort and a schema.

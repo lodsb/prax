@@ -29,11 +29,9 @@ from typing import Any, Protocol
 from prax import config, models, store
 from prax.errors import NotFound
 from prax.graph import ontology
-from prax.ml import pricing
 from prax.text import quotes
 
 DEFAULT_MODEL = "claude-opus-5"
-CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
 INPUT_CHARS = 12_000  # of document text after the metadata header
 # …and of its UTF-8, for the same reason the sections pass has one: a
 # character costs what its script makes it cost, and 12,000 characters of
@@ -571,16 +569,18 @@ class ClaudeExtractor:
     _prompts: dict[str, tuple[str, dict[str, Any]]] = field(
         default_factory=dict, init=False, repr=False
     )
+    _rt: models.ClaudeRuntime | None = field(default=None, init=False, repr=False)
 
     @property
     def name(self) -> str:
         return self.model
 
-    def _ensure(self) -> None:
-        if self.client is None:
-            import anthropic
-
-            self.client = anthropic.Anthropic(timeout=CALL_TIMEOUT, max_retries=3)
+    def _runtime(self) -> models.ClaudeRuntime:
+        if self._rt is None:
+            self._rt = models.ClaudeRuntime(
+                self.model, effort=self.effort, client=self.client
+            )
+        return self._rt
 
     def _prompt(self, doc: DocumentInput) -> tuple[str, dict[str, Any]]:
         onto = doc.ontology()
@@ -589,31 +589,16 @@ class ClaudeExtractor:
         return self._prompts[onto.version]
 
     def params(self, doc: DocumentInput) -> dict[str, Any]:
-        """The request parameters (shared by the sync and the batch path)."""
-        self._ensure()
+        """The request parameters (shared by the sync and the batch path):
+        the ontology's prompt cached, the answer in its JSON schema."""
         system, schema = self._prompt(doc)
-        output_config: dict[str, Any] = {
-            "format": {"type": "json_schema", "schema": schema}
-        }
-        if pricing.supports_effort(self.model):
-            output_config["effort"] = self.effort
-        return {
-            "model": self.model,
-            "max_tokens": 8000,
-            "system": [
-                {
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            "messages": [{"role": "user", "content": doc.as_message()}],
-            "output_config": output_config,
-        }
+        return self._runtime().params(
+            system, doc.as_message(), max_tokens=8000, schema=schema, cache_system=True
+        )
 
     def extract(self, doc: DocumentInput) -> Extraction:
-        self._ensure()
-        response = self.client.messages.create(**self.params(doc))
+        # the extraction carries its usage home itself (``Extraction.usage``)
+        response = self._runtime().create(self.params(doc), record=False)
         return self.from_message(response)
 
     @staticmethod
@@ -622,17 +607,7 @@ class ClaudeExtractor:
             raise RuntimeError(f"refused: {getattr(response, 'stop_details', None)}")
         text = next(b.text for b in response.content if b.type == "text")
         out = parse_output(json.loads(text))
-        usage = response.usage
-        out.usage = {
-            "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
-            "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
-            "cache_read_input_tokens": int(
-                getattr(usage, "cache_read_input_tokens", 0) or 0
-            ),
-            "cache_creation_input_tokens": int(
-                getattr(usage, "cache_creation_input_tokens", 0) or 0
-            ),
-        }
+        out.usage = models.claude_usage(response.usage)
         return out
 
 
