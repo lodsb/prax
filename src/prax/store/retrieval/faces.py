@@ -6,10 +6,10 @@ made on the worker, and a small square picture of it for the Review page.
 The vectors live in a usearch index of their own beside the text ones,
 ``vectors-face-<model>.usearch`` keyed by the face's id, with a delta
 that takes new vectors and a merge that folds it in: invariant 1's
-pattern, the same code as the chunks' (``base._INDEX_DIMS`` gives it its
-dimension). ``faces.vector_model`` records which faces it holds; a door
-killed between two saves forgets the rows whose vector was lost
-(``reconcile_face_vectors``), so those faces are read again.
+pattern, the same code as the chunks' (``base.face_index`` describes the
+file; its dimension is the recogniser's). ``faces.vector_model`` records
+which faces it holds; a door killed between two saves forgets the rows
+whose vector was lost (``reconcile_face_vectors``), so those faces are read again.
 
 Faces are biometric. Every read here goes through the wall: a face of a
 picture the viewer may not see is not there, and no named token's route
@@ -28,23 +28,21 @@ from prax import config
 from prax.ml import faces as faces_ml
 
 from ..base import (
-    _INDEX_DIMS,
     NotFound,
     _add_to_delta,
     _archive_bytes,
-    _delta_path,
     _get_vector,
     _knn,
     _reading,
     _serialized,
     archive_path,
     document_hidden,
+    face_index,
     hidden_documents,
     is_digest,
-    moment,
     now,
 )
-from .vectors import RECONCILE_SLACK, _index_has, _save_delta
+from .vectors import _reconcile, _save_delta
 
 FACE_MODEL = faces_ml.RECOGNIZER  # the default of ``faces.model``
 FACES_PAGE = 200  # crops a page of the Review page shows at most
@@ -73,12 +71,8 @@ def face_model() -> str:
 
 
 def face_index_path(model: str | None = None) -> Path:
-    """The face index of ``model`` (the host's), registered with its
-    dimension."""
-    spec = faces_ml.recognizer(model)
-    path = config.data_dir() / f"vectors-face-{spec.name}.usearch"
-    _INDEX_DIMS[str(path)] = spec.dim
-    return path
+    """The face index of ``model`` (the host's): ``base.face_index``."""
+    return face_index(model).path
 
 
 @_reading
@@ -181,27 +175,7 @@ def reconcile_face_vectors(
     vector it does not hold, so those faces are read again: what a door
     killed between two saves lost (``reconcile_unsaved`` for the chunks)."""
     model = model or face_model()
-    path = face_index_path(model)
-    files = [f for f in (path, _delta_path(path)) if f.exists()]
-    since = "0"
-    if files:
-        saved = max(f.stat().st_mtime for f in files) - RECONCILE_SLACK
-        since = moment(saved)
-    ids = [
-        int(r[0])
-        for r in con.execute(
-            "SELECT id FROM faces WHERE vector_model = ? AND vector_at >= ?",
-            (model, since),
-        )
-    ]
-    held = set(_index_has(path, ids)) if files else set()
-    lost = [i for i in ids if i not in held]
-    con.executemany(
-        "UPDATE faces SET vector_model = NULL, vector_at = NULL WHERE id = ?",
-        [(i,) for i in lost],
-    )
-    con.commit()
-    return {"checked": len(ids), "forgotten": len(lost)}
+    return _reconcile(con, face_index(model))
 
 
 def _face_doc(con: sqlite3.Connection, face_id: int) -> int | None:

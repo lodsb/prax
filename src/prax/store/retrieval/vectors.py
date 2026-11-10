@@ -19,11 +19,12 @@ from ..base import (
     _ASIDE,
     _INDEX_LOCK,
     _NOW,
-    VEC_DIM,
+    IndexFile,
     _add_to_delta,
     _delta,
     _delta_path,
     _doc_index_path,
+    _has_vectors,
     _index,
     _index_dim,
     _index_path,
@@ -31,6 +32,9 @@ from ..base import (
     _open_index,
     _reading,
     _serialized,
+    chunk_index,
+    document_index,
+    face_index,
     marks,
     moment,
     vectors_available,
@@ -185,26 +189,9 @@ def store_embeddings(
     """Add ``(chunk_id, kind, vector)`` rows for ``model`` to its index
     (in memory until ``save_vectors``) and record them in ``chunk_embeddings``.
     Requires the usearch library; the batch job calls this."""
-    if not vectors_available():
-        raise RuntimeError("usearch is not installed; vectors cannot be stored")
-    if not items:
-        return 0
-    ids = [cid for cid, _, _ in items]
-    import numpy as np
-
-    _add_to_delta(
-        _index_path(model),
-        ids,
-        np.vstack([np.asarray(v, dtype=np.float32) for _, _, v in items]),
-    )
-    con.executemany(
-        "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, ?)"
-        " ON CONFLICT(chunk_id) DO UPDATE SET model = excluded.model,"
-        f" embedded_at = {_NOW}",
-        [(cid, model) for cid in ids],
-    )
+    got = _add_and_record(con, chunk_index(model), [(c, v) for c, _, v in items])
     con.commit()
-    return len(items)
+    return got
 
 
 @_reading
@@ -242,25 +229,34 @@ def store_document_embeddings(
 ) -> int:
     """Add ``(doc_id, vector)`` rows to the document index of ``model`` (in
     memory until ``save_document_vectors``) and record them."""
+    got = _add_and_record(con, document_index(model), items)
+    con.commit()
+    return got
+
+
+def _add_and_record(
+    con: sqlite3.Connection,
+    index: IndexFile,
+    items: list[tuple[int, Any]],
+) -> int:
+    """``(key, vector)`` rows to the index's delta, and its table told
+    which model's vector each key now has; the caller commits."""
     if not vectors_available():
         raise RuntimeError("usearch is not installed; vectors cannot be stored")
     if not items:
         return 0
     import numpy as np
 
-    ids = [d for d, _ in items]
+    ids = [k for k, _ in items]
     _add_to_delta(
-        _doc_index_path(model),
-        ids,
-        np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]),
+        index.path, ids, np.vstack([np.asarray(v, dtype=np.float32) for _, v in items])
     )
     con.executemany(
-        "INSERT INTO document_embeddings (doc_id, model) VALUES (?, ?)"
-        " ON CONFLICT(doc_id) DO UPDATE SET model = excluded.model,"
-        f" embedded_at = {_NOW}",
-        [(d, model) for d in ids],
+        f"INSERT INTO {index.table} ({index.key}, {index.model_col}) VALUES (?, ?)"
+        f" ON CONFLICT({index.key}) DO UPDATE SET"
+        f" {index.model_col} = excluded.{index.model_col}, {index.at_col} = {_NOW}",
+        [(k, index.model) for k in ids],
     )
-    con.commit()
     return len(items)
 
 
@@ -445,35 +441,45 @@ def reconcile_unsaved(con: sqlite3.Connection, model: str) -> dict[str, int]:
     fraction of a second at start where ``compact_vectors`` costs minutes.
     """
     out = {"checked": 0, "forgotten": 0}
-    for path, table, key in (
-        (_index_path(model), "chunk_embeddings", "chunk_id"),
-        (_doc_index_path(model), "document_embeddings", "doc_id"),
-    ):
-        files = [f for f in (path, _delta_path(path)) if f.exists()]
-        if not files:
-            continue
-        saved = max(f.stat().st_mtime for f in files) - RECONCILE_SLACK
-        since = moment(saved)
-        ids = [
-            int(r[0])
-            for r in con.execute(
-                f"SELECT {key} FROM {table} WHERE model = ? AND embedded_at >= ?",
-                (model, since),
-            )
-        ]
-        if not ids:
-            continue
-        held = set(_index_has(path, ids))
-        lost = [i for i in ids if i not in held]
-        for i in range(0, len(lost), 500):
-            part = lost[i : i + 500]
-            con.execute(
-                f"DELETE FROM {table} WHERE {key} IN ({marks(len(part))})", part
-            )
-        con.commit()
-        out["checked"] += len(ids)
-        out["forgotten"] += len(lost)
+    for index in (chunk_index(model), document_index(model)):
+        got = _reconcile(con, index)
+        out["checked"] += got["checked"]
+        out["forgotten"] += got["forgotten"]
     return out
+
+
+def _reconcile(con: sqlite3.Connection, index: IndexFile) -> dict[str, int]:
+    """``reconcile_unsaved`` for one index: the rows of its model stamped
+    since its files were last saved, asked whether the files hold their
+    vectors, and those that do not forgotten (``IndexFile.forget``)."""
+    path = index.path
+    files = [f for f in (path, _delta_path(path)) if f.exists()]
+    if not files and not index.lost_without_file:
+        return {"checked": 0, "forgotten": 0}
+    since = (
+        moment(max(f.stat().st_mtime for f in files) - RECONCILE_SLACK)
+        if files
+        else "0"
+    )
+    ids = [
+        int(r[0])
+        for r in con.execute(
+            f"SELECT {index.key} FROM {index.table}"
+            f" WHERE {index.model_col} = ? AND {index.at_col} >= ?",
+            (index.model, since),
+        )
+    ]
+    held = set(_index_has(path, ids)) if files and ids else set()
+    lost = [i for i in ids if i not in held]
+    _forget(con, index, lost)
+    return {"checked": len(ids), "forgotten": len(lost)}
+
+
+def _forget(con: sqlite3.Connection, index: IndexFile, keys: list[int]) -> None:
+    for i in range(0, len(keys), 500):
+        part = keys[i : i + 500]
+        con.execute(index.forget.format(marks=marks(len(part))), part)
+    con.commit()
 
 
 RECONCILE_SLACK = 120.0  # seconds: a row stamped just before a save is asked about
@@ -492,11 +498,25 @@ def save_vectors(model: str) -> dict[str, Any]:
 
 @_serialized
 def merge_vectors(model: str) -> dict[str, Any]:
-    """Fold both deltas of ``model`` into their main files now."""
-    return {
+    """Fold the deltas of ``model``'s two indexes, and of the host's face
+    index where it has one, into their main files now."""
+    out = {
         "chunks": _merge(_index_path(model)),
         "documents": _merge(_doc_index_path(model)),
     }
+    faces = _face_index_or_none()
+    if faces is not None and _has_vectors(faces.path):
+        out["faces"] = _merge(faces.path)
+    return out
+
+
+def _face_index_or_none() -> IndexFile | None:
+    """The host's face index, or None where ``faces.model`` names no
+    recogniser prax knows (that host reads no faces)."""
+    try:
+        return face_index()
+    except ValueError:
+        return None
 
 
 @_reading
@@ -611,22 +631,32 @@ def _index_has(path: Path, ids: list[int]) -> list[int]:
 COMPACT_REBUILD = 0.1  # the share of removed slots past which the graph is built anew
 
 
-@_serialized
-def _forget_embeddings(con: sqlite3.Connection, chunk_ids: list[int]) -> None:
-    for i in range(0, len(chunk_ids), 500):
-        part = chunk_ids[i : i + 500]
-        con.execute(
-            f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks(len(part))})", part
-        )
-    con.commit()
-
-
 def compact_vectors(
     con: sqlite3.Connection, model: str, *, rebuild: bool | None = None
 ) -> dict[str, Any]:
-    """Reconcile the index with the bookkeeping: drop keys whose chunk is
-    gone, and forget bookkeeping rows whose vector is missing from the
-    index (so they get embedded again). Saves the index.
+    """Reconcile the indexes with their bookkeeping: drop keys whose chunk,
+    document or face is gone, and forget bookkeeping rows whose vector is
+    missing (so they are read again). The chunk index's counts at the top,
+    as before; the document index's and the face index's under
+    ``documents`` and ``faces`` (until 2026-11-10 only the chunk index was
+    compacted, so a retired document's or a gone face's vector stayed in
+    its file for good; structure review finding 9)."""
+    out = _compact(con, chunk_index(model), rebuild)
+    documents = document_index(model)
+    if _has_vectors(documents.path):
+        out["documents"] = _compact(con, documents, rebuild)
+    faces = _face_index_or_none()
+    if faces is not None and _has_vectors(faces.path):
+        out["faces"] = _compact(con, faces, rebuild)
+    return out
+
+
+def _compact(
+    con: sqlite3.Connection,
+    index: IndexFile,
+    rebuild: bool | None,
+) -> dict[str, Any]:
+    """One index compacted.
 
     Built like a merge: a private copy loaded, changed and written beside
     the main file outside ``_INDEX_LOCK``, and swapped in under it. It used
@@ -639,19 +669,20 @@ def compact_vectors(
     (``VectorIndex.rebuild``; ``rebuild`` says so either way). Minutes, and
     outside the store's lock: only forgetting the missing rows writes.
     A vector stored during the build is in the delta, and is not missing."""
-    path = _index_path(model)
+    path = index.path
     with _BUILD_LOCK:
         _merge(path)
         booked = {
-            r[0]
+            int(r[0])
             for r in con.execute(
-                "SELECT chunk_id FROM chunk_embeddings WHERE model = ?", (model,)
+                f"SELECT {index.key} FROM {index.table} WHERE {index.model_col} = ?",
+                (index.model,),
             )
         }
         with _INDEX_LOCK:
             arrived = {int(k) for k in _delta(path).all_keys()}
-        idx = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
-        live = {r[0] for r in con.execute("SELECT id FROM chunks")}
+        idx = vectors_mod.VectorIndex(path, index.dim, writable=True)
+        live = {int(r[0]) for r in con.execute(index.live)}
         keys = {int(k) for k in idx.all_keys()}
         removed = idx.remove(keys - live)
         again = (
@@ -663,7 +694,7 @@ def compact_vectors(
             idx.rebuild()
         missing = sorted(booked - keys - arrived)
         if missing:
-            _forget_embeddings(con, missing)
+            _serialized(_forget)(con, index, missing)
         tmp = path.with_suffix(path.suffix + ".compacting")
         idx.save_to(tmp)
         count = len(idx)

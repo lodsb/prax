@@ -566,3 +566,18 @@ def test_a_hit_carries_only_what_its_shape_declares(con: sqlite3.Connection) -> 
         for h in hits:
             assert set(h) <= declared, (mode, set(h) - declared)
             assert set(store.brief_hit(h)) <= declared
+
+
+@needs_usearch
+def test_compact_takes_a_retired_documents_vector_out(
+    con: sqlite3.Connection,
+) -> None:
+    # the document index is compacted too: a retired document's vector
+    # stayed in its file for good (structure review finding 9)
+    ids = _load(con)
+    _embed_all(con)
+    store.save_document_vectors("hash-test")
+    store.retire_document(con, ids["reverb"], reason="test")
+    rec = store.compact_vectors(con, "hash-test")
+    assert rec["documents"]["removed_stale"] == 1
+    assert rec["documents"]["count"] == len(ids) - 1

@@ -179,7 +179,6 @@ from .vectors import (  # noqa: F401
     RECONCILE_SLACK,
     _adopt_batch,
     _all_chunks_embedded,
-    _forget_embeddings,
     _index_has,
     _merge,
     _merge_now,

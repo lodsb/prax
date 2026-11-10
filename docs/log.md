@@ -10744,3 +10744,43 @@ three of the four usage counts and dropped the prompt cache's writes.
 - Test: a chat with a picture records its four counts once; the
   adjudicator keeps its usage with the cache's writes and records none,
   sends no system prompt and asks for low effort and a schema.
+
+## 2026-11-10: one description per vector file
+
+Finding 9 of the structure review. The three kinds of vector file (a
+model's chunks and documents, a recogniser's faces) share the low-level
+helpers in `store.base`, but what is kept beside each was written per
+kind. `store_embeddings` and `store_document_embeddings` were one
+function over two tables. `reconcile_face_vectors` re-did
+`reconcile_unsaved`'s loop. `merge_vectors` covered the chunks and the
+documents, `compact_vectors` the chunks only, with `VEC_DIM` written in.
+So a retired document's vector and a gone face's stayed in their files
+for good. A face file's dimension came from a registry the face part
+filled when it was first asked for its path; a merge in a process that
+had not asked would read 128 numbers as 384.
+
+- `store.IndexFile` describes one file: its kind, model, path and
+  dimension, the table that records which keys have a vector (key, model
+  and time columns), the keys that may keep one (`live`: a chunk that
+  exists, a document not retired, a face not gone) and how a lost
+  vector's row is forgotten. `chunk_index(model)`,
+  `document_index(model)` and `face_index(model)` make the three.
+  `face_index_path` stays, as `face_index(model).path`.
+- `_add_and_record`, `_reconcile` and `_compact` take an `IndexFile`.
+  `merge_vectors` also merges the host's face index where it has one.
+  `compact_vectors` compacts the chunk index as before (its counts at the
+  top of the answer) and the document and face indexes where they exist
+  (under `documents` and `faces`). It runs only on request
+  (`prax maintain --only vectors`).
+- `_index_dim` reads a face file's dimension from its name
+  (`vectors-face-<recogniser>`), so it holds in any process; the
+  registry `_INDEX_DIMS` is gone.
+- One difference kept on purpose (`lost_without_file`): with neither the
+  file nor its delta on disk, the face rows are all lost and forgotten,
+  as before; the text indexes ask nothing then, as before, rather than
+  sending the whole library back to be embedded.
+- `scripts/stress_vectors.py --seconds 30 --merge 1` ran clean: 151
+  adds, 6,533 reads, 5 merges.
+- Test: a retired document's vector is taken out by the compaction; a
+  gone face's vector likewise, with the face file's dimension read from
+  its name and its delta's.

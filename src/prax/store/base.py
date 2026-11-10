@@ -32,6 +32,7 @@ from typing import Any, Generic, ParamSpec, Required, TypedDict, TypeVar
 from prax import config, packs
 from prax.errors import NotFound  # noqa: F401  the store's miss, store.NotFound
 from prax.graph import ontology
+from prax.ml import faces as faces_ml
 from prax.ml import vectors
 
 VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file
@@ -951,16 +952,100 @@ def _doc_index_path(model: str) -> Path:
     return config.data_dir() / f"vectors-doc-{model}.usearch"
 
 
-# the dimension of an index other than the text ones (``VEC_DIM``), by its
-# main file: the face vectors (``retrieval.faces``) are 128 numbers each
-_INDEX_DIMS: dict[str, int] = {}
+FACE_INDEX = "vectors-face-"  # and the recogniser's name: its file's name
 
 
 def _index_dim(path: Path) -> int:
-    """The dimension of the index at ``path``, its delta or a merge's
-    temporary file: ``VEC_DIM`` unless its main file was registered."""
-    main = str(path).removesuffix(".merging").replace(".delta.usearch", ".usearch")
-    return _INDEX_DIMS.get(main, VEC_DIM)
+    """The dimension of the index at ``path``, its delta or a merge's or a
+    compaction's file beside it: a face index's is its recogniser's
+    (``prax.ml.faces``), named in the file's name, every other
+    ``VEC_DIM``. Read from the name, so it holds before anything else
+    has asked for the face index (it was a registry the face part filled,
+    and a merge in a process that had not called it read 128 numbers as
+    384; structure review finding 9)."""
+    name = path.name.removesuffix(".merging").removesuffix(".compacting")
+    name = name.replace(".delta.usearch", ".usearch").removesuffix(".usearch")
+    if name.startswith(FACE_INDEX):
+        return faces_ml.recognizer(name.removeprefix(FACE_INDEX)).dim
+    return VEC_DIM
+
+
+@dataclass(frozen=True)
+class IndexFile:
+    """One kind of vector file and the table that records what it holds:
+    the chunks' and the documents' of an embedder, the faces' of a
+    recogniser, of one ``model``. ``merge_vectors``, ``reconcile_unsaved`` and
+    ``compact_vectors`` do the same over each.
+
+    ``table`` holds a row per key with a vector: ``key`` its column,
+    ``model_col`` and ``at_col`` the model and when. ``live`` selects the
+    keys that may keep a vector in the file (a chunk that exists, a
+    document not retired, a face not gone); ``forget`` is the statement
+    that clears the rows of keys (``{marks}``) whose vector was lost, so
+    they are read again. ``lost_without_file``: when neither the file nor
+    its delta exists, every recent row's vector is lost (the faces'); the
+    text indexes then ask nothing, as they always did."""
+
+    kind: str
+    model: str
+    path: Path
+    dim: int
+    table: str
+    key: str
+    model_col: str
+    at_col: str
+    live: str
+    forget: str
+    lost_without_file: bool = False
+
+
+def chunk_index(model: str) -> IndexFile:
+    return IndexFile(
+        "chunks",
+        model,
+        _index_path(model),
+        VEC_DIM,
+        "chunk_embeddings",
+        "chunk_id",
+        "model",
+        "embedded_at",
+        "SELECT id FROM chunks",
+        "DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks})",
+    )
+
+
+def document_index(model: str) -> IndexFile:
+    return IndexFile(
+        "documents",
+        model,
+        _doc_index_path(model),
+        VEC_DIM,
+        "document_embeddings",
+        "doc_id",
+        "model",
+        "embedded_at",
+        f"SELECT id FROM documents WHERE {LIVE}",
+        "DELETE FROM document_embeddings WHERE doc_id IN ({marks})",
+    )
+
+
+def face_index(model: str | None = None) -> IndexFile:
+    """The face index of ``model``, the host's recogniser by default
+    (``faces.model``)."""
+    spec = faces_ml.recognizer(model)
+    return IndexFile(
+        "faces",
+        spec.name,
+        config.data_dir() / f"{FACE_INDEX}{spec.name}.usearch",
+        spec.dim,
+        "faces",
+        "id",
+        "vector_model",
+        "vector_at",
+        "SELECT id FROM faces WHERE gone_at IS NULL",
+        "UPDATE faces SET vector_model = NULL, vector_at = NULL WHERE id IN ({marks})",
+        lost_without_file=True,
+    )
 
 
 def _open_index(path: Path, *, writable: bool) -> vectors.VectorIndex | None:

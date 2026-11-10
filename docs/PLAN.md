@@ -357,7 +357,7 @@ against the code on 2026-11-08.
       since 2026-11-07. `ClaudeRuntime.chat` with `schema`, `images`,
       `cache_system` and `effort`; the extractor, the adjudicator and the
       vision reading each one call.
-- [ ] 9. The vector index family written three times; only the chunk
+- [x] 9 (2026-11-10, the log). The vector index family written three times; only the chunk
       index is compacted: one `IndexFile` per kind, `compact_vectors`
       and `merge_vectors` over all three.
 - [ ] 11 with 14. "Which documents" built by four selectors; a search's

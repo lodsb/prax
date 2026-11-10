@@ -193,3 +193,33 @@ def test_a_vector_must_fit_the_face(con: sqlite3.Connection) -> None:
         with pytest.raises(ValueError):
             store.apply_face_vectors(con, doc, faces=[bad], model=store.FACE_MODEL)
     assert store.face_vectors_due(con, store.FACE_MODEL, limit=5)
+
+
+def test_a_gone_faces_vector_leaves_the_index(con: sqlite3.Connection) -> None:
+    # the face index is merged and compacted with the text ones, and its
+    # dimension is read from its file's name (structure review finding 9)
+    from prax.store import base as store_base
+
+    path = store.face_index_path()
+    assert store_base._index_dim(path) == faces.DIM
+    assert store_base._index_dim(path.with_name(path.stem + ".delta.usearch")) == (
+        faces.DIM
+    )
+    first, second = _picture_with_faces(con, 120, 2)
+    store.apply_face_vectors(
+        con,
+        _doc(con, first),
+        faces=[
+            {"id": first, "vector": _unit(1)},
+            {"id": second, "vector": _unit(0, 1)},
+        ],
+        model=store.FACE_MODEL,
+    )
+    store.save_face_vectors()
+    con.execute(
+        "UPDATE faces SET gone_at = '2026-11-10T00:00:00Z' WHERE id = ?", (second,)
+    )
+    con.commit()
+    rec = store.compact_vectors(con, "no-text-model")
+    assert rec["faces"]["removed_stale"] == 1 and rec["faces"]["count"] == 1
+    assert "documents" not in rec  # no document index on this host
