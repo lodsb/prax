@@ -524,7 +524,7 @@ that has no column yet. `store.DocumentMeta` declares every key, and
 | `sections` | what a long document's parts are about, one summary a heading region, with the `text_hash` they were read from |
 | `summaries`, `summary_lang` | every summary there is keyed by language, so translating the German one does not lose it, and which language the canonical one is in |
 | `lang` | the document's own language, ISO 639-1, from `prax.text.language` |
-| `status` | what the document says of itself, as a project's sync read it (`prax.text.status`): `state` (retired, superseded, invalid, deprecated, current, draft), `since`, `words` (the line), `by` (`sync`; a person's is never replaced), `at` |
+| `status` | what the document says of itself, as a project's sync read it (`prax.text.status`): `state` (retired, superseded, invalid, retracted, deprecated, current, draft, or the word a keyed status line holds that the lexicon does not know, which is never stale), `since`, `words` (the line), `by` (`sync`; a person's is never replaced), `at` |
 | `published` | when the document was published: `date` (`2019`, `2019-07`, `2019-07-03`), `precision`, `by` (human, record, paper, citation, jsonld, arxiv, generic, first-page, in that order of trust), `at`; from the `dates` step also `words`, `confidence`, `run` |
 | `extraction`, `extraction_history` | stamp of the last extraction (extractor, ontology version, run, counts, token usage) and every earlier stamp |
 | `citations` | source, work id, citation count, reference count, fetch time |

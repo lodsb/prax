@@ -332,7 +332,7 @@ thirty fused hits are in one, and they hold every word of the question
 between them, that domain's hits get one more vote in the fusion. It is
 a preference and never a filter (`DOMAIN_PRIOR`; "apple cake" against
 "Apple Loops"). A document that is no longer current (its own status
-says retired, superseded, invalid or deprecated, `meta.status`, which a
+says retired, superseded, invalid, retracted or deprecated, `meta.status`, which a
 project's sync reads from the note; or a live `supersedes`/`invalidates`
 edge reaches it) carries `stale` with the date and what replaced it, and
 moves `STALE_SHIFT` places down: also a preference, `include_stale`

@@ -79,6 +79,9 @@ and its item 5 is items 1 and 2 below.
    and the remaining complex functions (the four at 17 and 18 split on
    2026-11-05; the top is 16). The measured improvements that need no model ("Retrieval
    and ask", "The graph").
+5. (the user, 2026-11-11) **AU, a project's journal and its open
+   questions**, after step 1 (done the same day): the entries, the
+   `prax:` pointer, the register and the read on a component.
 
 **Waiting on the user:**
 
@@ -390,6 +393,62 @@ against the code on 2026-11-08.
       indexes rebuilt.
 
 ## Stages
+
+- [ ] **AU. A project's journal, its open questions, and a link that
+      lasts.** The user, 2026-11-11: "yeah", after a proposal from the
+      MotorPlatterExperiments project (its `design/prax-workflow-proposal.md`,
+      99d33ed) settled with that project's session. On 2026-11-10 a sensor
+      bring-up re-derived a diagnosis, a fix design and a prediction that its
+      journals already held: capture worked, finding it at the moment of need
+      did not. The project keeps machine-read state, as-built docs and its
+      register of open questions (`design/OPEN.md`, d456fa6) in the repo;
+      prax keeps the dated entries and the evidence.
+      1. (done 2026-11-11) **A status line is the status, whatever its word.**
+         `prax.text.status`: a keyed line (`**STATUS: REMOVED …**`, front
+         matter's `status:`) ends the scan, and a word the lexicon does not
+         know (removed, candidate, brief) is kept as written and is never
+         stale. Before it, the reader skipped the unknown line and fired on
+         "*superseded*" in the sentence under it, which says the thing is not
+         superseded yet. `retracted` is a state of its own and stale (asserted,
+         acted on, found false; what stands on it is suspect), no longer folded
+         into `invalid`. A `SCOPE` line says what a document covers, not
+         whether it is current, and is not read.
+      2. **A journal as entries.** `sync_project` keys a file by remote and
+         path, and a changed file is a new document (invariant 2), so an
+         append-only journal of 3,400 or 7,600 lines comes back whole each
+         sync. An entry is a heading whose text, after an optional
+         `Session `, begins with `YYYY-MM-DD`, with an optional letter suffix
+         and an optional parenthetical (`2026-11-10b`, `2026-09-16 (late)`);
+         the heading's level says nothing (H3 is also an ordinary
+         sub-section); what follows belongs to the nearest dated heading
+         before it; a dated block whose date is not first (`Park state
+         2026-11-10`, `WHERE THINGS STAND (2026-11-10 …)`) is not an entry.
+         Entries are edited after the day (a `CORRECTION, same session`
+         added, the first text relabelled superseded), so an entry is a work
+         with versions (`example_of`, AS): its key the file and the heading's
+         date with suffix and qualifier as written, each changed text a
+         version, a search folding the old under the newest.
+      3. **`prax:<slug>`, a pointer that outlives a sync.** A slug names a
+         page or a work (a journal entry, a note across its versions), never
+         a document id, which a refresh retires; no host in it. The door, the
+         MCP tools and the web page's search resolve it. It also ends the
+         churn of nlbank's claims-index page, rewritten after every sync
+         because its links named retired ids.
+      4. **The register and "what about X".** The sync reads the project's
+         register of open questions as written: a `###` question, then
+         `- key: value` lines (`status` with its first word the state, open,
+         answered, retired or retracted, and its date; `asked`, `test`,
+         `answer`, `why it matters`, `why NOT …`, any other key kept), the
+         section it stands in a state when no status line says one. Each is a
+         claim node with edges to what it names (`prax:<slug>`, the asked-in
+         entry). The status is the repo's, versioned with the fix that closes
+         it; prax never writes it. One read answers what the library knows
+         about a board, a part or a subsystem and what is open on it: open
+         claims first, then retracted, then answered, the `why NOT` lines, three
+         to five pointers, about 40 lines. Its test cases are that project's
+         two questions of 2026-11-10 ("what is known about the raa2p's period
+         index, and what is open on it?", "what is open on ind01's reference
+         track?").
 
 - [ ] **AO. A text says what is wrong with it.** The user, 2026-10-17:
       "the most fluent workflow atm for me is to drop it into prax and

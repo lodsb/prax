@@ -17,7 +17,13 @@ The words that say a state, in each language, are the lexicon's
 read from the lexicon on disk when none are. A state word at a line's
 start counts only on a line of a status line's shape: after a key, or
 alone, emphasised, in capitals, or before a colon, a dash, a date or
-one of the words that follow a status ("Superseded by …"). The paths
+one of the words that follow a status ("Superseded by …"). A keyed line
+(``Status: REMOVED``, front matter's ``status:``) is the document's status
+whatever its word (AU step 1): a word the lexicon does not know is kept as
+written, lower case, and is never stale, and the scan stops there, so a
+state word in a sentence below it ("not yet *superseded*") is not read as
+the document's. What a document covers (a ``SCOPE`` line) is not whether
+it is current, and is not read. The paths
 a status line names (the replacement) are found by
 ``prax.text.paths``; the caller matches them. Nothing here imports prax
 at the top but its own text package.
@@ -34,13 +40,25 @@ from prax.text import paths
 
 HEAD_LINES = 30  # how far down a status line counts
 # the states a document may say it is in; the words for each are data
-STATES = ("retired", "superseded", "invalid", "deprecated", "current", "draft")
-STALE = frozenset({"retired", "superseded", "invalid", "deprecated"})
+STATES = (
+    "retired",
+    "superseded",
+    "invalid",
+    "retracted",
+    "deprecated",
+    "current",
+    "draft",
+)
+# retracted: asserted, acted on and found false, so what was built on it
+# is suspect; not folded into invalid (a project's notes keep the two apart)
+STALE = frozenset({"retired", "superseded", "invalid", "retracted", "deprecated"})
 # the edges that make the document they reach stale, and the state each
 # puts it in; a stale note naming its replacement is reached by the first
 # of them whose state it has, else by ``supersedes``
 STALE_RELS = {"supersedes": "superseded", "invalidates": "invalid"}
-_REL_OF = {state: rel for rel, state in STALE_RELS.items()}
+_REL_OF = {state: rel for rel, state in STALE_RELS.items()} | {
+    "retracted": "invalidates"
+}
 
 
 def stale_rel(state: str) -> str:
@@ -59,7 +77,8 @@ _FRONT_KEY = re.compile(r"^([A-Za-z_\-]+)\s*:\s*(.*?)\s*$")
 
 @dataclass
 class Status:
-    """A document's state as it states it: ``state`` (one of ``STATES``),
+    """A document's state as it states it: ``state`` (one of ``STATES``, or
+    the word of a keyed line the lexicon does not know, lower case),
     ``since`` (a date as written, or None), ``words`` (the line or the
     front matter that says it: the evidence) and ``refs`` (the paths the
     line names, as ``prax.text.paths.references`` gives them)."""
@@ -172,9 +191,8 @@ def read(
     w = words if words is not None else lexicon_words()
     front = _front_matter(text)
     if front:
-        state = (
-            w.state(front.get("status", "").split()[0]) if front.get("status") else None
-        )
+        first = (front.get("status") or "").split()[:1]
+        state = w.state(first[0]) if first else None
         since = None
         for key in ("retired", "superseded", "deprecated", "invalidated"):
             if front.get(key):
@@ -184,6 +202,8 @@ def read(
         replacement = front.get("superseded_by") or front.get("replaced_by")
         if replacement and not state:
             state = "superseded"
+        if not state and first:
+            state = first[0].lower()  # the project's own word, never stale
         if state:
             if since is None:
                 found = _DATE.search(front.get("status", "")) or _DATE.search(
@@ -219,7 +239,7 @@ def read(
         word = (
             keyed.group(1) if keyed else re.split(r"[\s:.,;!*_]", rest, maxsplit=1)[0]
         )
-        state = w.state(word)
+        state = w.state(word) or (word.lower() if keyed else None)
         if state is None:
             continue
         if not keyed and state not in STALE:

@@ -347,7 +347,8 @@ status:
   states:
     retired: [retired, withdrawn, archived, abandoned, zurückgezogen, archiviert, eingestellt, retiré, archivé, abandonné]
     superseded: [superseded, replaced, obsolete, outdated, ersetzt, überholt, veraltet, abgelöst, remplacé, obsolète, périmé]
-    invalid: [invalid, invalidated, void, wrong, retracted, ungültig, falsch, widerrufen, invalide]
+    invalid: [invalid, invalidated, void, wrong, ungültig, falsch, invalide]
+    retracted: [retracted, widerrufen, rétracté]
     deprecated: [deprecated, abgekündigt, déprécié]
     current: [current, active, accepted, final, approved, valid, aktuell, gültig, aktiv, actuel]
     draft: [draft, proposed, wip, entwurf, brouillon]

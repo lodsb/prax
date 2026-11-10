@@ -11008,3 +11008,31 @@ split each record in two.
   no module but `documents.meta` writes a test on a registered record's
   version, text hash or mark (run over the code before this change, the
   pattern finds 17 such lines).
+
+## 2026-11-11: AU step 1, a status line is the status whatever its word
+
+A proposal from the MotorPlatterExperiments project, settled with that
+project's session, became stage AU of the plan (the user's word). Its
+step 1: the four real status headers that project sent were all misread
+by `prax.text.status`. `**STATUS: REMOVED from the machine 2026-09-03**`
+was skipped (the lexicon has no "removed"), and the scan went on to the
+wrapped line under it, `> *superseded* rather than *removed*`, which an
+emphasised state word at a line's start counts as a status: the note was
+marked stale by a sentence saying it is not superseded yet. `candidate`
+and `brief` said nothing.
+
+Now a keyed line (a `status` key from the lexicon, or front matter's
+`status:`) is the document's status whatever its word, and the scan
+stops there. A word the lexicon does not know is kept lower case as the
+state and is never stale: a removed part's notes are the procedure for
+refitting it, so they keep their place in a search. `retracted` is a
+state of its own, stale, with `invalidates` as its edge: the project
+keeps "retired" (no longer relevant), "superseded" (a better answer)
+and "retracted" (the earlier answer was false) apart, and a retraction
+is what a reader must meet first. The lexicon's `invalid` words lost
+`retracted` and `widerrufen` to it. A `SCOPE` line, which says what a
+document covers, is not read: the project withdrew it as a status
+example itself, since its document is current.
+
+`tests/test_status.py`: two tests, the project's headers as written.
+

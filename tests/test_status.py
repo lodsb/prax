@@ -57,3 +57,35 @@ def test_what_says_nothing_about_the_document() -> None:
     deep = "# Notes\n" + "text\n" * 40 + "Retired 2026-10-02\n"
     assert status.read(deep, HERE) is None  # past the head of the document
     assert status.read("Status: current\n", HERE).state == "current"
+
+
+def test_the_first_status_line_is_the_status_whatever_its_word() -> None:
+    # a project's own words (AU step 1): recorded as written, never stale,
+    # and the scan stops there, so a state word in a later sentence ("not
+    # yet *superseded*") is not read as the document's
+    removed = (
+        "# The stack\n\n"
+        "> **STATUS: REMOVED from the machine 2026-09-03**, and probably heading for\n"
+        "> *superseded* rather than *removed*. The stack does not fit.\n"
+    )
+    got = status.read(removed, HERE)
+    assert got is not None and (got.state, got.since) == ("removed", "2026-09-03")
+    assert not got.stale
+    got = status.read("**STATUS: candidate.** Written 2026-10-18.\n", HERE)
+    assert got is not None and got.state == "candidate" and not got.stale
+    front = status.read("---\nstatus: brief\n---\n# Brief\nRetired 2026-10\n", HERE)
+    assert front is not None and front.state == "brief" and not front.stale
+    # what a document covers is not whether it is current
+    scope = "> **SCOPE (updated 2026-08-20).** This document describes `a.cpp`.\n"
+    assert status.read(scope, HERE) is None
+
+
+def test_retracted_is_its_own_state() -> None:
+    got = status.read(
+        "**STATUS: retracted 2026-11-10.** The attribution was wrong.\n", HERE
+    )
+    assert got is not None and got.state == "retracted" and got.stale
+    assert status.read("RETRACTED: the margin was never a metric.\n", HERE).state == (
+        "retracted"
+    )
+    assert status.stale_rel("retracted") == "invalidates"
