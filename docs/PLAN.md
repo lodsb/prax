@@ -489,7 +489,10 @@ they block, then by cost. Sizes are the review's.
 
 - [ ] 12. Every store-backed test replays all 69 migrations, some 4 to 5
       of the suite's 11 minutes: one store built per session and copied
-      per test; the migration tests keep their own.
+      per test; the migration tests keep their own. CI on 21af4ef
+      (2026-11-12): the Windows job took 15 minutes, the two Ubuntu jobs
+      4 each, so the migrations' fsyncs are probably most of Windows'
+      extra time. Measure the Windows job before and after.
 
 **Settings.**
 
