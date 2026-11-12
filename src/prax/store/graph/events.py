@@ -531,7 +531,7 @@ def decide_event(
     for m in members:
         try:
             node, ntype = document_node(con, int(m["id"]))
-        except KeyError:
+        except NotFound:
             continue  # no title, or gone
         day = str(m["taken"] or "")[:10]
         link(

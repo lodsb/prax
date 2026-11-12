@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from prax import models, store
+from prax.errors import NotFound
 from prax.graph import extraction, ontology
 from prax.ml import pricing
 
@@ -76,7 +77,7 @@ def test_build_input_has_header_and_skips_figures_and_code(
     assert "Figure 1" not in inp.text and "code listing" not in inp.text
     short = extraction.build_input(con, doc_id, max_chars=80)
     assert len(short.text) <= 80
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         extraction.build_input(con, 999)
 
 

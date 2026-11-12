@@ -13,7 +13,15 @@ from prax import config
 from prax.graph import ontology
 from prax.text import dates
 
-from ..base import VIEWER, _reading, doc_visible, domain_clause, hidden_documents, now
+from ..base import (
+    VIEWER,
+    NotFound,
+    _reading,
+    doc_visible,
+    domain_clause,
+    hidden_documents,
+    now,
+)
 from .communities import community_of
 from .edges import (
     _ASSERTED,
@@ -327,7 +335,7 @@ def _from_document(
         return name, etype
     try:
         title, own = document_node(con, int(m.group(1)))
-    except KeyError:
+    except NotFound:
         return name, etype
     return title, etype or own
 

@@ -44,6 +44,7 @@ from prax.text import acronyms, dates, language, quotes, schemaorg
 
 from .base import (
     LIVE,
+    NotFound,
     _serialized,
     archive_path,
     domain_clause,
@@ -580,7 +581,7 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
                 stamp["genre"] = genre
             try:
                 name, etype = document_node(con, r["id"])
-            except KeyError:
+            except NotFound:
                 name, etype = str(r["title"]), "document"
             # the page's language; for a page never indexed, the recipe
             # lines', detected or else by whose ingredient words they use

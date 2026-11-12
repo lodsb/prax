@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from prax import parsers, store
+from prax.errors import NotFound
 from prax.importers import zotero
 from prax.parsers import annotate, queue
 
@@ -382,7 +383,7 @@ def test_registry_dispatch() -> None:
     assert parsers.for_mime("text/markdown").name == "plain"
     assert parsers.for_mime("image/png") is None
     assert parsers.for_mime("text/plain", preferred="pymupdf") is None  # wrong type
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         parsers.by_name("nope")
     plain = parsers.by_name("plain")
     assert plain.stamp == "plain/1-r3"

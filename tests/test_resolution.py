@@ -8,6 +8,7 @@ import sqlite3
 import pytest
 
 from prax import store
+from prax.errors import NotFound
 from prax.graph import resolution
 from prax.ml import embeddings
 
@@ -103,7 +104,7 @@ def test_merge_rules(con: sqlite3.Connection) -> None:
     ).fetchone()[0]
     store.merge_entities(con, iii, jos)
     assert store.canonical_entity(con, iii) == smith
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.merge_entities(con, 999, smith)
 
 
@@ -360,7 +361,7 @@ def test_correct_edge_ends_states_and_records_in_one_write(
     # the run undone: the correction ended, the old fact stated again
     assert store.restore_run(con, "fix-1") == {"retired": 1, "restated": 1}
     assert [r["rel"] for r in store.traverse(con, "claim one", hops=1)] == ["supports"]
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.invalidate_edge(con, old)  # already ended
     restated = store.traverse(con, "claim one", hops=1)[0]["edge_id"]
     assert store.invalidate_edge(con, restated) is None

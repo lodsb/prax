@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from prax import models, store
 from prax.capture import routes
+from prax.errors import NotFound
 from prax.graph import extraction, ontology
 
 FIG_A = "a" * 64
@@ -159,7 +160,7 @@ def test_routes_of_other_kinds(
     by = _by_id(routes.routes_for(con, img))
     assert by["vision"]["action"]["extractor"] == "vision"
     assert "figures" not in by and "formulas" not in by
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         routes.routes_for(con, 999)
 
 
@@ -220,7 +221,7 @@ def test_request_extraction_goes_first_whatever_the_scope(
     # a document never extracted can be asked for too
     stale = store.request_extraction(con, later)
     assert "extractor" not in stale and stale["requested"]["by"] == "human"
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.request_extraction(con, 999)
 
 

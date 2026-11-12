@@ -302,7 +302,7 @@ def _annotate(
     try:
         # one node per document, whatever links it (``document_node``)
         target_name, target_type = document_node(con, target)
-    except KeyError:
+    except NotFound:
         raise NotFound(f"no such document to annotate: {target}") from None
     edge = Edge(*page, rel, target_name, target_type)
     if kind == "synthesis" and target_type not in ("page", "project"):
@@ -346,7 +346,7 @@ def _refuse_write(
     for target in annotates or []:
         try:
             document_node(con, target)
-        except KeyError:
+        except NotFound:
             raise NotFound(f"no such document to annotate: {target}") from None
     if part_of and (
         con.execute(
@@ -424,7 +424,7 @@ def _link_edges(
             continue
         try:
             target_name, target_type = document_node(con, target)
-        except KeyError:
+        except NotFound:
             continue
         wanted_titles.add(target_name)
         edge = Edge(page_title, page_type, rel, target_name, target_type)

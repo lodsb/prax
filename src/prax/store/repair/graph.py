@@ -17,6 +17,7 @@ from prax.text import glyphs, language, names
 
 from ..base import (
     LIVE,
+    NotFound,
     _node_doc,
     _serialized,
     hidden_documents,
@@ -485,7 +486,7 @@ def _repair_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     for row in rows:
         try:
             how = rename_entity(con, row["id"], row["cleaned"])
-        except KeyError:  # merged away by an earlier row of this pass
+        except NotFound:  # merged away by an earlier row of this pass
             continue
         except ValueError:
             # the clean name is already an alias of this one: an earlier
@@ -742,7 +743,7 @@ def _repair_document_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) 
                     producer=TWINS_PRODUCER,
                     run=run,
                 )
-            except (KeyError, ValueError):
+            except (NotFound, ValueError):
                 continue  # merged away meanwhile, or a cycle: left alone
             done += 1
     return done
@@ -864,7 +865,7 @@ def _repair_spacing_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
                     producer=SPACING_PRODUCER,
                     run=run,
                 )
-            except (KeyError, ValueError):
+            except (NotFound, ValueError):
                 continue  # merged away meanwhile, or a cycle: left alone
             done += 1
     return done
@@ -999,7 +1000,7 @@ def _repair_damaged_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
                     run=run,
                     across_types=into is not None and into["type"] != row["type"],
                 )
-            except (KeyError, ValueError):
+            except (NotFound, ValueError):
                 continue
             done += 1
             continue
@@ -1162,7 +1163,7 @@ def _stale_document_nodes(con: sqlite3.Connection) -> list[dict[str, Any]]:
     ):
         try:
             target = document_node(con, int(doc["id"]))[0]
-        except KeyError:  # untitled or hidden: nothing to name it after
+        except NotFound:  # untitled or hidden: nothing to name it after
             continue
         media = target != doc["title"]
         olds = {
@@ -1244,7 +1245,7 @@ def _repair_stale_document_nodes(
                 producer=STALE_NODES_PRODUCER,
                 run=run,
             )
-        except (KeyError, ValueError):  # a merge the store refuses: left
+        except (NotFound, ValueError):  # a merge the store refuses: left
             continue
         done += how != "unchanged"
     return done
@@ -1347,7 +1348,7 @@ def _repair_page_node_twins(con: sqlite3.Connection, rows: list[dict[str, Any]])
                 producer=PAGE_TWINS_PRODUCER,
                 run=run,
             )
-        except (KeyError, ValueError):  # merged or gone since it was found
+        except (NotFound, ValueError):  # merged or gone since it was found
             continue
         done += 1
     return done

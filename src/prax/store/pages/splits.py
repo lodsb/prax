@@ -393,7 +393,7 @@ def _end_given_edges(
         for target in linked_documents(child_text):
             try:
                 linked.add(document_node(con, target)[0])
-            except KeyError:
+            except NotFound:
                 continue
     for edge in con.execute(
         "SELECT e.id, t.name FROM edges e JOIN entities t ON t.id = e.dst"

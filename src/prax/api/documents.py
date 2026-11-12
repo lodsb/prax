@@ -498,10 +498,7 @@ def text(doc_id: int, request: Request) -> PlainTextResponse:
 def chunks(doc_id: int, request: Request) -> list[dict[str, Any]]:
     """The document as its chunks in order, with kind, heading, page, text."""
     con = _con(request)
-    try:
-        store.get_meta(con, doc_id)
-    except KeyError as exc:
-        raise HTTPException(404, "no such document") from exc
+    store.get_meta(con, doc_id)  # NotFound: the door's 404
     if store.document_hidden(con, doc_id):  # as if absent, for a named token
         raise HTTPException(404, "no such document")
     return store.list_chunks(con, doc_id)

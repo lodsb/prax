@@ -8,6 +8,7 @@ import sqlite3
 import pytest
 
 from prax import store
+from prax.errors import NotFound
 from prax.graph import extraction
 
 EVERY_MODULE = (
@@ -117,7 +118,7 @@ def test_write_read_and_revise(con: sqlite3.Connection) -> None:
         2,
     ]
     assert store.page_revision_text(con, "reverb-notes", 1).endswith("First thoughts.")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.page_revision_text(con, "reverb-notes", 9)
     assert store.get_page(con, "nope") is None
     with pytest.raises(ValueError):
@@ -149,7 +150,7 @@ def test_agent_appends_but_does_not_overwrite(con: sqlite3.Connection) -> None:
         ]
         == 4
     )
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.append_page(con, "missing", "x")
 
 
@@ -187,11 +188,11 @@ def test_addendum_and_project_edges_reach_the_context(con: sqlite3.Connection) -
     assert [m["doc_id"] for m in pctx["members"] if m["title"] == "Grain Paper"] == [
         paper
     ]
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.write_page(con, "n2", "x", annotates=[999])
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.write_page(con, "n3", "x", part_of="no-such-project")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.add_to_project(con, "granular-study", 999)
     assert (
         store.search(con, "figure", mode="fts", doctype="page")[0]["doc_id"]
@@ -305,7 +306,7 @@ def test_pages_form_a_tree(con: sqlite3.Connection) -> None:
     assert parents == {proj: None, note: proj, deep: note}
     with pytest.raises(ValueError, match="cycle"):
         store.set_page_parent(con, proj, deep)
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.set_page_parent(con, note, 999_999)
     store.set_page_parent(con, deep, None)
     assert {p["doc_id"]: p["parent"] for p in store.list_pages(con)}[deep] is None

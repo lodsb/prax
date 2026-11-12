@@ -36,7 +36,7 @@ async def import_zotero_item(
 
     try:
         planned = zotero.Planned.from_wire(json.loads(item))
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:  # the caller's own data
         raise HTTPException(400, f"not a planned item: {exc}") from exc
     data = await file.read() if file is not None else None
     if planned.path is not None and data is None and not planned.missing:

@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import config, store
+from prax.errors import NotFound
 from prax.graph import extraction, ontology
 from prax.store import documents
 from tests.conftest import copy_ontology
@@ -55,7 +56,7 @@ def test_set_add_remove(con: sqlite3.Connection, three_modules: Path) -> None:
         store.set_domains(con, a, ["core"])
     with pytest.raises(ValueError, match="unknown domain"):
         store.add_domain(con, a, "cooking")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.document_domains(con, 999)
 
 

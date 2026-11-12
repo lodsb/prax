@@ -36,19 +36,16 @@ def label(req: LabelReq, request: Request) -> dict[str, Any]:
     that language, and the shown name follows.
     """
     con = _con(request)
-    try:
-        wrote = store.add_label(
-            con,
-            req.entity_id,
-            req.label,
-            lang=req.lang,
-            kind=req.kind,
-            producer=req.producer,
-            run=req.run,
-            confidence=req.confidence,
-        )
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+    wrote = store.add_label(
+        con,
+        req.entity_id,
+        req.label,
+        lang=req.lang,
+        kind=req.kind,
+        producer=req.producer,
+        run=req.run,
+        confidence=req.confidence,
+    )
     return {
         "entity": req.entity_id,
         "written": wrote,
@@ -121,17 +118,14 @@ def merge(req: MergeReq, request: Request) -> dict[str, Any]:
     not decide. Filed under a run like any merge, so ``/graph/unmerge``
     takes it back; nothing is deleted."""
     run = req.run or store.run_name("merge", unique=True)
-    try:
-        store.merge_entities(
-            _con(request),
-            req.drop,
-            req.into,
-            across_types=req.across_types,
-            producer="human",
-            run=run,
-        )
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+    store.merge_entities(
+        _con(request),
+        req.drop,
+        req.into,
+        across_types=req.across_types,
+        producer="human",
+        run=run,
+    )
     return {"merged": req.drop, "into": req.into, "run": run}
 
 

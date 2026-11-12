@@ -8,6 +8,7 @@ import sqlite3
 import pytest
 
 from prax import store
+from prax.errors import NotFound
 from prax.importers import zotero
 from prax.writing import titles
 
@@ -256,7 +257,7 @@ def test_retitle_leaves_shared_entity_alone(con: sqlite3.Connection) -> None:
 
 
 def test_retitle_errors(con: sqlite3.Connection) -> None:
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.retitle(con, 999, "x", source="s")
     doc = store.ingest_text(con, "t " * 30, title="t")["doc_id"]
     with pytest.raises(ValueError):

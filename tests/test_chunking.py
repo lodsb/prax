@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from prax import parsers, store
+from prax.errors import NotFound
 from prax.text import chunking
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zotero"
@@ -208,7 +209,7 @@ def test_rechunk_rebuilds_legacy_rows(con: sqlite3.Connection) -> None:
     assert n == 7 and store.search(con, "measured values")[0]["kind"] == "table"
     empty = store.register(con, b"%PDF", mime="application/pdf")["doc_id"]
     assert store.rechunk(con, empty) == 0
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.rechunk(con, 999_999)
 
 

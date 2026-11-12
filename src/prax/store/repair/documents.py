@@ -17,6 +17,7 @@ from ..base import (
     _ASIDE,
     LIVE,
     DocumentMeta,
+    NotFound,
     _read_archive,
     live,
     meta_of,
@@ -112,7 +113,7 @@ def _repair_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
                 duplicate_of=row["duplicate_of"],
                 by="heal",
             )
-        except KeyError:
+        except NotFound:
             continue
         done += 1
     return done
@@ -192,7 +193,7 @@ def _repair_not_documents(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
             retire_document(
                 con, row["id"], reason=f"not a document: {row['why']} (heal)", by="heal"
             )
-        except KeyError:
+        except NotFound:
             continue
         done += 1
     return done
@@ -627,7 +628,7 @@ def _repair_picture_text(con: sqlite3.Connection, rows: list[dict[str, Any]]) ->
     for r in rows[:PICTURE_BATCH]:
         try:
             docs.rechunk(con, int(r["id"]))
-        except KeyError:
+        except NotFound:
             continue
         done += 1
     return done

@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 from prax.graph import graphio
 
 PAPER = "Wave digital filters. " * 40
@@ -174,7 +175,7 @@ def test_an_entity_left_out_takes_its_held_edges_with_it(
     assert (again.left_out, again.held, again.linked) == (1, 0, 0)
     with pytest.raises(ValueError):
         store.decide_foreign(other, "laptop", item["gid"], "maybe")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.decide_foreign(other, "laptop", "e:NOTHERE", "same")
 
 

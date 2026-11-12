@@ -8,6 +8,7 @@ handlers; prax.store serializes access.
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import threading
 import time
@@ -17,7 +18,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from prax import config, store
 from prax.capture import inbox
@@ -201,10 +202,30 @@ async def _not_found(request: Request, exc: NotFound) -> JSONResponse:
     return JSONResponse({"detail": str(exc)}, status_code=404)
 
 
+# ValueErrors no caller causes: a corrupt row's JSON or text, a host's
+# setting the code cannot follow, a model built from a bad row. Each is a
+# bug or the host's, so a 500 with its traceback in the log, never the
+# caller's 400 (the quality review of 2026-11-11, findings 13 and 22). A
+# route that parses what the caller sent catches its own decode error.
+NOT_THE_CALLERS = (
+    json.JSONDecodeError,
+    UnicodeError,
+    config.ConfigError,
+    ValidationError,
+)
+
+
 @app.exception_handler(ValueError)
 async def _refused(request: Request, exc: ValueError) -> JSONResponse:
     """What the store refuses (a bad relation, an empty title, a cycle):
-    400 with its reason. A route that means 409 or 422 catches it itself."""
+    400 with its reason, logged with the route. A route that means 409 or
+    422 catches it itself. One of ``NOT_THE_CALLERS`` is a 500."""
+    log = logging.getLogger("prax.door")
+    route = f"{request.method} {request.url.path}"
+    if isinstance(exc, NOT_THE_CALLERS):
+        log.error("%s failed", route, exc_info=exc)
+        return JSONResponse({"detail": "internal error"}, status_code=500)
+    log.info("%s refused: %s", route, exc)
     return JSONResponse({"detail": str(exc)}, status_code=400)
 
 

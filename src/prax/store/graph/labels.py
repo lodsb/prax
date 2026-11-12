@@ -703,7 +703,7 @@ def retitle(
     title = " ".join(title.split())
     try:
         node: tuple[str, str] | None = document_node(con, doc_id)
-    except KeyError:  # no title yet, or not found: _retitle_document says which
+    except NotFound:  # no title yet, or not found: _retitle_document says which
         node = None
     old = _retitle_document(
         con, doc_id, title, source=source, run=run, confidence=confidence

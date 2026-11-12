@@ -470,16 +470,22 @@ they block, then by cost. Sizes are the review's.
 
 **Errors that hide, an hour each.**
 
-- [ ] 13 and 22. The door's `ValueError` handler answers a bug (a
+- [x] 13 and 22. The door's `ValueError` handler answers a bug (a
       `JSONDecodeError`, a `ConfigError`, a corrupt row) as the caller's
       400 and logs nothing: a `prax.errors.Refused(ValueError)` the
       store raises for a refusal, or the subclasses excluded and logged
-      as a 500.
-- [ ] 14, 24 and 41. Fourteen routes and about forty store sites still
+      as a 500. Done 2026-11-12, the second way: `api.NOT_THE_CALLERS`
+      (a JSON or text decode error, `ConfigError`, a pydantic
+      `ValidationError`) is a 500 with its traceback, and a refusal is
+      logged with its route.
+- [x] 14, 24 and 41. Fourteen routes and about forty store sites still
       catch a plain `KeyError`: `NotFound` or no catch, a
       `store.require_document`, and a test that fails on `except
       KeyError` under `api`. With 34: the 36 tests that expect `KeyError`
-      expect `NotFound`.
+      expect `NotFound`. Done 2026-11-12: no route catches a plain
+      `KeyError` but the three that read the caller's own dicts (marked,
+      and `test_errors` holds it), the store's 22 catches name
+      `NotFound`, the 37 tests expect it.
 - [ ] 15. A scheduled job that fails before its job row exists is retried
       every 30 s and never shown: the failed start is a failed job row.
 - [ ] 16. The calibrated adjudicator reads an HTTP 401 or a wrong model
@@ -506,8 +512,8 @@ they block, then by cost. Sizes are the review's.
       extra time. Measure the Windows job before and after.
       Done 2026-11-12: `conftest.migrated_db`, copied into every test's
       data directory; a test marked `empty_store` starts without one.
-      Locally 646 s to 284 s. The Windows job's time after is to be read
-      on the next push.
+      Locally 646 s to 284 s; CI's Windows job on 36501cf 8 min 49 s
+      (from 15), the Ubuntu jobs 3 and 5.
 
 **Settings.**
 

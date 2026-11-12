@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 from prax.ml import matching
 from tests.test_face_naming import _grouped
 
@@ -109,7 +110,7 @@ def test_open_faces_offered_as_who_they_look_like(con: sqlite3.Connection) -> No
     # one person's faces whole
     whole = store.face_matches(con, person=ada)
     assert [m["entity_id"] for m in whole["items"]] == [ada]
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.face_matches(con, person=ada + 10_000)
 
 

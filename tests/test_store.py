@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from prax import store
+from prax.errors import NotFound
 
 LONG_TEXT = "".join(f"w{i} " for i in range(600))  # ~2900 chars, unique tokens
 
@@ -147,7 +148,7 @@ def test_register_dedupes_on_original_bytes(con: sqlite3.Connection) -> None:
 
 
 def test_index_text_on_unknown_document_raises(con: sqlite3.Connection) -> None:
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.index_text(con, 999, "nothing")
 
 

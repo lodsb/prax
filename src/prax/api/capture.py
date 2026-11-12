@@ -125,10 +125,7 @@ def set_title(doc_id: int, req: TitleReq, request: Request) -> dict[str, Any]:
     con = _con(request)
     if store.document_hidden(con, doc_id):
         raise HTTPException(404, f"no such document: {doc_id}")
-    try:
-        out = store.retitle(con, doc_id, req.title, source=req.by)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    out = store.retitle(con, doc_id, req.title, source=req.by)
     return {**out, "url": ui_url(request, doc_id)}
 
 
@@ -221,11 +218,8 @@ def _own_stamp(stamp: str) -> bool:
         return False
     if stamp.split("/", 1)[0] in parsers.SENDERS_TOO:
         return True
-    try:
-        parsers.by_name(stamp.split("/", 1)[0])
-    except KeyError:
-        return True
-    return False
+    name = stamp.split("/", 1)[0]
+    return all(e.name != name for e in parsers.REGISTRY)
 
 
 @router.post("/ingest/file")
@@ -518,8 +512,6 @@ def requests_finish(
             for d in done.get("domains") or []:
                 store.add_domain(con, int(done["doc_id"]), d)
         return done
-    except KeyError as exc:
-        raise HTTPException(404, str(exc).strip("'\"")) from exc
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 

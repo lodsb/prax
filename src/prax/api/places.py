@@ -64,7 +64,7 @@ def record_places(req: PlacesReq, request: Request) -> dict[str, Any]:
         raise HTTPException(413, f"at most {store.KNOWN_BATCH} entries a request")
     try:
         return store.record_places(_con(request), req.root, req.entries)
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:  # the caller's own data
         raise HTTPException(400, str(exc)) from exc
 
 
@@ -88,7 +88,7 @@ def ingest_reference(req: ReferenceReq, request: Request) -> dict[str, Any]:
             session=req.session,
             by=req.by,
         )
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:  # the caller's own data
         raise HTTPException(400, str(exc)) from exc
 
 

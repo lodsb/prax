@@ -11194,5 +11194,31 @@ migrations themselves is marked `empty_store` and starts with none
 `test_a_migrations_python_half_commits_with_it`; the marker is
 registered in pyproject). The full suite, locally: 646 s before, 366 s
 with the copy in `con` and `client` only, 284 s with it in `data_dir`.
-CI's Windows job took 15 minutes on 21af4ef; its time after is read on
-the next push.
+CI's Windows job took 15 minutes on 21af4ef and 8 min 49 s on
+36501cf; the Ubuntu jobs 3 and 5 minutes.
+
+## 2026-11-12: errors that hid behind a 400 or a 404 (quality findings 13, 22, 14, 24, 41, 34)
+
+The door's `ValueError` handler answered every ValueError as the
+caller's 400 and logged nothing, and a ValueError is also what a corrupt
+meta row's `json.loads`, a host's mistyped setting (`ConfigError`), a
+bad byte and a pydantic model built from a bad row raise. Those
+(`api.NOT_THE_CALLERS`) are now a 500 with the traceback in `prax.door`'s
+log; a refusal stays a 400 and is logged at INFO with its route. The two
+routes that parse JSON the caller sent catch their own decode error, as
+they did.
+
+A miss reaches the door as `NotFound` (2026-11-08), but routes still
+caught a plain `KeyError` and answered it 404 or 400, so a bug's missing
+dict key read as "no such thing". Gone: the retitle, chunks, request
+finish and `doc:N` edge-end routes leave the miss to the handler, the
+six curation and graph routes that mapped `(ValueError, KeyError)` to
+400 lost their try (a missing entity there is now a 404), and the stamp
+check reads the parser registry instead of catching `by_name`'s miss.
+Three handlers stay, the ones reading dicts the caller sent (a crawl's
+entries, a planned Zotero item), marked `# the caller's own data`;
+`test_errors.test_no_route_catches_a_plain_key_error` walks `prax.api`'s
+syntax trees for the rest. In the store, 22 catches of a miss from
+another store function name `NotFound` now (a worker's `gps` dict in
+`photos._a_position` keeps its `KeyError`), and the 37 tests that
+expected a `KeyError` expect `NotFound`; every one already got it.

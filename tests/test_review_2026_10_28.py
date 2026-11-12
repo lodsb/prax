@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 
 ADMIN = "admin-secret"
 
@@ -313,7 +314,7 @@ def test_an_event_candidate_keeps_its_id_and_none_is_given_twice(con: Any) -> No
     _photos(con, "2020-07-01T10:00:00", 10, folder="jul", tag="u")
     store.find_event_candidates(con)
     assert shown not in {c["id"] for c in store.event_candidates_page(con)["items"]}
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.decide_event(con, shown, event=True, name="May")
 
 

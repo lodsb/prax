@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ..base import rows_in, run_name
+from ..base import NotFound, rows_in, run_name
 from ..graph import (
     end_edges,
     resolve_review,
@@ -131,7 +131,7 @@ def _repair_review(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     for row in rows:
         try:
             resolve_review(con, row["id"], "dropped")
-        except (KeyError, ValueError):
+        except (NotFound, ValueError):
             continue
         done += 1
     return done
@@ -142,7 +142,7 @@ def _repair_jobs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     for row in rows:
         try:
             job_finish(con, row["id"], status="failed", note="closed by the heal pass")
-        except (KeyError, ValueError):
+        except (NotFound, ValueError):
             continue
         done += 1
     return done

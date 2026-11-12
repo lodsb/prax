@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from prax import store, worker
+from prax.errors import NotFound
 from prax.ml import faces, fetch
 from prax.parsers import photos
 from prax.steps import base
@@ -153,7 +154,7 @@ def test_the_step_makes_vectors_and_alike_faces_are_found(
         assert [f["id"] for f in store.similar_faces(con, one[0])] == [one[1]]
         assert store.face_crop(con, two[0]) is None
         assert store.faces_page(con)["total"] == 2
-        with pytest.raises(KeyError):
+        with pytest.raises(NotFound):
             store.similar_faces(con, two[0])
     finally:
         store.VIEWER.reset(token)

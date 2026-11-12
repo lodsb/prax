@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 from prax.store import pages
 
 
@@ -174,11 +175,11 @@ def test_a_move_is_refused_before_anything_is_written(con: sqlite3.Connection) -
     store.write_page(con, "top", "# Top\n\nText.", part_of="project-old")
     store.write_page(con, "below", "# Below\n\nText.", parent="top")
     store.write_page(con, "loose", "# Loose\n\nText.")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.move_page(con, "nowhere", parent="")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.move_page(con, "top", part_of="project-none")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.move_page(con, "top", parent="no-such-page")
     with pytest.raises(ValueError, match="cycle"):
         store.move_page(con, "top", parent="below")
@@ -232,7 +233,7 @@ def test_a_rename_is_refused_where_it_would_take_a_name(
         store.rename_page(con, "project-old", "project-older")
     with pytest.raises(ValueError):
         store.rename_page(con, "b", "  ")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.rename_page(con, "missing", "c")
     assert not store.rename_page(con, "b", "b")["changed"]
     # the database itself refuses a page under an old name
@@ -393,7 +394,7 @@ def test_an_old_slug_of_a_hidden_page_gives_away_nothing(
     mine = store.write_page(con, "mine", "# Mine\n\nText.")
     token = _as_guest()
     try:
-        with pytest.raises(KeyError) as absent:
+        with pytest.raises(NotFound) as absent:
             store.write_page(con, "plain-name", "# Over\n\nIt.")
         assert "aunt-diagnosis" not in str(absent.value)
         refusals = []
@@ -417,7 +418,7 @@ def test_the_cores_write_nothing_until_their_caller_commits(
     pages._write_page(con, "child-a", "# A\n\nThe first.", parent="index")
     pages._move_page(con, "child-a", parent="")
     pages._rename_slug(con, "child-a", "child-one")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         pages._move_page(con, "child-one", parent="nowhere")
     con.rollback()
     assert store.page_id(con, "child-a") is None

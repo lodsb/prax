@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from prax import evaluation, parsers, store
+from prax.errors import NotFound
 from prax.ml import embeddings
 
 needs_pymupdf = pytest.mark.skipif(
@@ -58,5 +59,5 @@ def test_harness_scores_every_mode_and_keyword_floor(
 def test_unresolvable_expectation_is_an_error(con: sqlite3.Connection) -> None:
     store.ingest_text(con, "some text", title="t")
     q = evaluation.Query(q="some text", expect=["NOPE0000"])
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         evaluation.run_query(con, q, "fts", evaluation.resolve_keys(con), 10)

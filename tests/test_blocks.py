@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from prax import store
 from prax.answering import ask, questions
+from prax.errors import NotFound
 from prax.text import blocks, chunking
 from tests.conftest import wait_job
 
@@ -252,7 +253,7 @@ def test_fill_blocks_is_an_agent_revision_over_a_persons_page(
     assert same["revision"] == 2 and same["report"] == {"q2": "held"}
     with pytest.raises(ValueError, match="no ask block q9"):
         store.fill_blocks(con, "fdn-notes", {"q9": "x"}, asked="d", run="s")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.fill_blocks(con, "nowhere", {"q1": "x"}, asked="d", run="s")
 
 

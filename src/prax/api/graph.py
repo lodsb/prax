@@ -43,10 +43,7 @@ def _end(con: Any, name: str, etype: str | None, side: str) -> tuple[str, str]:
     type, ``store.document_node``); a name needs its type."""
     m = _DOC_REF.fullmatch(name.strip())
     if m:
-        try:
-            return store.document_node(con, int(m.group(1)))
-        except KeyError as exc:
-            raise HTTPException(404, str(exc).strip("'\"")) from exc
+        return store.document_node(con, int(m.group(1)))
     if not etype:
         raise HTTPException(400, f"{side}_type is needed for a name ({name!r})")
     return name, etype
@@ -522,17 +519,14 @@ def graph_decide(req: DecideReq, request: Request) -> dict[str, Any]:
     by = (req.by or "").strip()
     if req.by is not None and (not by or by == store.PERSON):
         raise HTTPException(400, f"by: a model's name, not {req.by!r}")
-    try:
-        return store.decide_pair(
-            _con(request),
-            req.keep,
-            req.other,
-            same=req.same,
-            across_types=req.across_types,
-            **({"by": by} if by else {}),
-        )
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.decide_pair(
+        _con(request),
+        req.keep,
+        req.other,
+        same=req.same,
+        across_types=req.across_types,
+        **({"by": by} if by else {}),
+    )
 
 
 @router.get("/graph/split-names")
@@ -662,17 +656,14 @@ def graph_imports_decide(req: ForeignReq, request: Request) -> dict[str, Any]:
     """An answer for one of their entities (``store.decide_foreign``): the
     held edges whose ends are all decided are written."""
     by = (req.by or "").strip() or store.PERSON
-    try:
-        return store.decide_foreign(
-            _con(request),
-            req.source,
-            req.gid,
-            req.verdict,
-            entity_id=req.entity,
-            by=by,
-        )
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.decide_foreign(
+        _con(request),
+        req.source,
+        req.gid,
+        req.verdict,
+        entity_id=req.entity,
+        by=by,
+    )
 
 
 class ForeignUndoReq(BaseModel):
@@ -684,10 +675,7 @@ class ForeignUndoReq(BaseModel):
 def graph_imports_undo(req: ForeignUndoReq, request: Request) -> dict[str, Any]:
     """An answer for one of their entities taken back (``store.undo_foreign``):
     the edges written onto it end and wait with it again."""
-    try:
-        return store.undo_foreign(_con(request), req.source, req.gid)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.undo_foreign(_con(request), req.source, req.gid)
 
 
 class UnmergeEntityReq(BaseModel):
@@ -698,10 +686,7 @@ class UnmergeEntityReq(BaseModel):
 def graph_unmerge_entity(req: UnmergeEntityReq, request: Request) -> dict[str, Any]:
     """Take one merge back (``store.unmerge_entity``) and record the pair as
     different; for a merge no run can undo alone."""
-    try:
-        return store.unmerge_entity(_con(request), req.entity)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(400, str(exc)) from exc
+    return store.unmerge_entity(_con(request), req.entity)
 
 
 @router.get("/graph/events")

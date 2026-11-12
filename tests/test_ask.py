@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from prax import config, models, store
 from prax.answering import ask
+from prax.errors import NotFound
 
 
 def _library(con: sqlite3.Connection) -> tuple[int, int]:
@@ -260,7 +261,7 @@ def test_save_needs_an_answer(con: sqlite3.Connection) -> None:
     store.write_page(con, "p", "x")
     with pytest.raises(ValueError):
         ask.save(con, {"answer": None, "passages": []}, "p")
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         ask.save(con, {"answer": "a", "question": "q"}, "missing")
 
 

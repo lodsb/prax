@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 from prax.store import Edge
 from tests.test_face_groups import _face, _looks
 
@@ -104,7 +105,7 @@ def test_an_answer_changed_or_taken_back(con: sqlite3.Connection) -> None:
         " WHERE t.name = 'Grace Hopper' AND e.rel = 'depicts'"
     ).fetchone()[0]
     assert ended is not None  # ended, never deleted
-    with pytest.raises(KeyError):  # its answer was ended by the new one
+    with pytest.raises(NotFound):  # its answer was ended by the new one
         store.unname_faces(con, run=first["run"])
     # nobody to name: the fact it held up ends
     out = store.judge_faces(con, [face], verdict="nobody")
@@ -116,7 +117,7 @@ def test_an_answer_changed_or_taken_back(con: sqlite3.Connection) -> None:
     named = store.name_faces(con, [face], name="Hedy Lamarr")
     assert store.unname_faces(con, run=named["run"])["ended"] == 1
     assert _depicts(con, doc) == []
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.unname_faces(con, run=named["run"])
 
 
@@ -189,7 +190,7 @@ def test_one_events_faces(con: sqlite3.Connection) -> None:
     assert sorted(g["open"] for g in got["items"]) == [1, 1]
     assert [f["id"] for f in got["loose"]["faces"]] == [stray]
     assert got["events"] == [{"id": event, "name": "Trip to the sea", "faces": 3}]
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.face_groups(con, event=people["a"][0][0] + 10_000)
 
 

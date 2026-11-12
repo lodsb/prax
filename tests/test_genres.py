@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 from prax.graph import ontology
 from tests.conftest import copy_ontology
 
@@ -91,7 +92,7 @@ def test_a_persons_genres_are_the_gold(con: sqlite3.Connection) -> None:
     assert "genres" not in m and m["genres_skip"]
     store.set_genres(con, d, None)  # taken back: open again
     assert not {"genres", "genres_skip"} & set(store.get_meta(con, d))
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.set_genres(con, 99999, ["paper"])
 
 

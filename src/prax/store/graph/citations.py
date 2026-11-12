@@ -19,7 +19,7 @@ from typing import Any, Protocol
 
 from prax.text import arxiv, references
 
-from ..base import LIVE, _reading, live, meta_of, now
+from ..base import LIVE, NotFound, _reading, live, meta_of, now
 from ..documents import (
     get_meta,
     reference_chunks,
@@ -224,7 +224,7 @@ def link_references(
         # one node per document, whatever links it (``document_node``)
         try:
             me = document_node(con, doc_id)
-        except KeyError:
+        except NotFound:
             me = (title, "paper")
         # the entries: the reference chunks where the chunker cut them,
         # the bibliography's text split where it has not (before a rechunk)
@@ -251,7 +251,7 @@ def link_references(
             )
             try:
                 it = document_node(con, target)
-            except KeyError:
+            except NotFound:
                 it = (name, "paper")
             edge = Edge(*me, "cites", *it)
             confidence = (

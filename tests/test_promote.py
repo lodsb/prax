@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import models, store
+from prax.errors import NotFound
 from prax.graph import extraction
 
 
@@ -21,7 +22,7 @@ def test_promote_and_unpromote(con: sqlite3.Connection) -> None:
     again = store.promote(con, a, by="agent", reason="later")
     assert again == flag
     assert store.get_meta(con, a)["promote"] == flag
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.promote(con, 999)
     assert store.unpromote(con, a) and not store.unpromote(con, a)
     assert "promote" not in store.get_meta(con, a)

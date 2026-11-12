@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
+from prax.errors import NotFound
 from prax.store import pages
 
 LOG = (
@@ -174,7 +175,7 @@ def test_refused_splits_write_nothing(
     log = store.write_page(con, "log", LOG)
     with pytest.raises(PermissionError):
         store.split_page(con, "log", expected_text_hash="0" * 64)
-    with pytest.raises(KeyError):
+    with pytest.raises(NotFound):
         store.split_page(con, "nope")
 
     # a failure after the children are written takes them back with it
@@ -203,7 +204,7 @@ def test_a_personal_page_splits_into_personal_pages(con: sqlite3.Connection) -> 
     token = store.VIEWER.set(store.Viewer("guest", role="contributor"))
     try:
         assert store.cited_place(con, doc_id, find="second recording") is None
-        with pytest.raises(KeyError):
+        with pytest.raises(NotFound):
             store.split_page(con, "log-monday")
     finally:
         store.VIEWER.reset(token)

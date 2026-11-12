@@ -12,6 +12,7 @@ import yaml
 from fastapi.testclient import TestClient
 
 from prax import packs, steps, store
+from prax.errors import NotFound
 from prax.graph import ontology
 from prax.packs.base import Pack
 
@@ -110,7 +111,7 @@ def test_a_packs_capability_reaches_the_registries(
     assert packs.extractors(["fake"]) == ["an extractor"]
     assert packs.tools(["fake"])["math"](None, None, "x") == "answered x"
     assert packs.tool_help(["fake"]) == ["math: <x>   the fake tool"]
-    with pytest.raises(KeyError, match="no pack named"):
+    with pytest.raises(NotFound, match="no pack named"):
         packs.running(["nope"])
     twice = Pack(name="twice", steps={"parse": "elsewhere"})
     monkeypatch.setattr(packs, "PACKS", (*packs.PACKS, twice))
