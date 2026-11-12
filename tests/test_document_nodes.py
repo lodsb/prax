@@ -171,3 +171,40 @@ def test_a_retired_copy_hands_its_node_to_the_live_one(con: sqlite3.Connection) 
     store.retire_document(con, old, reason="synced again", duplicate_of=new)
     assert _doc_of(con, "Plan", "paper") == new
     assert store.node_document(con, "Plan", "paper") == new
+
+
+def test_a_pictures_node_outlives_the_text_it_is_given(
+    con: sqlite3.Connection,
+) -> None:
+    """A picture's node is named by its file and number while it has no
+    text; once a reading gives it one, its node is still the one kept on
+    the entity (migration 69), not a new one by its title (the quality
+    review of 2026-11-11, finding 2: its facts dropped out of the
+    document's reads)."""
+    one = int(
+        store.register(con, b"jpeg one " * 20, mime="image/jpeg", title="IMG_0001.JPG")[
+            "doc_id"
+        ]
+    )
+    two = int(
+        store.register(con, b"jpeg two " * 20, mime="image/jpeg", title="IMG_0001.JPG")[
+            "doc_id"
+        ]
+    )
+    name, etype = store.document_node(con, one)
+    assert name == f"IMG_0001.JPG (#{one})"
+    store.link(
+        con,
+        store.Edge(name, etype, "taken_in", "Aldmouth", "place"),
+        source_doc=one,
+        producer="photos",
+        run="t",
+    )
+    before = store.doc_node_ids(con, one)
+    assert len(before) == 1
+
+    store.index_text(con, one, "A harbour at dusk, two boats.")
+    assert store.document_node(con, one) == (name, etype)
+    assert store.doc_node_ids(con, one) == before
+    # the other camera's picture of the same file name is still its own
+    assert store.document_node(con, two)[0] == f"IMG_0001.JPG (#{two})"

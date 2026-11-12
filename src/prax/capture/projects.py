@@ -542,7 +542,8 @@ def _apply(
                 con,
                 r["doc_id"],
                 reason=f"replaced by a newer sync of project {name}",
-                duplicate_of=doc_id,
+                replaced_by=doc_id,
+                carry=(LINK_PRODUCER,),
             )
         r["doc_id"] = doc_id
         if sensitivity:

@@ -49,6 +49,8 @@ def retire_document(
     *,
     reason: str,
     duplicate_of: int | None = None,
+    replaced_by: int | None = None,
+    carry: tuple[str, ...] = (),
     by: str = "human",
     run: str | None = None,
 ) -> dict[str, Any]:
@@ -65,20 +67,36 @@ def retire_document(
     retired into this document, near or far, which would leave a link to
     either with no current copy (``current_of``).
 
+    With ``replaced_by`` the document is an older text of ``replaced_by``
+    (a project's note synced again, a repository's README imported
+    again): a link to it lands on the new one (``meta.retired.of``) and
+    its nodes move there, but nothing of what was read from its text
+    moves. Its facts end with it, and the new text is extracted and
+    summarised from its own words. The facts of the producers in
+    ``carry`` move to the new one: those the caller states again from
+    every text itself (a sync's links and status, ``sync_facts``), which
+    then keeps, ends or adds them against the new text. A union would
+    have handed the new text the old extraction stamp, so a correction
+    added to a note never reached the graph (the quality review of
+    2026-11-11, finding 1).
+
     The edges are ended under ``run`` (a clean-up's, which retires a set
     under one) or a run of the retirement's own, kept as
     ``meta.retired.run``, which ``unretire_document`` undoes."""
+    if duplicate_of is not None and replaced_by is not None:
+        raise ValueError("a duplicate or a replacement, not both")
+    of = duplicate_of if duplicate_of is not None else replaced_by
     meta = get_meta(con, doc_id)
-    if duplicate_of is not None and get_meta(con, duplicate_of) is None:
-        raise NotFound(f"no such document: {duplicate_of}")
-    if duplicate_of is not None and doc_id in _replacements(con, duplicate_of):
-        raise ValueError(
-            f"document {duplicate_of} was retired into {doc_id}: unretire it first"
-        )
+    if of is not None and get_meta(con, of) is None:
+        raise NotFound(f"no such document: {of}")
+    if of is not None and doc_id in _replacements(con, of):
+        raise ValueError(f"document {of} was retired into {doc_id}: unretire it first")
     moved: dict[str, int] = {"moved_edges": 0, "moved_items": 0}
     if duplicate_of is not None and duplicate_of != doc_id:
         moved = _join_duplicate(con, doc_id, duplicate_of)
         meta = get_meta(con, doc_id)
+    elif replaced_by is not None and replaced_by != doc_id and carry:
+        moved = {"moved_edges": _move_edges(con, doc_id, replaced_by, carry)}
     # retired again: its edges were ended under the first run, which is the
     # one the undo needs (the safety review of 2026-11-11)
     run = (
@@ -89,7 +107,7 @@ def retire_document(
     meta["retired"] = {
         "at": now(),
         "reason": reason,
-        "of": duplicate_of,
+        "of": of,
         "by": by,
         "run": run,
     }
@@ -117,7 +135,7 @@ def retire_document(
         " WHERE source_doc = ? AND resolution IS NULL",
         (doc_id,),
     ).rowcount
-    _move_nodes_off(con, doc_id, duplicate_of)
+    _move_nodes_off(con, doc_id, of)
     _put_meta(con, doc_id, meta)
     con.commit()
     return {
@@ -134,22 +152,7 @@ def _join_duplicate(
 ) -> dict[str, int]:
     """The union: what ``doc_id`` holds and ``keeper`` lacks becomes the
     keeper's (see ``retire_document``); returns what moved."""
-    moved_edges = 0
-    for e in con.execute(
-        "SELECT e.id, e.src, e.rel, e.dst FROM edges e"
-        " WHERE e.source_doc = ? AND e.valid_to IS NULL",
-        (doc_id,),
-    ).fetchall():
-        held = con.execute(
-            "SELECT 1 FROM edges WHERE source_doc = ? AND src = ? AND rel = ?"
-            " AND dst = ? AND valid_to IS NULL LIMIT 1",
-            (keeper, e["src"], e["rel"], e["dst"]),
-        ).fetchone()
-        if held is None:
-            con.execute(
-                "UPDATE edges SET source_doc = ? WHERE id = ?", (keeper, e["id"])
-            )
-            moved_edges += 1
+    moved_edges = _move_edges(con, doc_id, keeper)
     moved_items = 0
     for it in con.execute(
         "SELECT id, src, rel, dst FROM review_queue"
@@ -190,6 +193,35 @@ def _join_duplicate(
     )
     _put_meta(con, keeper, theirs)
     return {"moved_edges": moved_edges, "moved_items": moved_items}
+
+
+def _move_edges(
+    con: sqlite3.Connection,
+    doc_id: int,
+    keeper: int,
+    producers: tuple[str, ...] | None = None,
+) -> int:
+    """Source ``doc_id``'s live edges (of ``producers``, or all) to
+    ``keeper`` where the keeper does not state the same fact; returns how
+    many moved. Does not commit."""
+    by = f" AND e.producer IN ({','.join('?' * len(producers))})" if producers else ""
+    moved = 0
+    for e in con.execute(
+        "SELECT e.id, e.src, e.rel, e.dst FROM edges e"
+        " WHERE e.source_doc = ? AND e.valid_to IS NULL" + by,
+        (doc_id, *(producers or ())),
+    ).fetchall():
+        held = con.execute(
+            "SELECT 1 FROM edges WHERE source_doc = ? AND src = ? AND rel = ?"
+            " AND dst = ? AND valid_to IS NULL LIMIT 1",
+            (keeper, e["src"], e["rel"], e["dst"]),
+        ).fetchone()
+        if held is None:
+            con.execute(
+                "UPDATE edges SET source_doc = ? WHERE id = ?", (keeper, e["id"])
+            )
+            moved += 1
+    return moved
 
 
 REPLACED_HOPS = 20  # replacements a retired document's link follows, at most

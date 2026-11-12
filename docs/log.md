@@ -11121,3 +11121,56 @@ planned with no hurry: `docs/PLAN.md`, "The quality review of
 2026-11-11", ranked, with findings 1 and 2 before AU step 2. The
 repair of notes the first one already affected means extracting them
 again, which is the owner's call once they are counted on a copy.
+
+## 2026-11-13: the plan's state, AO's nights counted, and the quality review's two highs
+
+The state at the top of the plan is today's (read-only on the live
+store): 33,244 documents, 340,774 live facts over 271,053 entities,
+8,916 faces, migration 69. Item 0, the structure review's cleanups, is
+closed: every item of its list was ticked by 2026-11-10.
+
+AO's fixes (item 1) are done. The `fixes` slice of 2026-11-05 asked
+marker for 200 scans and the crops for 8; the backlog was read that
+night. Of marker's 208 clock readings since, 199 replaced their text,
+5 kept their OCR layer (marker's read came out shorter) and 4 timed out
+at marker's server. Of the 13 crops, 6 upgraded the text and 7 left it
+the same. Since 2026-11-08 a night asks for one document or none, and no
+reading waits. The 4 timeouts count as tried on their text, so the
+clock passes them by; a person asks for them again on the Admin page.
+
+**Finding 1: a changed note is read from its own text.** A project
+sync retired a changed note's old document with `duplicate_of=` the new
+one, and `_join_duplicate` gave the new text the old one's extraction
+stamp and summary and moved its facts onto it. The new text was never
+due for extraction, so a correction added to a journal entry never
+reached the graph, and the facts it carried quoted the old text.
+`retire_document` now takes `replaced_by=`: a link to the old document
+lands on the new one (`meta.retired.of`, `current_of`) and its nodes
+move there, but its facts end with it under its retirement's run, and
+nothing read from its text is copied. `carry=` names the producers
+whose facts the caller states again from every text (the sync's
+`links_to` and status edges, which `sync_facts` then keeps, ends or
+adds); those move as a duplicate's do (`library._move_edges`, now also
+under `_join_duplicate`). The project sync and the GitHub importer's
+newer README use it; a real duplicate (a page sent twice, a clean-up)
+keeps the union. Test: `test_projects.py::test_a_changed_note_is_read_from_its_own_text`.
+
+On the live store, read-only: 84 documents were retired as replaced by a
+newer sync, and 80 keepers inherited the old stamp; 6 of them are live
+now (the others were replaced again since). Their own text was never
+extracted, and the facts they carry came from an earlier text. The
+repair is to clear their stamp so the extraction step reads them; that
+changes live data and is the owner's call.
+
+**Finding 2: a picture's node outlives the text it is given.** A picture
+or a recording is named by its file and number (`IMG_0001.JPG (#123)`)
+while it has no text; a vision reading or a transcription that gave it
+one made `document_node` and `doc_node_ids` look for its title instead,
+so its `taken_in`, `recorded_at` and `depicts` facts dropped out of its
+document's reads, and two cameras' `IMG_0001.JPG` would have shared a
+node. Both now read first the node kept on the entity under its
+file-and-number name (`entities.doc_id`, migration 69;
+`edges._media_node`). No node is renamed: the three pictures on the
+live store that have a text of their own have nodes named by their
+titles and no node by number, so they keep those. Test:
+`test_document_nodes.py::test_a_pictures_node_outlives_the_text_it_is_given`.

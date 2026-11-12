@@ -155,7 +155,7 @@ def import_github(req: GitHubReq, request: Request) -> dict[str, Any]:
                 con,
                 old,
                 reason="replaced by a newer import from github",
-                duplicate_of=doc_id,
+                replaced_by=doc_id,
             )
     return {
         **result,

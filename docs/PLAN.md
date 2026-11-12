@@ -16,12 +16,13 @@ and its item 5 is items 1 and 2 below.
 
 ### The state
 
-- **The library.** 33,104 documents, 14,498 of them referenced
-  (`documents.held` 0: photos and recordings that stay on the NAS,
-  16,292 `places` rows). 336,770 live facts over 267,842 entities, and
-  8,919 faces. The database is at migration 68.
-- **The code.** The full suite of 2026-11-03 passed: 1,723 tests, 4
-  skipped, and the 88 UI tests. CI is green on 4579be8.
+- **The library** (2026-11-13). 33,244 documents, 14,498 of them
+  referenced (`documents.held` 0: photos and recordings that stay on the
+  NAS, 16,292 `places` rows). 340,774 live facts over 271,053 entities,
+  and 8,916 faces. The database is at migration 69.
+- **The code.** The full suite of 2026-11-11 passed: 1,830 tests, 4
+  skipped, and the 89 UI tests. CI is green on 21af4ef (Windows 15
+  minutes, Ubuntu 4).
 - **What runs.** The door and the worker run on the desktop under `prax
   up`. The card is back since 2026-11-02 (the bigger power supply):
   `llama-server`, `marker` and `ocr-server` are in `run:` again, and the
@@ -41,7 +42,8 @@ and its item 5 is items 1 and 2 below.
 
 ### Next, in order
 
-0. (the user's word, 2026-11-07) **The structure review's cleanups,
+0. (done 2026-11-10; every item of its list ticked) (the user's word,
+   2026-11-07) **The structure review's cleanups,
    before more is built on the store.** The mechanical ones are done
    (2026-11-08, the log): `NotFound` and the door's two handlers,
    `base.rows_in`, `base.live`, the store's surface pruned and held by a
@@ -70,8 +72,14 @@ and its item 5 is items 1 and 2 below.
    bare captions (the crops), counted on 2026-11-05. The 364 with
    leftovers name no reading and wait on the Admin page's "text checks".
    The first night: marker read a scan every 2.6 minutes, and the first
-   25 all replaced their text. Next: the whole night's count, and what
-   the reads that changed nothing were.
+   25 all replaced their text. (done; counted 2026-11-13) The backlog
+   went in the first night: marker was asked for 208 scans by the clock,
+   199 replaced their text, 5 kept their OCR layer (marker's read came
+   out shorter) and 4 timed out at marker's server; the crops were asked
+   for 13, 6 upgraded and 7 the same. Since 2026-11-08 a night asks for
+   one document or none, and no reading waits. The 4 timeouts count as
+   tried on their text (`tried_on_this_text`), so the clock never asks
+   for them again; a person asks on the Admin page.
 2. **The card's other work, in this order.** The latex2html re-import
    (done 2026-11-06: 2,641 pages at revision 2, 305 formula readings
    asked; 55 short pages kept at revision 1, the user's word)
@@ -415,7 +423,9 @@ they block, then by cost. Sizes are the review's.
 
 **Before AU step 2 (both high).**
 
-- [ ] 1. A project sync retires the old text of a changed note as a
+- [x] (2026-11-13, the log: `retire_document(replaced_by=, carry=)`;
+      six live notes carry an inherited stamp, their repair the owner's)
+      1. A project sync retires the old text of a changed note as a
       duplicate of the new one, and `_join_duplicate` copies the old
       `extraction` stamp and summary onto it and moves the old facts to
       it: the corrected text is never extracted and carries quotes from
@@ -426,7 +436,8 @@ they block, then by cost. Sizes are the review's.
       Repairing the notes already affected means extracting them again:
       count them on a copy first, and the re-extraction is the owner's
       call.
-- [ ] 2. A picture's or recording's node is named `name (#id)` only
+- [x] (2026-11-13, the log: the node kept on the entity read first)
+      2. A picture's or recording's node is named `name (#id)` only
       while it has no text; after a vision reading or a transcription
       `doc_node_ids` and `document_node` look for the new name and miss
       it, so its `recorded_at` and `depicts` facts drop. Read

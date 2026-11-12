@@ -32,6 +32,7 @@ from ..base import (
     domain_clause,
     domain_sets,
     hidden_documents,
+    media_node_name,
     node_name_of,
     rows_in,
 )
@@ -381,6 +382,25 @@ def _node_name(con: sqlite3.Connection, doc_id: int) -> tuple[str, bool, sqlite3
     return name, media, row
 
 
+def _media_node(
+    con: sqlite3.Connection, doc_id: int, row: sqlite3.Row
+) -> tuple[int, str, str] | None:
+    """The node a picture or a recording already has (``entities.doc_id``,
+    migration 69): ``(id, name, type)`` of the unmerged entity kept on it
+    under its file-and-number name, or None. Its name was given while it
+    had no text, and a reading or a transcription that gives it one must
+    not give it a second node by its title (the quality review of
+    2026-11-11, finding 2)."""
+    if not (mimes.is_picture(row["mime"]) or mimes.is_recording(row["mime"])):
+        return None
+    got = con.execute(
+        "SELECT id, name, type FROM entities WHERE doc_id = ? AND name = ?"
+        " AND canonical_id IS NULL ORDER BY id LIMIT 1",
+        (doc_id, media_node_name(str(row["title"]), doc_id)),
+    ).fetchone()
+    return None if got is None else (int(got[0]), str(got[1]), str(got[2]))
+
+
 def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
     """The entities that are this document in the graph: those called by
     its node name (``document_node``) as a document of any type (a reading
@@ -390,7 +410,10 @@ def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
     that thing's. What its own edges start from and its citations end at;
     empty when the graph has no node for it yet, NotFound as
     ``document_node``."""
-    name, _, _ = _node_name(con, doc_id)
+    name, _, row = _node_name(con, doc_id)
+    kept = _media_node(con, doc_id, row)
+    if kept is not None:
+        name = kept[1]
     onto = ontology.current()
     canon = {
         int(r[0])
@@ -436,6 +459,9 @@ def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     title, media, row = _node_name(con, doc_id)
     if media:
         return title, "document"
+    kept = _media_node(con, doc_id, row)
+    if kept is not None:
+        return kept[1], kept[2]
     page = con.execute("SELECT kind FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()
     if page is not None:
         return title, "project" if page["kind"] == "project" else "page"

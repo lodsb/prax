@@ -385,3 +385,52 @@ def test_a_loop_of_replacements_ends(client: TestClient) -> None:
     assert store.current_of(con, a) is None
     assert store.current_of(con, b) is None
     assert store.current_of(con, 999_999) is None
+
+
+def test_a_changed_note_is_read_from_its_own_text(client: TestClient) -> None:
+    """A sync retires a changed note's old text: the new text is read again,
+    and the old one's facts end with it rather than moving onto the new one
+    (the quality review of 2026-11-11, finding 1: the new text inherited
+    the old extraction stamp and summary, so a correction never reached
+    the graph)."""
+    from prax.graph import extraction, ontology
+
+    con = client.app.state.con
+    out = _sync(client, [_file("notes.md", NOTES)], dry_run=False)
+    old = next(p["doc_id"] for p in out["plan"] if p["path"] == "notes.md")
+    extraction.apply(
+        con, old, extraction.Extraction(summary="The old reading."), extractor="stub"
+    )
+    fact = store.Edge("Voice board", "device", "uses", "I2C", "concept")
+    store.link(con, fact, source_doc=old, producer="stub", run="t")
+    onto = ontology.current()
+    assert old not in store.select_for_extraction(
+        con, ontology_version=onto.version, onto=onto
+    )
+
+    fixed = NOTES + "\nCORRECTION: the voice board talks SPI.\n"
+    out = _sync(client, [_file("notes.md", fixed)], dry_run=False)
+    new = next(p["doc_id"] for p in out["plan"] if p["path"] == "notes.md")
+    assert new != old and store.get_meta(con, old)["retired"]["of"] == new
+
+    meta = store.get_meta(con, new)
+    assert "extraction" not in meta and meta.get("summary") != "The old reading."
+    assert new in store.select_for_extraction(
+        con, ontology_version=onto.version, onto=onto
+    )
+    live = con.execute(
+        "SELECT source_doc FROM edges WHERE source_doc IN (?, ?)"
+        " AND producer = 'stub' AND valid_to IS NULL",
+        (old, new),
+    ).fetchall()
+    assert live == []
+    # the old text's facts come back with it
+    store.unretire_document(con, old)
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ? AND producer = 'stub'"
+            " AND valid_to IS NULL",
+            (old,),
+        ).fetchone()[0]
+        >= 1
+    )
