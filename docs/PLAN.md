@@ -502,10 +502,14 @@ they block, then by cost. Sizes are the review's.
       threads' bags to the asking thread. 19 and 35 are open.
 - [ ] 36. One maintenance pass that raises skips the rest: each pass
       caught, the job failed naming it.
-- [ ] 20 and 37. A mistyped switch raises only when a parse computes its
+- [x] 20 and 37. A mistyped switch raises only when a parse computes its
       stamp, and marks every document it touches as failed for good:
       `config.check()` at the door's and `prax up`'s start, and a
       `ConfigError` deferred, not a document's failure.
+      Done 2026-11-12: `config.SWITCHES` and `check()`, called by the
+      door's lifespan, `prax up` and `worker.watch`; `do_parse` defers
+      the document and the rest of its batch; `annotate.mode` raises
+      `ConfigError`.
 
 **Tests.**
 

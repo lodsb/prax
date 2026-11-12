@@ -24,6 +24,7 @@ import os
 import time
 from collections.abc import Iterator
 from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -202,6 +203,41 @@ def flag(dotted: str, env: str | None = None, default: bool = False) -> bool:
     if word in NO:
         return False
     raise ConfigError(f"{dotted}: {value!r} is not on or off ({'/'.join(YES + NO)})")
+
+
+@dataclass(frozen=True)
+class Switch:
+    dotted: str
+    env: str | None
+    default: bool
+
+
+# every switch the code reads (``flag``), read once by ``check`` when the
+# door, ``prax up`` and a worker start; a test holds it to the code's calls
+SWITCHES = (
+    Switch("door.fetch_private", "PRAX_FETCH_PRIVATE", False),
+    Switch("parse.choose_reader", "PRAX_CHOOSE_READER", True),
+    Switch("parse.comments", "PRAX_COMMENTS", True),
+    Switch("parse.ocr_gpu", "PRAX_OCR_GPU", False),
+    Switch("extraction.standard_names", "PRAX_EXTRACT_STANDARD", False),
+    Switch("extraction.world_dates", "PRAX_EXTRACT_DATES", False),
+    Switch("private.referenced", None, True),
+)
+
+
+def check() -> None:
+    """Every switch read once; a ``ConfigError`` naming each bad one. A
+    mistyped switch was found only when a parse read it, and failed the
+    batch or every document it touched (the quality review of 2026-11-11,
+    findings 20 and 37)."""
+    bad = []
+    for s in SWITCHES:
+        try:
+            flag(s.dotted, s.env, s.default)
+        except ConfigError as exc:
+            bad.append(str(exc))
+    if bad:
+        raise ConfigError("; ".join(bad))
 
 
 def host_packs() -> list[str]:

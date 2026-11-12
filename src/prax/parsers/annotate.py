@@ -24,11 +24,11 @@ def mode(dotted: str, env: str, default: str, which: tuple[str, ...]) -> str:
     """The reading mode a host chose (``parse.figures``,
     ``parse.formula_readings``), refused when it is not one of ``which``."""
     from prax import config
-    from prax.parsers import ExtractionError
 
     chosen = str(config.setting(dotted, env, default))
     if chosen not in which:
-        raise ExtractionError(f"{dotted} must be one of {which}, not {chosen!r}")
+        # the host's, not the document's: the parse defers it (do_parse)
+        raise config.ConfigError(f"{dotted} must be one of {which}, not {chosen!r}")
     return chosen
 
 

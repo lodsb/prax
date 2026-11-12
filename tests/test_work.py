@@ -1909,3 +1909,41 @@ def test_which_step_may_spend_is_said_in_one_place() -> None:
         "skipped: the promote step is opus (paid); --spend runs it"
     )
     assert paid_refusal("extract", free) is None and paid_refusal("x", None) is None
+
+
+def test_a_bad_setting_defers_the_parse_and_fails_no_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ConfigError inside a parse (a switch read in an extractor's stamp
+    or while it reads) was that document's error, and the queue counts an
+    error as an attempt: every document the batch touched was never read
+    by that extractor again, even after prax.yaml was fixed (the quality
+    review of 2026-11-11, finding 37). It is the host's, not the
+    document's: the document and the rest of the batch are deferred."""
+
+    class Broken:
+        name = "html"
+        annotates = False
+
+        @property
+        def stamp(self) -> str:
+            raise config.ConfigError("parse.comments: 'keep' is not on or off")
+
+        def __call__(self, data: bytes, **kw: Any) -> str:
+            return "never"
+
+    class FakeDoor:
+        def get_bytes(self, ref: str) -> bytes:
+            return b"<html></html>"
+
+    monkeypatch.setattr(
+        step_parse, "_requested", lambda it, spend=False: ([Broken()], None)
+    )
+    lines: list[str] = []
+    items = [
+        {"doc_id": 1, "original": "a", "mime": "text/html"},
+        {"doc_id": 2, "original": "b", "mime": "text/html"},
+    ]
+    out = step_parse.do_parse(FakeDoor(), items, log_=lines.append)  # type: ignore[arg-type]
+    assert out == [{"doc_id": 1, "defer": True}, {"doc_id": 2, "defer": True}]
+    assert any("parse.comments" in line for line in lines)

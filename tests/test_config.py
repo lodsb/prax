@@ -169,3 +169,48 @@ def test_a_setting_overridden_for_one_call_is_that_threads_alone(
     t.join(5)
     assert seen == ["scans"]
     assert config.setting("parse.vision_pages", "PRAX_VISION_PAGES") == "scans"
+
+
+def test_a_bad_switch_is_found_at_the_start(data_dir: Path) -> None:
+    """A mistyped switch raised only when a parse computed its stamp: the
+    batch failed, or every document it touched was failed for good, and
+    nothing said so at the start (the quality review of 2026-11-11,
+    findings 20 and 37). ``config.check`` reads every switch, names each
+    bad one, and the door, ``prax up`` and the worker call it first."""
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    config.check()  # nothing written: every default
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / config.CONFIG_NAME).write_text(
+        "parse:\n  comments: keep\n  ocr_gpu: ture\n", "utf-8"
+    )
+    with pytest.raises(config.ConfigError) as got:
+        config.check()
+    assert "parse.comments: 'keep'" in str(got.value)
+    assert "parse.ocr_gpu: 'ture'" in str(got.value)
+    with pytest.raises(config.ConfigError), TestClient(app):
+        pass
+
+
+def test_every_switch_the_code_reads_is_checked() -> None:
+    """``config.SWITCHES`` is the list ``check`` reads: a ``config.flag``
+    call it does not name would be found only when it is read."""
+    import ast
+
+    root = Path(__file__).parents[1] / "src" / "prax"
+    read: set[str] = set()
+    for path in root.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "flag"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "config"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+            ):
+                read.add(str(node.args[0].value))
+    assert read and read == {s.dotted for s in config.SWITCHES}

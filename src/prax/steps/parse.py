@@ -360,7 +360,7 @@ def do_parse(
         if landed is not None:
             landed(list(rs))
 
-    for it in items:
+    for at, it in enumerate(items):
         doc_id = it["doc_id"]
         usage.clear()  # what this document's readings pay for, and nothing before
         exts, refused = _requested(it, spend=spend)
@@ -410,6 +410,14 @@ def do_parse(
                     deferred["extractor"] = it["extractor"]
                 done(*tried, deferred)
                 break
+            except config.ConfigError as exc:
+                # the host's setting, not the document's: an error would
+                # count as this extractor's attempt and it would never read
+                # the document again, nor any other of the batch (the quality
+                # review of 2026-11-11, finding 37). The rest wait for a fix.
+                say(log_, f"parse: a setting stops the batch — {exc}")
+                done(*({"doc_id": i["doc_id"], "defer": True} for i in items[at:]))
+                return results
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")
                 if ext is not exts[-1]:

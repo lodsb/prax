@@ -175,8 +175,10 @@ def watch(
     whole library follows the regular one once that hour has passed each
     day: the backlog and the stale texts, ``nightly_limit`` documents a
     step, the same steps."""
+    from prax import config
     from prax.host import schedule
 
+    config.check()  # a mistyped switch said now, not in the first parse
     night = schedule.parse_hour(nightly) if nightly else None
     # the nightly pass is at its hour: a worker (re)started after it — prax
     # up brings one back after a crash, a person after a change — waits

@@ -121,7 +121,8 @@ def test_the_step_names_the_model_and_none_is_an_error(
     with pytest.raises(parsers.ExtractionError, match="no text"):
         ext(b"", filename=None, previous="")
     monkeypatch.setenv("PRAX_FORMULA_READINGS", "sideways")
-    with pytest.raises(parsers.ExtractionError, match="must be one of"):
+    # the host's setting, which the parse defers (quality finding 37)
+    with pytest.raises(config.ConfigError, match="must be one of"):
         formulas.describe(PAPER, runtime=Reader())
 
 

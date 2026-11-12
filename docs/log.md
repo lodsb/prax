@@ -11254,3 +11254,35 @@ takes every pool thread's bag and records it again on the asking
 thread. Test: `test_models.py::test_a_judges_calls_to_a_keyed_server_reach_the_ledger`.
 Findings 19 (spending's four routes in two shapes) and 35 (a failed
 ledger write) stay open under the same item.
+
+## 2026-11-12: a mistyped switch is found at the start (quality findings 20, 37)
+
+Since `config.flag` refuses a word it does not know (2026-11-09), a typo
+such as `parse: {comments: keep}` raised only when something read it.
+`parse.comments` is read in the trafilatura extractor's stamp, which
+`do_parse`'s generic handler read again, so the error escaped it and
+the worker's batch failed. A switch read during a parse (`parse.ocr_gpu`)
+or a bad `parse.figures` and `parse.formula_readings` (`annotate.mode`)
+became the document's error, which `queue.seen` counts as the
+extractor's attempt: the document was never read by it again, even
+after prax.yaml was fixed.
+
+`config.SWITCHES` lists the seven switches the code reads (a test walks
+the source for `config.flag` calls and holds the list to them), and
+`config.check()` reads each and raises one `ConfigError` naming every
+bad one. The door's lifespan, `prax up` (after `up.roles()`, whose
+`ConfigError` it already reports) and `worker.watch` call it first, so a
+typo stops the start with its message. In `do_parse` a `ConfigError`,
+the host's and not the document's, defers that document and the rest of
+the batch and logs the setting; `annotate.mode` raises `ConfigError`
+instead of `ExtractionError` so its bad values go the same way. The
+live prax.yaml passes the check (read only). Tests:
+`test_config.py::test_a_bad_switch_is_found_at_the_start`,
+`::test_every_switch_the_code_reads_is_checked`,
+`test_work.py::test_a_bad_setting_defers_the_parse_and_fails_no_document`.
+Numbers and the other typed settings are not checked at the start; that
+is finding 21's registry.
+
+The errors-that-hide group is done except 19 and 35 (spending's routes
+and a failed ledger write) and 36 (one maintenance pass that raises
+skips the rest).

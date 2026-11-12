@@ -132,6 +132,7 @@ class _QuietResets(logging.Filter):
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logging.getLogger("asyncio").addFilter(_QuietResets())
+    config.check()  # a mistyped switch stops the start, not a parse later
     con = store.connect()
     store.init_db(con)
     app.state.con = con  # the main connection: migrations, the change stamp

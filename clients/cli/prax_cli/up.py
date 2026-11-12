@@ -264,6 +264,7 @@ def up(a: Any) -> int:
                 out.say(line)
             return 0
         roles = up.roles()
+        config.check()  # every switch, before a role starts on a bad one
         pid = up.running_pid(data_dir)
         if pid is not None:
             out.fail(
