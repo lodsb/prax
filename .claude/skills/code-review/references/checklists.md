@@ -1,4 +1,4 @@
-# The five checklists
+# The ten checklists
 
 Each question names what to look for and, marked *prax:*, a case the
 project has already met. A question with no hit is fine; the examples
@@ -135,3 +135,107 @@ entities.
 Measure a performance claim before reporting it: a timing on the copy of
 the library, a query plan, a memory figure. A guess about speed is not a
 finding.
+
+## 6. Test quality
+
+The full suite took eleven minutes on the dev box on 2026-11-11. A
+finding that cuts that with no lost coverage has a cost worth reporting.
+
+- **Cannot fail**: an assertion of what the test just set, a mock that
+  answers the assertion, a check true by construction.
+- **The wrong thing**: a test of the implementation (a private call
+  order, an exact SQL string) where the behaviour is what matters, so a
+  sound refactor breaks it.
+- **Missing**: a new public function, route or branch with no test
+  reaching it. Follow each one to a test.
+- **Out of date**: a test written against a contract the range changed.
+  *prax:* 36 tests still expected `KeyError` after `NotFound` became the
+  one miss (2026-11-11).
+- **Repeated fixtures**: the same helper in three files where one
+  conftest fixture would do.
+- **Slow**: run `pytest --durations=25 -q` on the files the range
+  touched, never the full suite, and say why each slow test is slow.
+  *prax:* every store-backed test replayed all 69 migrations, about 0.3 s
+  of fsyncs each, some 4 to 5 of the 11 minutes (2026-11-11).
+- **Fragile**: sleeps, wall clocks, shared module state, order
+  dependence.
+
+## 7. Error handling and observability
+
+The question for each failure: how would the owner find out it happened?
+
+- **Swallowed**: a bare `except`, or `except Exception` with no log or a
+  log nobody reads.
+- **Silent default**: an error turned into a value a caller cannot tell
+  from a real answer. *prax:* the calibrated adjudicator read an HTTP
+  401 as "not sure" (2026-11-11).
+- **Invisible**: a failure the Jobs page, the tray or the log does not
+  show, or shows as success. *prax:* a scheduled job that failed before
+  its job row existed was retried every 30 s and never listed.
+- **Retries**: no bound, no backoff, or the same failure repeated
+  forever.
+- **Messages**: an error that does not name its document, step, run or
+  setting.
+- **The door's contract** (CLAUDE.md "Conventions"): `NotFound` is a
+  404 and a `ValueError` a 400 in one place, and a plain `KeyError` is a
+  bug and a 500. A route that catches `KeyError`, or a handler that
+  answers a bug as the caller's fault without a log line, breaks it.
+- **Money**: spending that can leave the ledger without a trace, so the
+  daily budget under-counts.
+
+## 8. Interface and contract design
+
+The door's routes and the MCP tools are an API that an agent and a
+stranger's client build on. Invariant 6 is the measure for size.
+
+- **One word, two meanings**: a parameter (`limit`, `offset`, `domain`,
+  `as_of`) that means different things on two routes.
+- **One thing, two shapes**: a document, a hit or an edge answered in
+  different shapes by different routes.
+- **The schema lies**: an OpenAPI bound or type that differs from what
+  the store does. *prax:* list routes said at most 500 while the store
+  returned at most 50 to 200; `/traverse` said at least 1 while 0 meant
+  the most (2026-11-11).
+- **Breaking changes**: a route or field changed in the range with no
+  note in the log.
+- **Store signatures**: a boolean trap, a positional flag that should be
+  a keyword, one verb doing two jobs. *prax:* `POST /graph/restore`
+  takes a retirement's run and restates its facts while the documents
+  stay retired.
+- **The step protocol** (`prax.work`): two routes carrying the same
+  thing (spending, usage) in two shapes.
+
+## 9. Operability
+
+The reader is a stranger installing prax on a Pi.
+
+- **Settings**: a key read in code that `prax.example.yaml`,
+  `docs/howto.md` or the config reference does not document; a typo
+  that is ignored, or found only when a pass first reads it. *prax:*
+  about fifteen undocumented settings, and a mistyped switch failing
+  the parse pass instead of the start (2026-11-11).
+- **Defaults** that work only on the owner's machine.
+- **Upgrades**: a migration that is slow at 60,000 documents, or not
+  resumable; an upgrade rule that changes after it shipped.
+- **Interruption**: what a kill of the door or the worker mid-pass
+  leaves. *prax:* the Windows Update reboot of 2026-11-11.
+- **Growth**: a log, run file or table that grows without a bound.
+- **Supervision**: anything `prax up` or the tray cannot show or
+  restart.
+
+## 10. Documentation drift
+
+CLAUDE.md, `docs/architecture.md`, `docs/meta.md`, `docs/howto.md`
+and docstrings, read against the code the range changed.
+
+- A name, function, setting, default, number or file that no longer
+  exists or no longer behaves as written. *prax:* invariant 3 said the
+  store's `__init__` re-exports every name a week after the surface was
+  pruned (2026-11-11).
+- An invariant whose kind (checked, enforced, measured, chosen) no
+  longer matches what catches a breach.
+- A table row (`architecture.md`'s "where to touch what") that points to
+  code that moved.
+
+Each finding names the sentence and the code that contradicts it.
+Wording is not a finding; a false statement is.

@@ -33,6 +33,11 @@ and its item 5 is items 1 and 2 below.
   structure review of 2026-11-07 over all of `src`
   (`docs/eval/structure-review-2026-11-07.md`): 56 findings, the ten
   bugs among them fixed that day; the rest is item 0 below.
+  The safety review of 2026-11-11 over the range since `2093c44`
+  (`docs/eval/safety-review-2026-11-11.md`): 15 defects, fixed in
+  `714df80`. The quality review of the same range in ultra mode
+  (`docs/eval/quality-review-2026-11-11.md`): 46 findings and two of
+  the critic's, item 6 below.
 
 ### Next, in order
 
@@ -85,6 +90,10 @@ and its item 5 is items 1 and 2 below.
 5. (the user, 2026-11-11) **AU, a project's journal and its open
    questions**, after step 1 (done the same day): the entries, the
    `prax:` pointer, the register and the read on a component.
+6. (the user, 2026-11-12) **The quality review of 2026-11-11**, all
+   of it planned under its section below. Its findings 1 and 2 come
+   before AU step 2; the rest in any order, the hidden errors and the
+   test suite's speed first.
 
 **Waiting on the user:**
 
@@ -394,6 +403,165 @@ against the code on 2026-11-08.
 - [x] 1 (the rest; 2026-11-10, the log; the owner's word: one rule, the keys stay, no migration). One done-or-tried stamp per step for every kind of
       due query, in place of the meta keys: a migration and the meta-path
       indexes rebuilt.
+
+### The quality review of 2026-11-11
+
+`docs/eval/quality-review-2026-11-11.md`, numbered there: the first run
+with ten dimensions in ultra mode, over the range since `2093c44` after
+the safety review's fifteen fixes (`714df80`). 46 confirmed and two
+from the completeness critic (C1, C2). Nothing fixed yet; the user's
+word on 2026-11-12 was to plan them all, with no hurry. Ranked by what
+they block, then by cost. Sizes are the review's.
+
+**Before AU step 2 (both high).**
+
+- [ ] 1. A project sync retires the old text of a changed note as a
+      duplicate of the new one, and `_join_duplicate` copies the old
+      `extraction` stamp and summary onto it and moves the old facts to
+      it: the corrected text is never extracted and carries quotes from
+      the old one. Short fix (an hour): no `extraction`/`summary` copy
+      when the text hashes differ, or retire without `duplicate_of`.
+      For AU 2: the work-naming and `example_of` statement out of
+      `versions.decide_version` as a store function the sync calls.
+      Repairing the notes already affected means extracting them again:
+      count them on a copy first, and the re-extraction is the owner's
+      call.
+- [ ] 2. A picture's or recording's node is named `name (#id)` only
+      while it has no text; after a vision reading or a transcription
+      `doc_node_ids` and `document_node` look for the new name and miss
+      it, so its `recorded_at` and `depicts` facts drop. Read
+      `entities.doc_id` first in both (two reads and a test), before AQ
+      stage 4's transcription step.
+
+**Wrong now, an hour each.**
+
+- [ ] 5. The UI's `lib.js` keeps its own list of stale states, without
+      `retracted`: the document read carries `stale` from
+      `store.staleness`, drawn with `staleNote`.
+- [ ] 6. `sync_facts` keys a fact by its `ontology_version`, so any
+      module bump makes the next project sync end and restate every
+      link and status edge. Key without the version; test: sync, bump an
+      unrelated module, sync, nothing ended.
+- [ ] 7. A refreshed note whose first heading changed leaves its node on
+      the retired copy: `retire_document` with `duplicate_of` moves the
+      nodes whatever the title. The note's slug through its sync key is
+      AU 3.
+- [ ] 4. Unretiring one document of a clean-up in the format before
+      2026-11-07 drops its list of ended edges: the format upgraded once
+      in `init_db` (an `AFTER_MIGRATION` half), no legacy branch.
+- [ ] 18 and 38. List routes say at most 500 in OpenAPI while the store
+      returns at most 50 to 200: `AtMost(<the store's cap>)` per route,
+      and the applied `limit` echoed. `/traverse` says `minimum: 1`
+      while 0 means the most: `minimum: 0` and the description.
+- [ ] 39. `POST /graph/restore` takes a retirement's or clean-up's run
+      and restates its facts while the documents stay retired: refuse it
+      naming `unretire`, and `NotFound` for a run that did nothing.
+
+**Errors that hide, an hour each.**
+
+- [ ] 13 and 22. The door's `ValueError` handler answers a bug (a
+      `JSONDecodeError`, a `ConfigError`, a corrupt row) as the caller's
+      400 and logs nothing: a `prax.errors.Refused(ValueError)` the
+      store raises for a refusal, or the subclasses excluded and logged
+      as a 500.
+- [ ] 14, 24 and 41. Fourteen routes and about forty store sites still
+      catch a plain `KeyError`: `NotFound` or no catch, a
+      `store.require_document`, and a test that fails on `except
+      KeyError` under `api`. With 34: the 36 tests that expect `KeyError`
+      expect `NotFound`.
+- [ ] 15. A scheduled job that fails before its job row exists is retried
+      every 30 s and never shown: the failed start is a failed job row.
+- [ ] 16. The calibrated adjudicator reads an HTTP 401 or a wrong model
+      as "not sure": a server error raises when every pair failed.
+- [ ] 17, 19 and 35. Spending: the judges' calls to a keyed, priced
+      server never reach the ledger (`top_logprobs` records, the pool
+      threads' usage handed back); spending reaches the door by four
+      routes in two shapes (`payload.spent` the one, a stage); a failed
+      ledger write leaves no trace (a warning, and the bag refilled).
+- [ ] 36. One maintenance pass that raises skips the rest: each pass
+      caught, the job failed naming it.
+- [ ] 20 and 37. A mistyped switch raises only when a parse computes its
+      stamp, and marks every document it touches as failed for good:
+      `config.check()` at the door's and `prax up`'s start, and a
+      `ConfigError` deferred, not a document's failure.
+
+**Tests.**
+
+- [ ] 12. Every store-backed test replays all 69 migrations, some 4 to 5
+      of the suite's 11 minutes: one store built per session and copied
+      per test; the migration tests keep their own.
+
+**Settings.**
+
+- [ ] 21. About fifteen settings the code reads are documented nowhere,
+      and a mistyped key in a section is ignored: a settings registry in
+      `prax.config` (key, variable, type, default, a line), a test
+      against `prax.example.yaml`, packs adding rows. A stage.
+
+**Languages and the owner's library, an hour each.**
+
+- [ ] 9. `BRACKETED_WORDS = 3` drops a title of one to three words that
+      carries its citation as a reference number: tell a citation by its
+      shape; count on a copy how many listed entities are titles.
+- [ ] 10. `reference_name` knows English words only for figure, table,
+      equation, chapter: a `numbered:` list in the lexicon, shared with
+      `figures._CAPTION_LINE`.
+- [ ] 27. The status lexicon's keys cover five languages, its states
+      three, and front matter reads `status:` only.
+- [ ] 28. The citations pass's bibliography headings and title stopwords
+      are English and German, in the store: into the research pack's
+      lexicon.
+
+**Performance, an hour each.**
+
+- [ ] 11 and 32. Every edge write calls `ontology.current()` three
+      times, each statting some 19 files (1,700 to 650 µs an edge with the
+      `onto` passed); `document_facts` 20 times slower. Pass it, and
+      memoize the stamp for a second.
+- [ ] 33. The nightly references pass reads every bibliography before
+      checking what is due: the stamp in `STAMPS`, the due ids first.
+
+**Hygiene and generality.**
+
+- [ ] 3. The edge row inserted by hand in `_link` and `_restore_run`:
+      one column list. With 23: linking document nodes written twice,
+      and `Ontology.kinds_of("document")`.
+- [ ] 25. Two rules for "the same server": `models.same_server`.
+- [ ] 26. `images=` takes its pair in opposite orders in the two
+      runtimes, and the `Runtime` protocol has none.
+- [ ] 29 and 31. `STAMPS` stops before extraction, markup and private,
+      and titles bypasses `_due`: an exact-match version, an
+      `on_original` record (half a day).
+- [ ] 30. The lost-readings ailment looks at figures only, though
+      formulas are carried too.
+- [ ] 8. The graph export does not say which document a node is: a
+      `doc_hash` on a document node's line, claimed by hash on import
+      (an afternoon).
+
+**Docs, minutes each.**
+
+- [ ] 40 and 45. Invariant 3, `architecture.md:328` and the store's
+      docstring say every name is re-exported on `store`; four
+      `store.<name>` references in CLAUDE.md and `clusters.py:92` no
+      longer resolve.
+- [ ] 42 and 43. `architecture.md`'s clock row points to a binding that
+      moved to `api.passes.JOBS`; its module table lacks citations,
+      schemaorg, `errors`, `ml.sessions`, `parsers.annotate`.
+- [ ] 44. CLAUDE.md's store imports lack `errors`, its config readers
+      `flag`.
+- [ ] 46. `docs/meta.md` says a step's result clears its tried mark; a
+      title from the titles step leaves `titles_tried`.
+
+**Structure (the critic's).**
+
+- [ ] C1. `store/base.py` grew from 1,080 to 1,799 lines with eight
+      concerns, and the next stage or two takes it past the 2,000-line
+      split: a `base` package of parts (tokens and viewers, the index
+      files, node claiming with edge ending and restore). A stage.
+- [ ] C2. Migration 69's Python half is the living node-claim rule that
+      `link` and the heal use, so a later change to it changes what the
+      migration does on a store upgraded afterwards: a frozen copy for
+      the migration.
 
 ## Stages
 

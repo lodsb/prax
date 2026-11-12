@@ -11079,3 +11079,45 @@ with a key, so nothing needed repair. Each fix has a test that fails on
 the code the review read (`tests/test_review_2026_11_11.py`, and beside
 the code in `test_schema`, `test_unretire`, `test_models`,
 `test_document_nodes`, `test_embeddings`, `test_api`).
+
+## 2026-11-11: the quality review in ultra mode, with ten dimensions
+
+The quality half of the day's review, over the same range (`2093c44`
+to `714df80`), with the project's code-review skill in full mode. The
+skill grew five dimensions for it: tests, error handling and
+observability, interface contracts, operability, and documentation
+drift, each with a checklist section beside the first five
+(`.claude/skills/code-review/references/checklists.md`). The workflow
+gained an ultra mode (`args.ultra`): two reviewers a dimension from
+different angles, a skeptic for each finding rather than one a
+dimension, and a completeness critic at the end. The run took 84
+agents and about 16 minutes, and about a quarter of the user's session
+allowance; the user called it an experiment.
+
+46 findings confirmed, 17 refuted, two from the critic not re-checked
+(`docs/eval/quality-review-2026-11-11.md`, numbered there). Two are
+high, and both are wrong now. A project sync retires a changed note's
+old text as a duplicate of the new one, and the new text inherits the
+old extraction stamp, summary and facts: a correction added to a
+journal entry is never extracted (reproduced on a temporary store),
+which is the case AU step 2 is for. A picture's or recording's node is
+named with its number only while it has no text, and once a reading or
+a transcription gives it one, the node lookups by name miss it and its
+facts drop. The mediums cluster: errors the door answers as the
+caller's 400 with no log line, plain `KeyError` catches the 2026-11-08
+contract retired, a scheduled job's failed start invisible on the Jobs
+page, a judge reading a 401 as "not sure", judge spending on a keyed
+server missing from the ledger; every store-backed test replaying the
+69 migrations (some 4 to 5 of the suite's 11 minutes); a module bump
+making every project sync restate its links; about fifteen settings
+documented nowhere. Seven docs-drift items, small reuse and language
+items. The critic adds that `store/base.py` went from 1,080 to 1,799
+lines and will pass the 2,000-line split within a stage or two, and that
+migration 69's Python half is the living node-claim rule, not a frozen
+one.
+
+Nothing was changed. On 2026-11-12 the user asked for all of it to be
+planned with no hurry: `docs/PLAN.md`, "The quality review of
+2026-11-11", ranked, with findings 1 and 2 before AU step 2. The
+repair of notes the first one already affected means extracting them
+again, which is the owner's call once they are counted on a copy.

@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Review prax's code for quality rather than safety — hygiene (reuse, modularity, packaging, structure), extensibility against docs/PLAN.md, independence from the owner's library and generality for anyone's, conceptual generality, and performance on the Pi-class target. Use it when the user asks for a code review, a hygiene or quality pass, a review "of what was added", or asks whether code is general, reusable, extensible or fast enough; after a run of stages, before building more on them; and before a stage is called done when it added a module or a package. Two modes: quick (inline, over a diff or a package) and full (a workflow, one reviewer per dimension, every finding verified). Safety and correctness (the invariants, the wall, bugs) are a separate review; this skill points to it but does not replace it.
+description: Review prax's code for quality rather than safety — hygiene (reuse, modularity, packaging, structure), extensibility against docs/PLAN.md, independence from the owner's library and generality for anyone's, conceptual generality, performance on the Pi-class target, and in full mode also tests, error handling, interface contracts, operability and documentation drift. Use it when the user asks for a code review, a hygiene or quality pass, a review "of what was added", or asks whether code is general, reusable, extensible or fast enough; after a run of stages, before building more on them; and before a stage is called done when it added a module or a package. Two modes: quick (inline, over a diff or a package) and full (a workflow, one reviewer per dimension, every finding verified). Safety and correctness (the invariants, the wall, bugs) are a separate review; this skill points to it but does not replace it.
 ---
 
 # code-review
@@ -17,7 +17,7 @@ invariants of CLAUDE.md and the wall, is reviewed separately (the
 first when both are due: quality findings on code that is about to
 change for a bug are wasted.
 
-## The five dimensions
+## The dimensions
 
 Each has a checklist in `references/checklists.md`. Read the one for a
 dimension before reviewing it; the questions are concrete and carry the
@@ -42,6 +42,23 @@ examples prax has already met.
    could be done once, scans and quadratic loops that grow with the
    library, SQL no index serves, memory peaks, start-up and first-call
    costs.
+6. **Tests**: tests that cannot fail or test the implementation,
+   behaviour with no test, repeated fixtures, slow or fragile tests.
+7. **Errors and observability**: a failure swallowed, turned into a
+   silent default, or invisible on the Jobs page and in the log; the
+   door's `NotFound`/`ValueError` contract; spending that leaves the
+   ledger.
+8. **Contracts**: the door's routes, the MCP tools, the store's surface
+   and the step protocol as an API: one word with two meanings, one
+   thing in two shapes, an OpenAPI schema that differs from the code.
+9. **Operability**: settings documented and checked at start, upgrades,
+   what a kill mid-pass leaves, growth without a bound, what `prax up`
+   can show.
+10. **Documentation drift**: CLAUDE.md, the docs and docstrings against
+    the code, a false statement rather than wording.
+
+Quick mode covers 1 to 5 unless asked. Full mode runs all ten (added
+2026-11-11; the first run is `docs/eval/quality-review-2026-11-11.md`).
 
 ## Quick mode
 
@@ -62,8 +79,9 @@ For a diff, a commit range or one package, in this session.
 ## Full mode
 
 For a run of stages (days of commits), when the user asks for it or a
-workflow is already agreed. Five reviewers in parallel, one per
-dimension, each finding re-checked by a skeptic; about ten agents.
+workflow is already agreed. Ten reviewers in parallel, one per
+dimension, each dimension's findings re-checked by a skeptic; about
+twenty agents.
 
 Run `references/workflow.js` with the Workflow tool:
 
@@ -71,8 +89,14 @@ Run `references/workflow.js` with the Workflow tool:
               args: {base: "<commit before the range>", scope: "src"}})
 
 `args.dimensions` (a list of keys: hygiene, plan, independence,
-generality, performance) runs a subset. The script is read-only for its
-agents and returns `{confirmed, rejected}`. A workflow needs the user's
+generality, performance, tests, errors, contracts, operability, docs)
+runs a subset. `args.ultra: true` is the thorough run: two reviewers a
+dimension from different angles, a skeptic for each finding, and a
+completeness critic at the end that names what the review missed. The
+first ultra run (2026-11-11) took 84 agents and about 16 minutes, and
+about a quarter of a session's allowance. The script is read-only for
+its agents and returns `{confirmed, missed, rejected, covered,
+not_run}`; `missed` is the critic's, not re-checked. A workflow needs the user's
 word (the Workflow tool's rule); asking for this review in full mode is
 that word.
 
