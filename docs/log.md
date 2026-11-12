@@ -11159,8 +11159,13 @@ On the live store, read-only: 84 documents were retired as replaced by a
 newer sync, and 80 keepers inherited the old stamp; 6 of them are live
 now (the others were replaced again since). Their own text was never
 extracted, and the facts they carry came from an earlier text. The
-repair is to clear their stamp so the extraction step reads them; that
-changes live data and is the owner's call.
+owner agreed to the repair: the door was restarted on the fix at 14:06
+(a sync at 12:23 had still run the old code, and made four of the six,
+33245 to 33248; their old texts are 33240 to 33243), and the six were
+asked for again with `POST /doc/{id}/extract` (33114, 33136, 33245 to
+33248). The extract step reads them first, on the local model, and
+its reading retires the inherited facts. A seventh keeper of today's
+sync, 33249, had no stamp and was already due.
 
 **Finding 2: a picture's node outlives the text it is given.** A picture
 or a recording is named by its file and number (`IMG_0001.JPG (#123)`)
@@ -11174,3 +11179,20 @@ file-and-number name (`entities.doc_id`, migration 69;
 live store that have a text of their own have nodes named by their
 titles and no node by number, so they keep those. Test:
 `test_document_nodes.py::test_a_pictures_node_outlives_the_text_it_is_given`.
+
+## 2026-11-12: the tests start from a migrated store (quality finding 12)
+
+Every test that opened a store ran all 69 migrations into it: 336 ms a
+test against 1.5 ms for copying the result. The root `conftest.py` now
+builds the store once a session (`migrated_db`, `init_db` and a
+`wal_checkpoint(TRUNCATE)` under a cleared environment) and the autouse
+`data_dir` fixture copies it to the test's `config.db_path()`, so the
+files that define their own `client` and the tests that call
+`store.connect()` themselves start from it too. A test of the
+migrations themselves is marked `empty_store` and starts with none
+(`test_pre_migration_db_gets_stamped`,
+`test_a_migrations_python_half_commits_with_it`; the marker is
+registered in pyproject). The full suite, locally: 646 s before, 366 s
+with the copy in `con` and `client` only, 284 s with it in `data_dir`.
+CI's Windows job took 15 minutes on 21af4ef; its time after is read on
+the next push.

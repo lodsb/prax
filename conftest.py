@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,8 +16,42 @@ from fastapi.testclient import TestClient
 from prax import store, work
 
 
+@pytest.fixture(scope="session")
+def migrated_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A store brought to the latest migration once a session, which every
+    test's data directory starts from as a copy. Running every
+    migration for every test was 0.34 s a test (the quality review of
+    2026-11-11, finding 12). A test of the migrations themselves builds
+    its own, and is marked ``empty_store``."""
+    d = tmp_path_factory.mktemp("migrated")
+    with pytest.MonkeyPatch.context() as mp:
+        for name in [k for k in os.environ if k.startswith("PRAX_")]:
+            mp.delenv(name, raising=False)
+        mp.setenv("PRAX_DATA_DIR", str(d))
+        c = store.connect(d / "prax.db")
+        store.init_db(c)
+        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        c.close()
+    return d / "prax.db"
+
+
+def _start_from(migrated: Path) -> None:
+    """Put the migrated store where this test's data directory keeps it."""
+    from prax import config
+
+    path = config.db_path()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(migrated, path)
+
+
 @pytest.fixture(autouse=True)
-def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def data_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    migrated_db: Path,
+    request: pytest.FixtureRequest,
+) -> Path:
     """Point PRAX_DATA_DIR at tmp_path before any store, API or MCP call.
 
     Every other ``PRAX_*`` variable is cleared first: a developer's own
@@ -65,6 +100,9 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # a meta key the code writes and store.DocumentMeta does not name fails
     # the test that wrote it (a host only logs it)
     monkeypatch.setattr(store.checks, "strict_meta", True)
+    # the store at the latest migration, copied (``migrated_db``)
+    if request.node.get_closest_marker("empty_store") is None:
+        _start_from(migrated_db)
     return d
 
 

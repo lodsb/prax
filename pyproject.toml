@@ -55,6 +55,9 @@ packages = ["src/prax", "clients/cli/prax_cli"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "clients/cli"]
+markers = [
+    "empty_store: the test starts with no store in its data directory (conftest.migrated_db)",
+]
 
 [tool.mypy]
 # what the type hints promise, checked (niggles.txt, 2026-09-27). Strict

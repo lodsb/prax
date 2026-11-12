@@ -23,6 +23,7 @@ def test_init_db_is_idempotent(con: sqlite3.Connection) -> None:
     assert store.init_db(con) == v == store.schema_version(con)
 
 
+@pytest.mark.empty_store
 def test_pre_migration_db_gets_stamped(data_dir: Path) -> None:
     """A Stage 0 database (tables present, user_version 0) upgrades in place."""
     con = store.connect()
@@ -212,6 +213,7 @@ def test_a_new_connection_never_takes_an_old_ones_memo_key(data_dir: Path) -> No
     assert len(set(addresses)) < len(addresses)
 
 
+@pytest.mark.empty_store
 def test_a_migrations_python_half_commits_with_it(
     data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
