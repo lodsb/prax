@@ -486,15 +486,20 @@ they block, then by cost. Sizes are the review's.
       `KeyError` but the three that read the caller's own dicts (marked,
       and `test_errors` holds it), the store's 22 catches name
       `NotFound`, the 37 tests expect it.
-- [ ] 15. A scheduled job that fails before its job row exists is retried
+- [x] 15. A scheduled job that fails before its job row exists is retried
       every 30 s and never shown: the failed start is a failed job row.
-- [ ] 16. The calibrated adjudicator reads an HTTP 401 or a wrong model
+      Done 2026-11-12 (`schedule._failed_start`).
+- [x] 16. The calibrated adjudicator reads an HTTP 401 or a wrong model
       as "not sure": a server error raises when every pair failed.
+      Done 2026-11-12 (`LocalAdjudicator.decide`).
 - [ ] 17, 19 and 35. Spending: the judges' calls to a keyed, priced
       server never reach the ledger (`top_logprobs` records, the pool
       threads' usage handed back); spending reaches the door by four
       routes in two shapes (`payload.spent` the one, a stage); a failed
       ledger write leaves no trace (a warning, and the bag refilled).
+      17 done 2026-11-12: `top_logprobs` records a keyed server's use
+      under `model@host`, and `calibration.each` carries the pool
+      threads' bags to the asking thread. 19 and 35 are open.
 - [ ] 36. One maintenance pass that raises skips the rest: each pass
       caught, the job failed naming it.
 - [ ] 20 and 37. A mistyped switch raises only when a parse computes its

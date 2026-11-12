@@ -614,6 +614,7 @@ class LocalAdjudicator:
     settle: float = SETTLE
     slots: int = 2
     probabilities: list[float | None] = field(default_factory=list)
+    errors: list[Exception] = field(default_factory=list)  # this decide's
 
     @property
     def name(self) -> str:
@@ -628,15 +629,25 @@ class LocalAdjudicator:
             raw = calibration.p_yes(
                 self.base_url, self.model, [{"role": "user", "content": prompt}]
             )
-        except (models.ServerNotReady, RuntimeError, OSError, ValueError):
-            return None  # no answer: the pair is left, and asked again
+        except models.ServerNotReady:
+            return None  # down or loading: the pair is left, and asked again
+        except (RuntimeError, OSError, ValueError) as exc:
+            self.errors.append(exc)
+            return None  # this pair's; ``decide`` raises when every pair failed
         platt = calibration.Platt.of(self.platt)
         return raw if raw is None or platt is None else platt(raw)
 
     def decide(self, candidates: list[Candidate]) -> list[bool | None]:
+        """Each pair settled or left. When every pair failed with the
+        server's error (an HTTP 401, a model it does not have), the first
+        is raised: read as "not sure", a misconfigured judge looked like a
+        cautious one (the quality review of 2026-11-11, finding 16)."""
         from prax.graph import calibration
 
+        self.errors = []
         self.probabilities = calibration.each(self.probability, candidates, self.slots)
+        if candidates and len(self.errors) == len(candidates):
+            raise self.errors[0]
         return [self.settled(p) for p in self.probabilities]
 
     def settled(self, p: float | None) -> bool | None:

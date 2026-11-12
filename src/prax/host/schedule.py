@@ -124,8 +124,25 @@ def tick(
             logging.getLogger("prax.schedule").info(
                 "%s started by the clock (%s)", entry.name, entry.at.strftime("%H:%M")
             )
-        except Exception:
+        except Exception as exc:
             logging.getLogger("prax.schedule").exception(
                 "the clock could not start %s", entry.name
             )
+            _failed_start(con, entry.name, last, exc)
     return started
+
+
+def _failed_start(con: Any, name: str, last: Any, exc: Exception) -> None:
+    """A start that raised before its job row: a failed row of its own, so
+    the Admin page shows it and the entry waits for its next day, where it
+    was tried again every tick (the quality review of 2026-11-11, finding
+    15). A starter that wrote its row keeps it, for the reaper."""
+    from prax import store
+
+    now = store.last_job(con, name)
+    if now is not None and (last is None or now["id"] != last["id"]):
+        return
+    job = store.job_start(con, name, note="the clock could not start it")
+    store.job_finish(
+        con, job, status="failed", note=f"not started: {type(exc).__name__}: {exc}"
+    )

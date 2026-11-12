@@ -369,3 +369,50 @@ def test_a_judge_asks_a_keyed_server_with_its_key(
     assert models.top_logprobs("http://gpu-box:8080/v1", "qwen-32b", msg)
     models.top_logprobs("http://127.0.0.1:1/v1", "tiny", msg)
     assert keys == ["secret", None]
+
+
+def test_a_judges_calls_to_a_keyed_server_reach_the_ledger(
+    cfg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``top_logprobs`` sent a keyed server its key and recorded nothing,
+    and the adjudicator asks from a pool whose threads' bags no post took:
+    a priced judge's spending never reached the ledger or the budget (the
+    quality review of 2026-11-11, finding 17). Both now land in the bag of
+    the thread that asked, under the runtime's name, as ``chat``'s do."""
+    from prax.graph import resolution
+    from prax.ml import usage
+
+    cfg.write_text(
+        YAML.replace(
+            "    price: [0.5, 1.5]\n",
+            "    price: [0.5, 1.5]\n    api_key_env: GPU_KEY\n",
+        ),
+        encoding="utf-8",
+    )
+    models.load()
+
+    def fake_post(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+        top = [{"token": "yes", "logprob": -0.01}]
+        return {
+            "choices": [{"logprobs": {"content": [{"top_logprobs": top}]}}],
+            "usage": {"prompt_tokens": 120, "completion_tokens": 1},
+        }
+
+    monkeypatch.setattr(models, "post_json", fake_post)
+    monkeypatch.setenv("GPU_KEY", "secret")
+    usage.clear()
+    judge = resolution.LocalAdjudicator(
+        base_url="http://gpu-box:8080/v1", model="qwen-32b", slots=3
+    )
+    pairs = [
+        resolution.Candidate(1, i, "a", "b", "tool", "likely", 0.9) for i in range(2, 6)
+    ]
+    assert judge.decide(pairs) == [True] * 4
+    assert usage.take() == {
+        "qwen-32b@gpu-box:8080": {"input_tokens": 480, "output_tokens": 4}
+    }
+    # a server that takes no key is one's own, and bills nothing
+    models.top_logprobs(
+        "http://127.0.0.1:1/v1", "tiny", [{"role": "user", "content": "?"}]
+    )
+    assert usage.take() == {}

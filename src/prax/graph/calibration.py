@@ -141,9 +141,27 @@ def p_yes(
 
 def each(ask: Callable[[T], R], items: Iterable[T], slots: int) -> list[R]:
     """``ask`` over the items, ``slots`` at a time: the server's parallel
-    slots, each question one short request."""
+    slots, each question one short request. What a paid server's answers
+    used is recorded on each pool thread (``prax.ml.usage``, thread-local);
+    it is taken there and recorded again on the calling thread, whose post
+    carries it home (the quality review of 2026-11-11, finding 17)."""
+    from prax.ml import usage
+
+    bags: list[dict[str, dict[str, int]]] = []
+
+    def asked(item: T) -> R:
+        usage.clear()  # a pool thread's own: nothing earlier lands here
+        try:
+            return ask(item)
+        finally:
+            bags.append(usage.take())
+
     with ThreadPoolExecutor(max_workers=max(1, slots)) as pool:
-        return list(pool.map(ask, items))
+        out = list(pool.map(asked, items))
+    for bag in bags:
+        for model, tokens in bag.items():
+            usage.record(model, tokens)
+    return out
 
 
 def _log_loss(a: float, b: float, x: Sequence[float], t: Sequence[float]) -> float:

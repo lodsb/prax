@@ -11222,3 +11222,35 @@ syntax trees for the rest. In the store, 22 catches of a miss from
 another store function name `NotFound` now (a worker's `gps` dict in
 `photos._a_position` keeps its `KeyError`), and the 37 tests that
 expected a `KeyError` expect `NotFound`; every one already got it.
+
+## 2026-11-12: a failed start, a refusing judge server, a judge's spending (quality findings 15, 16, 17)
+
+**15.** A clock entry whose starter raised before it wrote a job row
+left the jobs table as it was: the entry stayed due, was started again
+every tick (30 s) and the Admin page showed nothing. `schedule.tick` now
+writes a failed job row of the entry's name with the error in its note
+(`_failed_start`), so it is shown and waits for its next day; a starter
+that wrote its own row before raising keeps it, for the reaper. Tests:
+`test_schedule.py::test_a_start_that_fails_before_its_job_is_a_failed_job`
+and `..._wrote_its_job_keeps_its_own_row`.
+
+**16.** `LocalAdjudicator.probability` read every server error as "not
+sure", so a judge with a wrong key (HTTP 401) or a model the server does
+not have settled nothing and looked cautious. A server that is down or
+loading (`ServerNotReady`) still leaves the pair; any other error is
+kept, and `decide` raises the first when every pair failed so. One
+failure among answers stays that pair's. The worker's pass then fails
+with the server's message, and five alike stop it. Test:
+`test_calibration.py::test_a_judge_whose_server_refuses_every_pair_says_so`.
+
+**17.** The calibrated judges' calls to a keyed server (the safety review
+gave them its key on 2026-11-11) were recorded nowhere: `top_logprobs`
+never called `usage.record`, and the adjudicator asks from
+`calibration.each`'s pool, whose threads' bags no post took. A priced
+judge's spending reached neither the ledger nor the budget cap. Now
+`top_logprobs` records a keyed server's tokens under `model@host`, the
+runtime's name `chat` uses (priced by prax.yaml or free), and `each`
+takes every pool thread's bag and records it again on the asking
+thread. Test: `test_models.py::test_a_judges_calls_to_a_keyed_server_reach_the_ledger`.
+Findings 19 (spending's four routes in two shapes) and 35 (a failed
+ledger write) stay open under the same item.

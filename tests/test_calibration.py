@@ -96,3 +96,46 @@ def test_one_judge_chain_and_one_reading_of_a_fit(
     assert cal.each(lambda x: x * 2, [1, 2, 3], slots=2) == [2, 4, 6]
     assert models.served(None) is None
     assert models.served(models.StubRuntime()) is None
+
+
+def test_a_judge_whose_server_refuses_every_pair_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An HTTP 401 or a model the server does not have was read as "not
+    sure" for every pair, so a misconfigured judge looked like a cautious
+    one and settled nothing (the quality review of 2026-11-11, finding 16).
+    When every pair failed so, the error is raised; a server that is down
+    or loading still leaves the pairs, and one failure among answers is
+    that pair's."""
+    from prax import models
+    from prax.graph import resolution
+
+    pairs = [
+        resolution.Candidate(1, i, "a", "b", "tool", "likely", 0.9) for i in (2, 3)
+    ]
+    judge = resolution.LocalAdjudicator(base_url="http://x/v1", model="q")
+
+    def refused(*a: object, **k: object) -> None:
+        raise RuntimeError("http://x/v1/chat/completions: HTTP 401: no key")
+
+    monkeypatch.setattr(models, "top_logprobs", refused)
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        judge.decide(pairs)
+
+    def down(*a: object, **k: object) -> None:
+        raise models.ServerNotReady("loading")
+
+    monkeypatch.setattr(models, "top_logprobs", down)
+    assert judge.decide(pairs) == [None, None]
+
+    answers = iter([RuntimeError("HTTP 500"), [("yes", -0.01)]])
+
+    def mixed(*a: object, **k: object) -> list[tuple[str, float]]:
+        got = next(answers)
+        if isinstance(got, Exception):
+            raise got
+        return got
+
+    monkeypatch.setattr(models, "top_logprobs", mixed)
+    judge.slots = 1
+    assert judge.decide(pairs) == [None, True]

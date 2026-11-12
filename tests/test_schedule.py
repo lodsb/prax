@@ -484,3 +484,41 @@ def test_the_questions_job_lets_go_of_its_key(
                 break
         time.sleep(0.05)
     assert "p" not in passes._answering
+
+
+def test_a_start_that_fails_before_its_job_is_a_failed_job(
+    con: sqlite3.Connection,
+) -> None:
+    """A starter that raised before it wrote its job row left the jobs table
+    as it was: the entry stayed due, was tried again every tick (30 s), and
+    the Admin page showed nothing (the quality review of 2026-11-11,
+    finding 15). The failed start is a failed job row, so it is shown and
+    waits for the next day like any run."""
+    tried: list[str] = []
+
+    def broken(options: dict[str, Any]) -> None:
+        tried.append("maintain")
+        raise RuntimeError("no such pass: vacuum")
+
+    now = datetime.now().astimezone()
+    entries = schedule.entries({"maintain": "00:00"})
+    assert schedule.tick(con, {"maintain": broken}, now=now, entries_=entries) == []
+    last = store.last_job(con, "maintain")
+    assert last is not None and last["status"] == "failed"
+    assert "no such pass: vacuum" in (last["note"] or "")
+    assert schedule.tick(con, {"maintain": broken}, now=now, entries_=entries) == []
+    assert tried == ["maintain"]
+
+
+def test_a_start_that_wrote_its_job_keeps_its_own_row(
+    con: sqlite3.Connection,
+) -> None:
+    def half(options: dict[str, Any]) -> None:
+        store.job_start(con, "maintain")
+        raise RuntimeError("after the row")
+
+    now = datetime.now().astimezone()
+    entries = schedule.entries({"maintain": "00:00"})
+    schedule.tick(con, {"maintain": half}, now=now, entries_=entries)
+    rows = con.execute("SELECT status FROM jobs WHERE name = 'maintain'").fetchall()
+    assert [r["status"] for r in rows] == ["running"]  # the reaper's to close

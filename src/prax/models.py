@@ -588,9 +588,23 @@ def top_logprobs(
         "top_logprobs": 10,
         **extra,
     }
-    got = post_json(
-        base_url.rstrip("/") + "/chat/completions", body, _server_key(base_url)
-    )
+    key = _server_key(base_url)
+    got = post_json(base_url.rstrip("/") + "/chat/completions", body, key)
+    if key:
+        # a keyed server bills: its use goes home under the runtime's name,
+        # as ``OpenAIRuntime.chat``'s does (the quality review of 2026-11-11,
+        # finding 17)
+        from prax.ml import usage
+
+        u = got.get("usage") or {}
+        host = urlparse(base_url).netloc or "server"
+        usage.record(
+            f"{model}@{host}",
+            {
+                "input_tokens": u.get("prompt_tokens"),
+                "output_tokens": u.get("completion_tokens"),
+            },
+        )
     try:
         top = got["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
         return [(str(t["token"]), float(t["logprob"])) for t in top]
