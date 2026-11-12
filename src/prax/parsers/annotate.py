@@ -102,17 +102,25 @@ def carry(previous: str | list[str], text: str) -> str:
     ``previous`` may be several texts, newest first (the current one and
     the earlier ones, ``store.earlier_texts``): a model's newest reading of
     a figure is the one carried. On 2026-10-06 a marker evening dropped
-    every figure reading of the papers it read."""
+    every figure reading of the papers it read.
+
+    An anchor that comes several times (an equation repeated, a figure
+    shown twice) is matched by its turn: the second in the old text is the
+    second in the new one. By the anchor alone, the second's readings went
+    under the first, or were lost (the safety review of 2026-11-11)."""
     texts = [previous] if isinstance(previous, str) else previous
-    held: dict[str, list[str]] = {}
+    held: dict[tuple[str, int], list[str]] = {}
     for one in texts:
         if "(figure:" not in one and "$$" not in one:
             continue
         old = one.split("\n")
+        turns: dict[str, int] = {}
         for i, line in enumerate(old):
-            ref = anchor_of(line)
-            if ref is None:
+            anchor = anchor_of(line)
+            if anchor is None:
                 continue
+            turns[anchor] = turns.get(anchor, 0) + 1
+            ref = (anchor, turns[anchor])
             have = {
                 m.group("model")
                 for t in held.get(ref, [])
@@ -128,12 +136,17 @@ def carry(previous: str | list[str], text: str) -> str:
         return text
     lines = text.split("\n")
     out: list[str] = []
+    seen: dict[str, int] = {}
     i = 0
     while i < len(lines):
         out.append(lines[i])
-        ref = anchor_of(lines[i])
+        anchor = anchor_of(lines[i])
         i += 1
-        if ref is None or ref not in held:
+        if anchor is None:
+            continue
+        seen[anchor] = seen.get(anchor, 0) + 1
+        ref = (anchor, seen[anchor])
+        if ref not in held:
             continue
         there: list[str] = []
         while i < len(lines) and markup.READ_BY.match(lines[i]):

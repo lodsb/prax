@@ -619,10 +619,15 @@ def _relabel(
     called (``was``, which ``unmerge_run`` puts back) and the new one
     preferred in the language the library shows, which the cached name
     then follows. Without the labels the ``names`` pass rebuilds the old
-    name from them, and the rename is gone the next night."""
+    name from them, and the rename is gone the next night.
+
+    Only the preferred label the old name is marked: the undo makes a
+    marked label preferred again, and marking its variants too (another
+    case, another language) gave the undo two preferred labels of one
+    language, or the wrong one (the safety review of 2026-11-11)."""
     marked = con.execute(
         "UPDATE entity_labels SET was = 1, run = ?"
-        " WHERE entity_id = ? AND label = ? COLLATE NOCASE",
+        " WHERE entity_id = ? AND label = ? AND kind = 'pref'",
         (run, entity_id, old),
     ).rowcount
     if not marked:

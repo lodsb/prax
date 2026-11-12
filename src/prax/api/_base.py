@@ -23,11 +23,19 @@ class AtMost:
     rest passed any number to the store (structure review finding 47)."""
 
     most: int
+    # 0 asks for as many as there are, which is the most (``/traverse``'s
+    # whole first hop: until 2026-11-11 a hub's 13,440 edges in one answer)
+    zero_is_most: bool = False
 
     def __get_pydantic_core_schema__(self, source: Any, handler: Any) -> Any:
         return core_schema.no_info_after_validator_function(
-            lambda v: max(1, min(int(v), self.most)), handler(source)
+            self._clamp, handler(source)
         )
+
+    def _clamp(self, v: Any) -> int:
+        if self.zero_is_most and int(v) <= 0:
+            return self.most
+        return max(1, min(int(v), self.most))
 
     def __get_pydantic_json_schema__(self, schema: Any, handler: Any) -> Any:
         out = handler(schema)

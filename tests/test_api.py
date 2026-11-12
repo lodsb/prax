@@ -775,10 +775,15 @@ def test_every_list_route_declares_and_clamps_its_limit(client: TestClient) -> N
             for p in op.get("parameters") or []:
                 if p["name"] not in ("limit", "k", "members"):
                     continue
-                s = p["schema"]
-                if s.get("type") == "integer" and "maximum" not in s:
-                    open_ended.append(path)
-    assert open_ended == ["/work/{step}"]  # a worker's batch, its own protocol
+                # ``int | None`` is an anyOf with null, which the check
+                # skipped, and /traverse's limit went unclamped (the safety
+                # review of 2026-11-11)
+                for s in p["schema"].get("anyOf") or [p["schema"]]:
+                    if s.get("type") == "integer" and "maximum" not in s:
+                        open_ended.append(path)
+    # a worker's batch, its own protocol; and a window of one page's text in
+    # characters (``get_page``), as ``/doc``'s ``max_chars``, not a list
+    assert open_ended == ["/page/{slug}", "/work/{step}"]
     for i in range(3):
         client.post(
             "/ingest", json={"title": f"note {i}", "text": "granular synthesis"}

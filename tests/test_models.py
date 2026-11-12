@@ -312,3 +312,60 @@ def test_a_yes_or_no_question_reads_the_first_tokens_alternatives(
     judge = resolution.LocalAdjudicator(base_url="http://gpu/v1", model="q")
     pair = resolution.Candidate(1, 2, "a", "b", "tool", "likely", 0.9)
     assert judge.probability(pair) is None  # left, and asked again
+
+
+def test_a_keyed_server_is_charged_by_its_own_name(
+    cfg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A server that takes a key records its use under the runtime's name,
+    which ``prax.yaml`` prices or which costs nothing; under the bare model
+    name a free llama-server with a key was charged at Opus rates and held
+    the paid steps (the safety review of 2026-11-11)."""
+    from prax.ml import pricing, usage
+
+    monkeypatch.setattr(
+        models,
+        "post_json",
+        lambda url, body, key: {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 0},
+        },
+    )
+    monkeypatch.setenv("GPU_KEY", "secret")
+    # priced in the file (0.5 a million in), and a server of one's own
+    for url, cost in (("http://gpu-box:8080/v1", 0.5), ("http://lan-box:8080/v1", 0)):
+        usage.clear()
+        rt = models.OpenAIRuntime(url, "qwen-32b", "GPU_KEY")
+        rt.chat("", "hello")
+        got = usage.take()
+        assert list(got) == [rt.name]
+        assert pricing.cost_usd(rt.name, got[rt.name]) == cost
+
+
+def test_a_judge_asks_a_keyed_server_with_its_key(
+    cfg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``top_logprobs`` (the calibrated judges) sends the key of the server
+    it asks, as ``chat`` does; it sent none, and a keyed server answered
+    every question 401 (the safety review of 2026-11-11)."""
+    cfg.write_text(
+        YAML.replace(
+            "    price: [0.5, 1.5]\n",
+            "    price: [0.5, 1.5]\n    api_key_env: GPU_KEY\n",
+        ),
+        encoding="utf-8",
+    )
+    models.load()
+    keys: list[str | None] = []
+
+    def fake_post(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+        keys.append(key)
+        top = [{"token": "yes", "logprob": -0.1}]
+        return {"choices": [{"logprobs": {"content": [{"top_logprobs": top}]}}]}
+
+    monkeypatch.setattr(models, "post_json", fake_post)
+    monkeypatch.setenv("GPU_KEY", "secret")
+    msg = [{"role": "user", "content": "?"}]
+    assert models.top_logprobs("http://gpu-box:8080/v1", "qwen-32b", msg)
+    models.top_logprobs("http://127.0.0.1:1/v1", "tiny", msg)
+    assert keys == ["secret", None]

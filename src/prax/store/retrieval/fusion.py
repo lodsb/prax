@@ -759,9 +759,13 @@ def _search_hits(
     with took("embed"):
         vector = emb.embed_query(expanded_text(terms) if VEC_EXPAND else query)
     if mode == "vec":
+        # a domain drops its neighbours outside it after they are drawn, so
+        # draw as deep as the fused lists do: drawn to the page alone, a
+        # small domain came back short (the safety review of 2026-11-11)
+        drawn = max(fetch, depth) if within else fetch
         return _finish(
             con,
-            kept(_vec_search(con, vector, fetch + len(aside), kind)),
+            kept(_vec_search(con, vector, drawn + len(aside), kind)),
             query,
             limit,
             doctype,

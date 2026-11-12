@@ -581,3 +581,25 @@ def test_compact_takes_a_retired_documents_vector_out(
     rec = store.compact_vectors(con, "hash-test")
     assert rec["documents"]["removed_stale"] == 1
     assert rec["documents"]["count"] == len(ids) - 1
+
+
+def test_a_small_domain_fills_a_vector_page(con: sqlite3.Connection) -> None:
+    """A vector-only search drops the documents outside the domain after the
+    nearest neighbours are drawn, so it draws as deep as the fused search;
+    it drew only the page, and a small domain came back short (the safety
+    review of 2026-11-11)."""
+    for n in range(40):
+        doc = store.ingest_text(
+            con, f"reverb reverb reverb hall {n} " * 20, title=f"R{n}"
+        )
+        store.set_domains(con, doc["doc_id"], ["research"])
+    kitchen = set()
+    for n in range(12):
+        doc = store.ingest_text(
+            con, f"reverb at party {n} " + "and cake " * 40, title=f"K{n}"
+        )
+        store.set_domains(con, doc["doc_id"], ["kitchen"])
+        kitchen.add(doc["doc_id"])
+    _embed_all(con)
+    got = store.search(con, "reverb hall", limit=10, domain="kitchen", mode="vec")
+    assert len(got) == 10 and {h["doc_id"] for h in got} <= kitchen

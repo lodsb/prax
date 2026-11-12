@@ -509,11 +509,13 @@ class OpenAIRuntime:
         u = data.get("usage") or {}
         if self.api_key_env:
             # a server that takes a key is a service that bills (a local
-            # llama-server takes none): its use goes home like Claude's
+            # llama-server takes none): its use goes home like Claude's,
+            # under the runtime's name, which prax.yaml prices or which costs
+            # nothing; the bare model's name was priced as an unknown Claude
             from prax.ml import usage
 
             usage.record(
-                self.model,
+                self.name,
                 {
                     "input_tokens": u.get("prompt_tokens"),
                     "output_tokens": u.get("completion_tokens"),
@@ -586,12 +588,33 @@ def top_logprobs(
         "top_logprobs": 10,
         **extra,
     }
-    got = post_json(base_url.rstrip("/") + "/chat/completions", body, None)
+    got = post_json(
+        base_url.rstrip("/") + "/chat/completions", body, _server_key(base_url)
+    )
     try:
         top = got["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
         return [(str(t["token"]), float(t["logprob"])) for t in top]
     except (KeyError, IndexError, TypeError, ValueError):
         return None
+
+
+def _server_key(base_url: str) -> str | None:
+    """The key a server of the file takes, from the variable its spec names
+    (``api_key_env``), for a question asked of the server by its URL: the
+    calibrated judges sent none, and a keyed server answered each 401 (the
+    safety review of 2026-11-11)."""
+    root = _server_root(base_url)
+    for name in names():
+        s = spec(name)
+        if (
+            s
+            and s.kind == "openai"
+            and s.base_url
+            and s.api_key_env
+            and _server_root(s.base_url) == root
+        ):
+            return os.environ.get(s.api_key_env)
+    return None
 
 
 # ------------------------------------------------------- server status

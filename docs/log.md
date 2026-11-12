@@ -11036,3 +11036,46 @@ example itself, since its document is current.
 
 `tests/test_status.py`: two tests, the project's headers as written.
 
+## 2026-11-11: the safety and correctness review, and its fifteen fixes
+
+The first half of the review the plan asks for after a run of stages:
+everything since `2093c44`, the structure review's fixes among it. A
+workflow of twelve agents (six areas, a skeptic each) confirmed 19
+findings and refuted 3; 15 distinct defects, four of them in the fixes of
+2026-11-10 (findings 2 and 17 of the structure review). The write-up,
+with each scenario, the skeptic's reproduction and what was done, is
+`docs/eval/safety-review-2026-11-11.md`.
+
+The three high ones. The hidden set's memo was keyed by the connection's
+address: a request thread's connection is freed when the thread ends, and
+the next is often made at the same address with the same `data_version`
+and `total_changes`, so a named token was served the hidden set of before
+a document was marked personal. A connection `connect` makes is now a
+`store.Connection` with a serial that never repeats, and `store_state`
+keys on it; the People and media memos share the key. Taking one document
+of a clean-up back (`unretire_document`) restated the facts of the whole
+set under the clean-up's run; `_restore_run(source_doc=)` now undoes one
+document's part. A keyed server's use was recorded under the bare model
+name, which the price table reads as an unknown Claude at Opus rates; it
+is recorded under `model@host`, which `prax.yaml` prices or which costs
+nothing.
+
+The rest: a retired copy hands its node to the live one; a rename marks
+only the preferred label as what the entity was called; a paid call
+whose answer could not be used is charged; an ask bundle keeps the facts
+of both versions of one title; a second restore of a run that ends its
+own edges ends nothing it restated; a second retirement keeps the first
+run; a vector-only search draws as deep as the fused one before a domain
+filter; a title filter folds case beyond ASCII (`prax_fold`); the
+calibrated judges send a keyed server its key; a repeated equation keeps
+each occurrence's reading; migration 69's claim runs in the migration's
+transaction (`AFTER_MIGRATION`); `/traverse`'s limit is clamped to 1,000,
+0 meaning the most rather than every edge (the largest hub holds 13,440),
+so the graph view draws at most that many of a hub's edges.
+
+Before the fixes, read-only on the live store: no retirement had been
+undone since finding 2's code went in, and no local server is configured
+with a key, so nothing needed repair. Each fix has a test that fails on
+the code the review read (`tests/test_review_2026_11_11.py`, and beside
+the code in `test_schema`, `test_unretire`, `test_models`,
+`test_document_nodes`, `test_embeddings`, `test_api`).

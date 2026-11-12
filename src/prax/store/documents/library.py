@@ -79,7 +79,13 @@ def retire_document(
     if duplicate_of is not None and duplicate_of != doc_id:
         moved = _join_duplicate(con, doc_id, duplicate_of)
         meta = get_meta(con, doc_id)
-    run = run or run_name("retire", doc_id, unique=True)
+    # retired again: its edges were ended under the first run, which is the
+    # one the undo needs (the safety review of 2026-11-11)
+    run = (
+        (meta.get("retired") or {}).get("run")
+        or run
+        or run_name("retire", doc_id, unique=True)
+    )
     meta["retired"] = {
         "at": now(),
         "reason": reason,
@@ -111,6 +117,7 @@ def retire_document(
         " WHERE source_doc = ? AND resolution IS NULL",
         (doc_id,),
     ).rowcount
+    _move_nodes_off(con, doc_id, duplicate_of)
     _put_meta(con, doc_id, meta)
     con.commit()
     return {
@@ -219,6 +226,32 @@ def current_of(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
     return {"doc_id": at, "title": row[0], "hops": chain.index(at) + 1}
 
 
+def _move_nodes_off(
+    con: sqlite3.Connection, doc_id: int, duplicate_of: int | None
+) -> int:
+    """Move the nodes that are ``doc_id`` (``entities.doc_id``) to a live
+    document of their name as it is retired: the copy it is a duplicate of
+    (a re-synced note), else the live namesake of the lowest id. A node
+    kept the retired copy, so a project's members listed the old version
+    and its staleness was missed (the safety review of 2026-11-11). A node
+    with no live namesake stays where it is. Does not commit."""
+    n = 0
+    for ent, name in con.execute(
+        "SELECT id, name FROM entities WHERE doc_id = ?", (doc_id,)
+    ).fetchall():
+        row = con.execute(
+            f"SELECT id FROM documents WHERE title = ? AND id != ? AND {LIVE}"
+            " ORDER BY id = ? DESC, id LIMIT 1",
+            (name, doc_id, duplicate_of),
+        ).fetchone()
+        if row is not None:
+            con.execute(
+                "UPDATE entities SET doc_id = ? WHERE id = ?", (int(row[0]), ent)
+            )
+            n += 1
+    return n
+
+
 def _replacements(con: sqlite3.Connection, doc_id: int) -> list[int | None]:
     """The documents that replaced ``doc_id`` in turn (``meta.retired.of``),
     at most ``REPLACED_HOPS``; a last None when the chain comes back on a
@@ -253,7 +286,9 @@ def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     meta = get_meta(con, doc_id)
     retired = meta.pop("retired", None) or {}
     restored = (
-        _restore_run(con, retired["run"]) if retired.get("run") else {"restated": 0}
+        _restore_run(con, retired["run"], source_doc=doc_id)
+        if retired.get("run")
+        else {"restated": 0}
     )
     _put_meta(con, doc_id, meta)
     n = 0

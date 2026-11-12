@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import hashlib
+import itertools
 import json
 import logging
 import re
@@ -460,17 +461,35 @@ def _end_edges(
 END_BATCH = 500
 
 
-def _restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
+def _restore_run(
+    con: sqlite3.Connection, run: str, *, source_doc: int | None = None
+) -> dict[str, int]:
     """Undo a repair run: its own live edges are ended (``retire_run``),
     and every edge it ended (``edge_endings``) is stated again as a new
     edge with the old one's fact, document, evidence, producer, run and
     world dates. The ended edge stays ended: when prax held what is
     history. A fact that is live again by other means is not doubled.
     What still holds an ended edge's id moves to the edge that states it
-    again (``_move_references``). Does not commit."""
-    retired = con.execute(
-        f"UPDATE edges SET valid_to = {_NOW} WHERE run = ? AND valid_to IS NULL", (run,)
-    ).rowcount
+    again (``_move_references``). Does not commit.
+
+    With ``source_doc`` only that document's part of the run is undone:
+    the edges it ended of that document, and none of the run's own. A
+    clean-up retires a set under one run, and taking one document of it
+    back stated the facts of the whole set while the rest stayed retired
+    (the safety review of 2026-11-11)."""
+    # not what an undo of the run stated again: a run that ends its own
+    # edges (a sync's links:) restates them under its own name, and a second
+    # undo ended them for good (the safety review of 2026-11-11)
+    retired = (
+        con.execute(
+            f"UPDATE edges SET valid_to = {_NOW} WHERE run = ? AND valid_to IS NULL"
+            " AND id NOT IN (SELECT restated_as FROM edge_endings"
+            " WHERE run = ? AND restated_as IS NOT NULL)",
+            (run, run),
+        ).rowcount
+        if source_doc is None
+        else 0
+    )
     rows = con.execute(
         """
         SELECT x.edge_id, e.*, s.name AS s_name, s.type AS s_type,
@@ -478,8 +497,9 @@ def _restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
         FROM edge_endings x JOIN edges e ON e.id = x.edge_id
         JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
         WHERE x.run = ? AND x.restated_as IS NULL
+          AND (? IS NULL OR e.source_doc = ?)
         """,
-        (run,),
+        (run, source_doc, source_doc),
     ).fetchall()
     restated = 0
     moved: dict[int, int] = {}
@@ -1026,15 +1046,39 @@ class Memo(Generic[K, V]):
 _hidden_memo: Memo[tuple[Any, ...], frozenset[int]] = Memo(16)
 
 
+class Connection(sqlite3.Connection):
+    """A store connection: an ordinary one with a ``serial``, a number no
+    other connection of this process has had. ``id(con)`` is not that: a
+    request thread's connection is freed when the thread ends and the next
+    one is often made at the same address, starting at the same
+    ``data_version`` and ``total_changes``, so a memo keyed by the address
+    served the hidden set of before a document was marked personal (the
+    safety review of 2026-11-11)."""
+
+    _serials = itertools.count(1)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.serial = next(Connection._serials)
+        # SQLite's lower() and LIKE fold ASCII alone: "Über" is not "über"
+        self.create_function("prax_fold", 1, _fold, deterministic=True)
+
+
+def _fold(text: Any) -> str | None:
+    """A text in the case it is compared in, any script (``str.casefold``);
+    SQL's ``prax_fold``."""
+    return None if text is None else str(text).casefold()
+
+
 def store_state(con: sqlite3.Connection) -> tuple[Any, ...]:
     """What a read's memo is keyed by besides its arguments: the file, this
-    connection, ``PRAGMA data_version`` (another connection committed) and
-    this connection's own ``total_changes`` (it wrote), so a memo never
-    outlives a write. A closed connection's id may be a new one's, hence
-    the file too."""
+    connection (its ``serial``; a connection ``connect`` did not make falls
+    back to its address, which a later one may reuse), ``PRAGMA
+    data_version`` (another connection committed) and this connection's
+    own ``total_changes`` (it wrote), so a memo never outlives a write."""
     return (
         str(con.execute("PRAGMA database_list").fetchone()[2]),
-        id(con),
+        getattr(con, "serial", None) or ("id", id(con)),
         int(con.execute("PRAGMA data_version").fetchone()[0]),
         con.total_changes,
     )
@@ -1206,7 +1250,9 @@ def thread_connection() -> sqlite3.Connection:
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
     path = db_path or config.db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(path, check_same_thread=False, timeout=BUSY_TIMEOUT)
+    con = sqlite3.connect(
+        path, check_same_thread=False, timeout=BUSY_TIMEOUT, factory=Connection
+    )
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
@@ -1490,22 +1536,29 @@ def init_db(con: sqlite3.Connection) -> int:
             f"the store is at schema version {current}, this code knows {latest}:"
             " update prax before opening it"
         )
-    before = current
     for number, path in known:
         if number <= current:
             continue
         sql = path.read_text(encoding="utf-8")
+        after = AFTER_MIGRATION.get(number)
         try:
-            con.executescript(
-                "BEGIN;\n" + sql + f"\nPRAGMA user_version = {number};\nCOMMIT;"
-            )
-        except Exception:
-            con.execute("ROLLBACK")
+            if after is None:
+                con.executescript(
+                    "BEGIN;\n" + sql + f"\nPRAGMA user_version = {number};\nCOMMIT;"
+                )
+            else:
+                # its Python half in the same transaction: committed apart, a
+                # stop between the two left a store at the version whose
+                # half never ran (the safety review of 2026-11-11)
+                con.executescript("BEGIN;\n" + sql)
+                after(con)
+                con.execute(f"PRAGMA user_version = {number}")
+                con.commit()
+        except BaseException:  # a stop too: nothing of the migration stays
+            if con.in_transaction:
+                con.execute("ROLLBACK")
             raise
         current = number
-    if before < DOCUMENT_NODES <= current:
-        _claim_document_nodes(con)
-        con.commit()
     _drop_legacy_vec_table(con)
     return current
 
@@ -1513,6 +1566,10 @@ def init_db(con: sqlite3.Connection) -> int:
 # the migration that gave an entity its document: the nodes written before
 # it are linked by ``_claim_document_nodes`` as the store passes it
 DOCUMENT_NODES = 69
+# a migration's Python half, run in the migration's own transaction
+AFTER_MIGRATION: dict[int, Callable[[sqlite3.Connection], Any]] = {
+    DOCUMENT_NODES: _claim_document_nodes,
+}
 
 
 def _drop_legacy_vec_table(con: sqlite3.Connection) -> None:

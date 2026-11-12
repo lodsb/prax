@@ -192,3 +192,56 @@ def test_a_connection_bounds_its_write_ahead_log(
     assert limit == store.base.JOURNAL_MB * 1024 * 1024
     monkeypatch.setenv("PRAX_SQLITE_JOURNAL_MB", "4")
     assert store.connect().execute("PRAGMA journal_size_limit").fetchone()[0] == 4 << 20
+
+
+def test_a_new_connection_never_takes_an_old_ones_memo_key(data_dir: Path) -> None:
+    """``store_state`` keys a read's memo. A request thread's connection is
+    freed when the thread ends and the next is often made at its address,
+    with the same ``data_version`` and ``total_changes``: keyed by
+    ``id(con)``, it read the hidden set of before a document was marked
+    personal (the safety review of 2026-11-11). The serial never repeats."""
+    states, addresses = [], []
+    for _ in range(40):
+        c = store.connect()
+        states.append(store.store_state(c))
+        addresses.append(id(c))
+        c.close()
+        del c
+    assert len(set(states)) == len(states)
+    # what made the address a bad key: it does come round again
+    assert len(set(addresses)) < len(addresses)
+
+
+def test_a_migrations_python_half_commits_with_it(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Migration 69's claim of the document nodes ran after the migration
+    had committed: a stop between the two left the store at 69 with the
+    claim never run (the safety review of 2026-11-11)."""
+    con = store.connect()
+    con.executescript(
+        "BEGIN;\n"
+        + "\n".join(
+            p.read_text(encoding="utf-8")
+            for n, p in store.migrations()
+            if n < store.base.DOCUMENT_NODES
+        )
+        + f"\nPRAGMA user_version = {store.base.DOCUMENT_NODES - 1};\nCOMMIT;"
+    )
+
+    def stop(con: sqlite3.Connection) -> int:
+        raise KeyboardInterrupt
+
+    monkeypatch.setitem(store.base.AFTER_MIGRATION, store.base.DOCUMENT_NODES, stop)
+    with pytest.raises(KeyboardInterrupt):
+        store.init_db(con)
+    con.close()
+    con = store.connect()
+    assert store.schema_version(con) == store.base.DOCUMENT_NODES - 1
+    monkeypatch.setitem(
+        store.base.AFTER_MIGRATION,
+        store.base.DOCUMENT_NODES,
+        store.base._claim_document_nodes,
+    )
+    assert store.init_db(con) == store.migrations()[-1][0]
+    con.close()

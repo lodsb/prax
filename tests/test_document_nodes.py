@@ -153,3 +153,21 @@ def test_the_heal_links_a_cited_node_and_folds_a_pages_twin(
     assert merged[0] == twins[0]["into"]
     assert merged[1].startswith("heal:page-node-twins:")
     assert _page_node_twins(con) == []
+
+
+def test_a_retired_copy_hands_its_node_to_the_live_one(con: sqlite3.Connection) -> None:
+    """A note synced again is a new document and the old one is retired as
+    its duplicate; the node moves to the live copy, where it kept the
+    retired one (the safety review of 2026-11-11)."""
+    old = _doc(con, "Plan, first version. " * 20, "Plan")
+    store.link(
+        con,
+        store.Edge("Plan", "paper", "authored_by", "Ada", "person"),
+        source_doc=old,
+        producer="test",
+    )
+    assert _doc_of(con, "Plan", "paper") == old
+    new = _doc(con, "Plan, second version. " * 20, "Plan")
+    store.retire_document(con, old, reason="synced again", duplicate_of=new)
+    assert _doc_of(con, "Plan", "paper") == new
+    assert store.node_document(con, "Plan", "paper") == new

@@ -169,3 +169,45 @@ def test_the_heals_edge_repairs_can_be_undone(con: sqlite3.Connection) -> None:
     assert store.restore_run(con, runs[one]) == {"retired": 0, "restated": 1}
     assert store.restore_run(con, runs[two]) == {"retired": 0, "restated": 1}
     assert len(_live(con, doc)) == 2
+
+
+def test_one_document_of_a_clean_up_comes_back_alone(con: sqlite3.Connection) -> None:
+    """A clean-up retires a set under one run; taking one back states its
+    facts and not the others' (the safety review of 2026-11-11)."""
+    docs = []
+    for title in ("Clip one", "Clip two"):
+        doc = _doc(con, f"{title} is a clip by Ada. " * 20, title)
+        store.link(
+            con,
+            store.Edge(title, "paper", "authored_by", "Ada", "person"),
+            source_doc=doc,
+            evidence="by Ada",
+            producer="test",
+            run="read-1",
+        )
+        docs.append(doc)
+    for doc in docs:
+        store.retire_document(con, doc, reason="clip", run="cleanup-x")
+    assert store.unretire_document(con, docs[0])["edges"] == 1
+    assert len(_live(con, docs[0])) == 1
+    assert not _live(con, docs[1])
+    assert store.unretire_document(con, docs[1])["edges"] == 1
+
+
+def test_a_second_retirement_keeps_the_run_the_undo_needs(
+    con: sqlite3.Connection,
+) -> None:
+    """Retiring a retired document again ends nothing; it kept the second
+    run, so the undo found no endings and brought nothing back."""
+    doc = _doc(con, "A paper on wavelets, by Ada. " * 20, "Wavelets")
+    store.link(
+        con,
+        store.Edge("Wavelets", "paper", "authored_by", "Ada", "person"),
+        source_doc=doc,
+        evidence="by Ada",
+        producer="test",
+        run="read-1",
+    )
+    store.retire_document(con, doc, reason="first")
+    store.retire_document(con, doc, reason="again", run="cleanup-y")
+    assert store.unretire_document(con, doc)["edges"] == 1

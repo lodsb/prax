@@ -271,10 +271,17 @@ def count_pages(con: sqlite3.Connection, ids: list[int]) -> int:
 
 def title_contains(words: str, alias: str = "d") -> tuple[str, list[Any]]:
     """A title holding ``words``, any case, as a literal (``100%`` is not
-    a pattern)."""
+    a pattern). Words beyond ASCII are compared casefolded on both sides
+    (``prax_fold``): SQLite folds ASCII alone, and "Über" never matched
+    (the safety review of 2026-11-11)."""
+    if words.isascii():
+        return (
+            f"lower(coalesce({alias}.title, '')) LIKE ? ESCAPE '!'",
+            ["%" + _like_prefix(words.lower())[:-1] + "%"],
+        )
     return (
-        f"lower(coalesce({alias}.title, '')) LIKE ? ESCAPE '!'",
-        ["%" + _like_prefix(words.lower())[:-1] + "%"],
+        f"prax_fold(coalesce({alias}.title, '')) LIKE ? ESCAPE '!'",
+        ["%" + _like_prefix(words.casefold())[:-1] + "%"],
     )
 
 

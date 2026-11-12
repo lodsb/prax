@@ -53,23 +53,37 @@ def document_facts(
     out: dict[int, list[dict[str, Any]]] = {i: [] for i in doc_ids}
     if not doc_ids:
         return out
+    # the entities that are each document (``doc_node_ids``): two versions
+    # of one title are one node, kept on one of them, and keeping only the
+    # edges whose node is kept on their document lost the other's facts
+    # (the safety review of 2026-11-11)
+    nodes: dict[int, set[int]] = {}
+    for i in doc_ids:
+        try:
+            nodes[i] = set(doc_node_ids(con, i))
+        except NotFound:  # no title yet, so no node
+            nodes[i] = set()
+    every = sorted(set().union(*nodes.values()))
+    if not every:
+        return out
     marks = ",".join("?" * len(doc_ids))
+    at = ",".join("?" * len(every))
     skip = ",".join("?" * len(ASK_FACT_RELS_SKIPPED))
     rows = con.execute(
         f"""
-        SELECT x.source_doc AS doc_id, x.rel, t.name, t.type FROM edges x
-        JOIN documents d ON d.id = x.source_doc
-        JOIN entities s ON s.id = x.src
+        SELECT x.source_doc AS doc_id, x.src, x.rel, t.name, t.type FROM edges x
         JOIN entities t0 ON t0.id = x.dst
         JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
         WHERE x.source_doc IN ({marks}) AND x.valid_to IS NULL
-          AND s.doc_id = x.source_doc AND x.rel NOT IN ({skip})
+          AND x.src IN ({at}) AND x.rel NOT IN ({skip})
         ORDER BY x.source_doc, x.rel, t.name
         """,
-        (*doc_ids, *ASK_FACT_RELS_SKIPPED),
+        (*doc_ids, *every, *ASK_FACT_RELS_SKIPPED),
     )
     seen: set[tuple[int, str, str]] = set()
     for r in rows:
+        if int(r["src"]) not in nodes[r["doc_id"]]:
+            continue  # another document's node, named in this one
         key = (r["doc_id"], r["rel"], r["name"])
         if key in seen or len(out[r["doc_id"]]) >= limit:
             continue

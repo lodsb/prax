@@ -599,7 +599,16 @@ class ClaudeExtractor:
     def extract(self, doc: DocumentInput) -> Extraction:
         # the extraction carries its usage home itself (``Extraction.usage``)
         response = self._runtime().create(self.params(doc), record=False)
-        return self.from_message(response)
+        try:
+            return self.from_message(response)
+        except Exception:
+            # a refusal or an answer cut short was paid for all the same: it
+            # goes home with the error's post (``prax.ml.usage``), where it
+            # was not counted at all (the safety review of 2026-11-11)
+            from prax.ml import usage
+
+            usage.record(self.model, getattr(response, "usage", None))
+            raise
 
     @staticmethod
     def from_message(response: Any) -> Extraction:

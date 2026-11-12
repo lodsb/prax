@@ -443,23 +443,34 @@ class ClaudeAdjudicator:
         # the decisions carry their usage home (``do_adjudicate``)
         runtime = models.ClaudeRuntime(self.model, effort="low", client=self.client)
         out: list[bool | None] = []
-        for start in range(0, len(candidates), self.batch):
-            part = candidates[start : start + self.batch]
-            lines = "\n".join(
-                f'{i}. [{c.type}] "{c.keep_name}"  vs  "{c.drop_name}"'
-                for i, c in enumerate(part, 1)
-            )
-            text, used = runtime.chat(
-                "",
-                adjudicate_prompt({c.type for c in part}) + lines,
-                max_tokens=6000,
-                schema=ANSWER_SCHEMA,
-                record=False,
-            )
-            self.client = runtime.client
-            for key, got in used.items():
-                self.usage[key] = self.usage.get(key, 0) + got
-            out.extend(answers_by_number(text, len(part)))
+        try:
+            for start in range(0, len(candidates), self.batch):
+                part = candidates[start : start + self.batch]
+                lines = "\n".join(
+                    f'{i}. [{c.type}] "{c.keep_name}"  vs  "{c.drop_name}"'
+                    for i, c in enumerate(part, 1)
+                )
+                text, used = runtime.chat(
+                    "",
+                    adjudicate_prompt({c.type for c in part}) + lines,
+                    max_tokens=6000,
+                    schema=ANSWER_SCHEMA,
+                    record=False,
+                )
+                self.client = runtime.client
+                for key, got in used.items():
+                    self.usage[key] = self.usage.get(key, 0) + got
+                out.extend(answers_by_number(text, len(part)))
+        except Exception:
+            # the batches answered before the failure were paid for and
+            # their decisions go nowhere: what they used goes home with the
+            # worker's next post (``prax.ml.usage``), where it was lost (the
+            # safety review of 2026-11-11)
+            from prax.ml import usage
+
+            usage.record(self.model, dict(self.usage))
+            self.usage.clear()
+            raise
         return out
 
 

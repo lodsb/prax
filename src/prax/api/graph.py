@@ -77,12 +77,19 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
     return {"edge_id": eid}
 
 
+# the most of an entity's own edges one walk answers; None asks for the
+# host's own number (``graph.edges``), 0 for the most (the graph view's
+# whole first hop), with ``left_out`` counting the rest (the safety review
+# of 2026-11-11)
+TRAVERSE_MOST = 1000
+
+
 @router.get("/traverse")
 def traverse(
     entity: str,
     request: Request,
     hops: int = 1,
-    limit: int | None = None,
+    limit: Annotated[int, AtMost(TRAVERSE_MOST, zero_is_most=True)] | None = None,
     type: str | None = None,
     domain: str | None = None,
     as_of: str | None = None,

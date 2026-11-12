@@ -45,11 +45,14 @@ and its item 5 is items 1 and 2 below.
    `store.update_meta`, `_put_meta` with its columns, `meta_of`); the entity a
    name means, its canonical id and alias group, a document's node (done
    2026-11-08: `canonical_entity`, `alias_group`, `with_aliases`, one name
-   lookup, `doc_node_ids`; still open: `senses` matches a name by case where
-   the walk does not, and the page/project node split, finding 17); ending
-   and undoing edges (done 2026-11-08: `_end_edges` the one ending by id,
-   `correct_edge` one write; still open: the repairs that end without a
-   run, and a retired document's edges); the tried marks of the
+   lookup, `doc_node_ids`; `senses` matching by case was found to be no
+   defect, and the page/project node split, finding 17, was done
+   2026-11-10, with migration 69); ending and undoing edges (done
+   2026-11-08: `_end_edges` the one ending by id, `correct_edge` one
+   write; the heal's repairs ending under a run and a retired document's
+   edges taken back with it were done 2026-11-10, finding 2, and the
+   safety review of 2026-11-11 fixed its undo of one document of a
+   clean-up); the tried marks of the
    steps in one shape (done 2026-11-08: `store.step_tried`, the four keys
    kept, so no migration; the retry on a new text was the bug fix of
    2026-11-07). The rest, by cost: "The structure review of 2026-11-07:
