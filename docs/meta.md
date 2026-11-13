@@ -38,9 +38,15 @@ published, summary, titles). The step's own result and a new text
 
 Which documents a step reads again is said once, in `store.STAMPS`: a
 step's record (`photo`, `faces`, `place`, `world_dates`, `sections`,
-`quality`, or its `_tried` mark) and whether it carries the hash of the
-text it read (a new text is read again), the version of its reading (an
-older one is read again), or both. Every due query and count of the
+`quality`, `markup`, `private`, or its `_tried` mark) and whether it
+carries the hash of the text it read (a new text is read again), the
+version of its reading (an older one is read again), or both. Three more
+shapes: a string version read again when it is any other (`exact`: the
+private rules' stamp), the original's hash rather than the text's
+(`on_original`: the markup pass), and a mark that the text was read
+(`read_mark`). Extraction is the one step outside it: its version is the
+composed version of each document's domain subset, which its query
+computes (`select_for_extraction`). Every due query and count of the
 waiting is built from it (`_due`, and `_of_this_text` for "read from the
 text it holds now"); `tests/test_step_stamps.py` fails on such a test
 written by hand. A new step names its record there.

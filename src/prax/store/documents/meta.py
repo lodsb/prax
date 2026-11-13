@@ -425,18 +425,32 @@ class Stamp:
     version of its reading (``version``, the record's key for it: an older
     one is read again), or both. A step that read a text and kept nothing
     leaves a mark instead (``tried``, ``step_tried``), which a new text
-    clears (``TRIED_ON_TEXT``) and its own result replaces."""
+    clears (``TRIED_ON_TEXT``) and its own result replaces.
+
+    Three more shapes (the quality review of 2026-11-11, finding 29): a
+    version that is a string, read again when it is any other
+    (``exact``: the private rules' stamp); a record of the original's
+    bytes rather than the text's (``on_original``, the record's key for
+    the hash: the markup pass reads a page's own markup); and a mark that
+    the text was read, which a document with a text and no mark lacks
+    (``read_mark``)."""
 
     key: str
     on_text: bool = False
     version: str | None = None
     tried: bool = False
+    exact: str | None = None
+    on_original: str | None = None
+    read_mark: str | None = None
 
 
 # Every step whose record says whether a document waits for it: the one
 # place a due query or a count of the waiting is built from (``_due``). A
 # new step names its record here rather than writing the test again in a
-# shape of its own.
+# shape of its own. Extraction is the one left out: its version is the
+# composed ontology version of each document's domain subset, a value per
+# document the query computes, and its failure mark holds until that
+# version changes (``select_for_extraction``).
 STAMPS: dict[str, Stamp] = {
     "photos": Stamp("photo", version="v"),
     "faces": Stamp("faces", version="v"),
@@ -445,17 +459,21 @@ STAMPS: dict[str, Stamp] = {
     "sections": Stamp("sections", on_text=True),
     "quality": Stamp("quality", on_text=True, version="version"),
     **{step: Stamp(f"{step}_tried", tried=True) for step in TRIED_STEPS},
+    "markup": Stamp("markup", on_original="hash"),
+    "private": Stamp("private", exact="rules", read_mark="read"),
 }
 
 
 def _due(step: str, alias: str | None = None) -> str:
     """The SQL that keeps the documents ``step`` reads (``STAMPS``): no
-    record, a record of another text, or one of an older version, whose
-    test takes the step's current version as one ``?``; for a step that
-    marks a document tried, no mark. ``NOT`` it is what the step has read."""
+    record, a record of another text or another original, or one of an
+    older or another version, whose tests take the step's current version
+    as a ``?`` each (``version``, then ``exact``); for a step that marks a
+    document tried, no mark. ``NOT`` it is what the step has read."""
     stamp = STAMPS[step]
     meta = f"{alias}.meta" if alias else "meta"
     text = f"{alias}.text_hash" if alias else "text_hash"
+    original = f"{alias}.hash" if alias else "hash"
     if stamp.tried:
         return f"json_extract({meta}, '$.{stamp.key}') IS NULL"
     tests = []
@@ -464,6 +482,20 @@ def _due(step: str, alias: str | None = None) -> str:
     if stamp.version:
         tests.append(
             f"coalesce(json_extract({meta}, '$.{stamp.key}.{stamp.version}'), 0) < ?"
+        )
+    if stamp.exact:
+        tests.append(
+            f"coalesce(json_extract({meta}, '$.{stamp.key}.{stamp.exact}'), '') != ?"
+        )
+    if stamp.on_original:
+        tests.append(
+            f"coalesce(json_extract({meta}, '$.{stamp.key}.{stamp.on_original}'), '')"
+            f" != {original}"
+        )
+    if stamp.read_mark:
+        tests.append(
+            f"({text} IS NOT NULL"
+            f" AND json_extract({meta}, '$.{stamp.key}.{stamp.read_mark}') IS NULL)"
         )
     return "(" + " OR ".join(tests) + ")"
 

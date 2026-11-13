@@ -572,11 +572,13 @@ they block, then by cost. Sizes are the review's.
 - [x] (2026-11-13) 25. Two rules for "the same server": `models.same_server`.
 - [x] (2026-11-13) 26. `images=` takes its pair in opposite orders in the two
       runtimes, and the `Runtime` protocol has none.
-- [ ] 29 and 31. `STAMPS` stops before extraction, markup and private,
+- [x] (2026-11-13) 29 and 31. `STAMPS` stops before extraction, markup and private,
       and titles bypasses `_due`: an exact-match version, an
       `on_original` record (half a day). 31 done 2026-11-13: the titles
       hand-out's untried filter is `_due("titles")` in `title_rows`' SQL.
-      29 is open: extraction's selection, the markup and private passes.
+      29 done the same night for markup and private (`Stamp.exact`,
+      `on_original`, `read_mark`); extraction stays outside the registry,
+      its per-subset version a value its query computes, and says so.
 - [x] (2026-11-13) 30. The lost-readings ailment looks at figures only, though
       formulas are carried too.
 - [x] (2026-11-13) 8. The graph export does not say which document a node is: a

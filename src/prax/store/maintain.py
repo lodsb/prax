@@ -532,8 +532,7 @@ def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         "SELECT id FROM documents WHERE sensitivity IS NULL"
         f" AND {LIVE}"
         " AND coalesce(json_extract(meta, '$.sensitivity.by'), '') != 'human'"
-        " AND (coalesce(json_extract(meta, '$.private.rules'), '') != ?"
-        "  OR (text_hash IS NOT NULL AND json_extract(meta, '$.private.read') IS NULL))"
+        f" AND {_due('private')}"
         " ORDER BY id",
         (stamp,),
     ).fetchall()
@@ -558,7 +557,7 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         "SELECT id, hash, title, meta FROM documents"
         " WHERE mime IN ('text/html', 'application/xhtml+xml') AND title IS NOT NULL"
         f" AND {LIVE}"
-        " AND COALESCE(json_extract(meta, '$.markup.hash'), '') != hash ORDER BY id"
+        f" AND {_due('markup')} ORDER BY id"
     ).fetchall()
     onto = ontology.current()
     # the ingredient words of each language the craft pack's lexicon has

@@ -11705,3 +11705,23 @@ Still open from the review: 21 (a settings registry, which would refuse
 unknown keys in `prax.yaml`, a stage), 29 (extraction, markup and private
 as stamps, half a day), and C1 (`store/base.py` at 1,864 lines, split
 past 2,000).
+
+## 2026-11-13: the markup and private passes are stamps (quality finding 29)
+
+`store.STAMPS` could say a text hash, an integer version and a tried
+mark. The markup pass's record is of the original's bytes
+(`meta.markup.hash` against `documents.hash`). The private pass's is a
+string, the rules' stamp, read again when it is any other, with a mark
+that the text was read (`meta.private.read`). Both due tests were written
+by hand in `maintain`, where the registry's test could not see them.
+`Stamp` has the three shapes now (`exact`, `on_original`, `read_mark`),
+and `_due` builds them. `markup` and `private` are in the registry, and
+`maintain._markup` and `_private` select through `_due`. The registry's
+test builds its pattern from every field a record is read by, so a
+hand-written test of these is found as well.
+
+Extraction stays outside. Its version is the composed ontology version
+of each document's domain subset, which the selection computes per
+document, and its failure mark holds until that version changes. The
+registry's comment, `docs/meta.md` and CLAUDE.md say so. Test:
+`test_step_stamps.py::test_a_record_of_the_original_and_an_exact_version`.

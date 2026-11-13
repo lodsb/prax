@@ -86,9 +86,15 @@ def test_every_record_is_declared_and_its_test_written_once() -> None:
     # the tests on a record's version or text hash, written outside the
     # builder, are what drifted apart (the counts and the due queries)
     keys = "|".join(re.escape(s.key) for s in store.STAMPS.values())
-    written = re.compile(
-        rf"\$\.({keys})\.(v|version|text_hash)'|\$\.({keys})'\)\s*IS NULL"
-    )
+    # every field a record is read by, the shapes of finding 29 among them
+    fields = {"text_hash"} | {
+        f
+        for s in store.STAMPS.values()
+        for f in (s.version, s.exact, s.on_original, s.read_mark)
+        if f
+    }
+    named = "|".join(sorted(re.escape(f) for f in fields))
+    written = re.compile(rf"\$\.({keys})\.({named})'|\$\.({keys})'\)\s*IS NULL")
     root = Path(__file__).resolve().parents[1] / "src" / "prax"
     found = [
         f"{p.relative_to(root)}:{n}"
@@ -108,3 +114,36 @@ def test_a_title_clears_the_titles_steps_tried_mark(con: sqlite3.Connection) -> 
     assert "titles_tried" in store.get_meta(con, doc)
     store.retitle(con, doc, "A title at last", source="titles")
     assert "titles_tried" not in store.get_meta(con, doc)
+
+
+def test_a_record_of_the_original_and_an_exact_version(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 29 of the 2026-11-11 quality review: the markup pass's
+    record of the original's hash and the private pass's rules stamp and
+    read mark are stamps too, built by ``_due``."""
+    fresh = _doc(con, "A page never read for its markup. " * 5, {})
+    row = con.execute("SELECT hash FROM documents WHERE id = ?", (fresh,)).fetchone()
+    read = _doc(con, "A page read for its markup. " * 5, {})
+    mine = con.execute("SELECT hash FROM documents WHERE id = ?", (read,)).fetchone()
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.markup', json(?)) WHERE id = ?",
+        (json.dumps({"hash": mine[0]}), read),
+    )
+    other = _doc(con, "A page read when its bytes were others. " * 5, {})
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.markup', json(?)) WHERE id = ?",
+        (json.dumps({"hash": row[0]}), other),
+    )
+    con.commit()
+    waiting = _waiting(con, "markup")
+    assert fresh in waiting and other in waiting and read not in waiting
+    looked = _doc(con, "Looked at by the rules of r2. " * 5, {})
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.private', json(?)) WHERE id = ?",
+        (json.dumps({"rules": "r2", "read": True}), looked),
+    )
+    con.commit()
+    assert looked not in _waiting(con, "private", "r2")
+    assert looked in _waiting(con, "private", "r3")
+    assert fresh in _waiting(con, "private", "r2")
