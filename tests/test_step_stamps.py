@@ -98,3 +98,13 @@ def test_every_record_is_declared_and_its_test_written_once() -> None:
         if "json_extract" in line and written.search(line)
     ]
     assert found == []
+
+
+def test_a_title_clears_the_titles_steps_tried_mark(con: sqlite3.Connection) -> None:
+    """Finding 46 of the 2026-11-11 quality review: each step's result
+    clears its tried mark, the titles step's too."""
+    doc = _doc(con, "A document without a title yet. " * 5, {})
+    store.step_tried(con, doc, "titles", "run-1", "no title kept")
+    assert "titles_tried" in store.get_meta(con, doc)
+    store.retitle(con, doc, "A title at last", source="titles")
+    assert "titles_tried" not in store.get_meta(con, doc)

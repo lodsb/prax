@@ -4,8 +4,10 @@ Everything else (the door, the MCP proxy, the importers, the one-off
 scripts) calls these functions: ingest in two steps (``register``,
 ``index_text``), search, the graph, pages, jobs. It was one file until it
 passed four thousand lines; it is a package now, one module per concern,
-and the surface is unchanged — everything is still ``store.<name>`` and
-every module re-exports here.
+and every public name a caller outside the store uses is re-exported
+here as ``store.<name>``. A part's private helpers (``_serialized``,
+``rows_in``, ``first_fresh_id``) stay in the package that holds them
+(``store.base``), out of this surface since 7175aa8.
 
 Concurrency: the door runs sync handlers on worker threads, so connections
 are created with ``check_same_thread=False``, reads take a connection per

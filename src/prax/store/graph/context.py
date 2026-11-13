@@ -58,9 +58,10 @@ def document_facts(
     # edges whose node is kept on their document lost the other's facts
     # (the safety review of 2026-11-11)
     nodes: dict[int, set[int]] = {}
+    onto = ontology.current()  # once, not once a document (finding 32)
     for i in doc_ids:
         try:
-            nodes[i] = set(doc_node_ids(con, i))
+            nodes[i] = set(doc_node_ids(con, i, onto))
         except NotFound:  # no title yet, so no node
             nodes[i] = set()
     every = sorted(set().union(*nodes.values()))

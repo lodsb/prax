@@ -89,7 +89,7 @@ def carry_ids(
     the overlap, when that is ``at_least`` or more, else ``(None, 0.0)``.
     The largest new group chooses first, so it keeps a contested id, and an
     old id is given once. A group given None takes a fresh id, never a
-    dissolved one's (``store.first_fresh_id``). The communities, the face
+    dissolved one's (``store.base.first_fresh_id``). The communities, the face
     groups and the event candidates each wrote this until 2026-11-09, the
     communities in input order (structure review finding 18)."""
     holds: dict[K, list[int]] = {}

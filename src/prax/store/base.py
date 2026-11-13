@@ -895,11 +895,15 @@ def _claim_node(
     etype: str,
     name: str,
     source_doc: int | None = None,
+    onto: ontology.Ontology | None = None,
 ) -> None:
     """Link an entity of a document type to its document (``_node_doc``)
     when it has no document yet; what ``_link`` does for both ends of an
-    edge. An entity of another type is no document's. Does not commit."""
-    onto = ontology.current()
+    edge. An entity of another type is no document's. ``onto`` is the
+    ontology the caller holds: ``ontology.current()`` stats every module
+    file, and two more calls an edge made each link 55-80% slower (the
+    quality review of 2026-11-11, findings 11 and 32). Does not commit."""
+    onto = onto or ontology.current()
     if etype not in onto.entity_types or not onto.is_a(etype, "document"):
         return
     row = con.execute(

@@ -557,7 +557,7 @@ they block, then by cost. Sizes are the review's.
 
 **Performance, an hour each.**
 
-- [ ] 11 and 32. Every edge write calls `ontology.current()` three
+- [x] (2026-11-13) 11 and 32. Every edge write calls `ontology.current()` three
       times, each statting some 19 files (1,700 to 650 µs an edge with the
       `onto` passed); `document_facts` 20 times slower. Pass it, and
       memoize the stamp for a second.
@@ -583,16 +583,16 @@ they block, then by cost. Sizes are the review's.
 
 **Docs, minutes each.**
 
-- [ ] 40 and 45. Invariant 3, `architecture.md:328` and the store's
+- [x] (2026-11-13) 40 and 45. Invariant 3, `architecture.md:328` and the store's
       docstring say every name is re-exported on `store`; four
       `store.<name>` references in CLAUDE.md and `clusters.py:92` no
       longer resolve.
-- [ ] 42 and 43. `architecture.md`'s clock row points to a binding that
+- [x] (2026-11-13) 42 and 43. `architecture.md`'s clock row points to a binding that
       moved to `api.passes.JOBS`; its module table lacks citations,
       schemaorg, `errors`, `ml.sessions`, `parsers.annotate`.
-- [ ] 44. CLAUDE.md's store imports lack `errors`, its config readers
+- [x] (2026-11-13) 44. CLAUDE.md's store imports lack `errors`, its config readers
       `flag`.
-- [ ] 46. `docs/meta.md` says a step's result clears its tried mark; a
+- [x] (2026-11-13) 46. `docs/meta.md` says a step's result clears its tried mark; a
       title from the titles step leaves `titles_tried`.
 
 **Structure (the critic's).**

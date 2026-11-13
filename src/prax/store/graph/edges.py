@@ -282,8 +282,8 @@ def _link(
     dst = _entity_id(con, edge.dst, edge.dst_type)
     # which document a node of a document type is, kept the first time an
     # edge reaches it (migration 69, ``node_document``)
-    _claim_node(con, src, edge.src_type, edge.src, source_doc)
-    _claim_node(con, dst, edge.dst_type, edge.dst, source_doc)
+    _claim_node(con, src, edge.src_type, edge.src, source_doc, onto)
+    _claim_node(con, dst, edge.dst_type, edge.dst, source_doc, onto)
     cur = con.execute(
         "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
         " ontology_version, evidence, producer, run, valid_from,"
@@ -402,7 +402,9 @@ def _media_node(
     return None if got is None else (int(got[0]), str(got[1]), str(got[2]))
 
 
-def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
+def doc_node_ids(
+    con: sqlite3.Connection, doc_id: int, onto: ontology.Ontology | None = None
+) -> list[int]:
     """The entities that are this document in the graph: those called by
     its node name (``document_node``) as a document of any type (a reading
     and an importer may name it a ``paper`` and a ``datasheet``, and a
@@ -415,7 +417,7 @@ def doc_node_ids(con: sqlite3.Connection, doc_id: int) -> list[int]:
     kept = _media_node(con, doc_id, row)
     if kept is not None:
         name = kept[1]
-    onto = ontology.current()
+    onto = onto or ontology.current()
     canon = {
         int(r[0])
         for r in con.execute(

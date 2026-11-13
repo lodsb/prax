@@ -528,6 +528,10 @@ def _retitle_document(
     meta["title_source"] = source
     meta["title_run"] = run
     meta["title_confidence"] = confidence
+    # a title is the titles step's result, which clears its tried mark as a
+    # summary, a date and a genre clear theirs (quality review 2026-11-11,
+    # finding 46)
+    meta.pop("titles_tried", None)
     _put_meta(con, doc_id, meta, title=title)
     return str(old)
 

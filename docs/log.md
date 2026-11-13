@@ -11517,3 +11517,45 @@ answer in three shapes, a change to their callers left for now.
 Tests: `test_maintain.py`, `test_budget.py` (2), `test_models.py`,
 `test_schemaorg.py`, `test_document_nodes.py`, `test_cleanup.py`,
 `test_api.py`, `test_unretire.py`, and the UI's `dateLine`.
+
+## 2026-11-13: one ontology read an edge, and the docs caught up (quality findings 11, 32, 40, 42 to 46)
+
+**11 and 32.** `ontology.current()` stats every module, pack, sameness
+and lexicon file on each call, 0.33 to 0.39 ms on the desktop. `_link`
+read it once and `_claim_node`, added with migration 69, read it twice
+more for the two ends of every edge. `_claim_node` now takes the
+ontology `_link` holds. `doc_node_ids` takes one too, and
+`document_facts` reads it once for an ask's documents, not once a
+document. Measured on a scratch store, 1,000 `cites` edges written one at
+a time: 7.2 ms an edge with three reads, 4.9 ms with one. Each write's
+commit is most of what is left. Throttling `current()`'s stat to once a
+second would help every caller, but it was not done: a test that edits a
+module file would read the old one for that second.
+
+**40 and 45.** Invariant 3 said the store's `__init__` re-exports every
+name; since 7175aa8 it re-exports the public ones, and a part's private
+helpers stay on their package. CLAUDE.md, `architecture.md` and the
+package's docstring say so now. The five references that did not resolve
+name their package: `store.base._reading`, `store.base._serialized`,
+`store.graph._refresh_name`, `store.retrieval.expand_query_senses`, and
+`store.base.first_fresh_id` in `ml.clusters`. A script resolving every
+`store.<name>` in CLAUDE.md and `architecture.md` also found
+`store.maintain.PASSES` (the function shadows the module), now
+`store.PASSES`.
+
+**42 and 43.** The clock's row points to a `DoorJob` in
+`api.passes.JOBS`, not to a binding in `prax.api` that is gone. `fixes`
+is named among the clock's entries. `store.graph`'s row has `citations`
+and `schemaorg`, and `store.base`'s has the tokens and the ending of edges
+with its undo. `prax.errors`, `prax.ml.sessions` and
+`prax.parsers.annotate` have rows.
+
+**44.** The store may also import `errors`, and the config readers include
+`flag`, the yes-or-no reader that refuses any other word.
+
+**46.** A title now clears `titles_tried`, as a summary, a date and a
+genre clear theirs; `docs/meta.md` said it did.
+
+41 was already true: no route catches a plain `KeyError` since findings
+14 and 24. Tests: `test_document_nodes.py::test_an_edge_reads_the_ontology_once`,
+`test_step_stamps.py::test_a_title_clears_the_titles_steps_tried_mark`.

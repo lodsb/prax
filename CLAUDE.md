@@ -63,11 +63,14 @@ revisit threshold, under "Decision thresholds" below.
    `index_text`. `ingest_text` composes both for plain text. The store
    is a package of ten modules, in this order: `base`, `documents`,
    `retrieval`, `graph`, `pages`, `jobs`, `summary`, `repair`,
-   `maintain`, `backup`. Its `__init__` re-exports every name, so a
-   caller writes `store.<name>` and never imports a submodule. Inside
+   `maintain`, `backup`. Its `__init__` re-exports every public name,
+   so a caller outside the store writes `store.<name>` and never imports a
+   submodule; a part's private helpers (`_serialized`, `rows_in`) stay in
+   the package that holds them (`store.base._serialized`). Inside
    the package, a module imports only from the ones before it in that
    order. At the top of a module the store imports only what is below
-   it (config, the packs' manifests, `text`, `ml`, `graph.ontology`); a
+   it (config, `errors`, the packs' manifests, `text`, `ml`,
+   `graph.ontology`); a
    pass that needs a
    step's logic calls up inside a function (`tests/test_invariants.py`).
    A module past two thousand lines becomes a package of parts
@@ -88,8 +91,8 @@ revisit threshold, under "Decision thresholds" below.
    `scripts/work.py` runs it) and never opens the database. The door consumes its own drop
    folder and holds the vector delta indexes. Inside the door, reads
    use a connection per request thread and never take the store's lock
-   (`store._reading`: a WAL snapshot and the busy-retry only). Writes
-   go one at a time behind the lock (`store._serialized`). The one
+   (`store.base._reading`: a WAL snapshot and the busy-retry only). Writes
+   go one at a time behind the lock (`store.base._serialized`). The one
    shared connection, which serves the change stamp, has a lock of its
    own. The index views and deltas are behind `_INDEX_LOCK` for the
    milliseconds a search or an add takes. The MCP server is a proxy of
@@ -110,7 +113,7 @@ revisit threshold, under "Decision thresholds" below.
    read-only)
    still open the file.
    WAL, a 30 s busy timeout and a retry with rollback in
-   `store._serialized` are the safety net for those, not a mechanism to
+   `store.base._serialized` are the safety net for those, not a mechanism to
    rely on.
 5. **The MCP server is a thin proxy.** *(checked)* `prax.mcp_server` exposes tools
    that each make one HTTP call to the door (`prax.client`, `PRAX_DOOR`,
@@ -321,7 +324,7 @@ A word the graph adds to a query (through an entity's label) is
 searched only where the thing it names lives: its type's domains and
 the domains of the documents that say something about it. It is merged
 with the plain words by BM25 score, not given a list of its own, so it
-adds no vote (`store.expand_query_senses`; `Apfelkuchen` -> `apple`
+adds no vote (`store.retrieval.expand_query_senses`; `Apfelkuchen` -> `apple`
 the ingredient, not the Logic manuals). A rare query word (under 50 documents) also
 matches the other forms of it the library uses, a plural or inflection
 ending added or taken off, and only forms in the word's own range
@@ -517,7 +520,8 @@ reference `docs/ask.md`.
 - What a host chooses is configuration, not code. It lives in
   `prax.yaml` in the data directory, read through `prax.models` for the
   models and steps (`resolve(step)`, `runtime(spec)`) and `prax.config`
-  for the rest (`setting`, `number`, `words`, by dotted path:
+  for the rest (`setting`, `number`, `words`, and `flag` for a yes or
+  no that refuses any other word, by dotted path:
   `embeddings`, `vectors`, `rerank`, `parse`, `citations`, `door`,
   `ontology`, `paths`). A module never invents an environment variable
   of its own. It names a setting, and the matching `PRAX_*` variable
@@ -598,7 +602,7 @@ reference `docs/ask.md`.
   language this host shows (`graph.language`), rebuilt by the `names`
   pass of `prax maintain`. Every entity carries a label of its own name
   (migrations 23 and 24), so the cache can always be rebuilt from the
-  labels, and `store._refresh_name` records the name it replaces before
+  labels, and `store.graph._refresh_name` records the name it replaces before
   replacing it — a name this design drops is one nothing can put back.
   One preferred name per language (migration 22 holds it) and any number
   of alternatives, which is the shape SKOS gives a concept. A label carries its language, the producer, the run

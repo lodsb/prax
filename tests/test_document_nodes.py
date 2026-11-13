@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from prax import store
 from prax.store.base import _claim_document_nodes
 from prax.store.repair.graph import (
@@ -228,3 +230,34 @@ def test_a_note_retitled_by_its_sync_hands_its_node_on(
     assert members["count"] == 1
     assert members["items"][0]["doc_id"] == new
     assert members["items"][0]["title"] == "Sensor notes, raa2p (lab)"
+
+
+def test_an_edge_reads_the_ontology_once(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Findings 11 and 32 of the 2026-11-11 quality review: each
+    ``ontology.current()`` stats every module file; ``_link`` holds one
+    and hands it to ``_claim_node``, which made two more calls an edge, and
+    an ask's facts read it once, not once a document."""
+    from prax.graph import ontology
+
+    doc = _doc(con, "A source. " * 20, "Source")
+    real = ontology.current
+    calls: list[int] = []
+
+    def counting() -> ontology.Ontology:
+        calls.append(1)
+        return real()
+
+    monkeypatch.setattr(ontology, "current", counting)
+    store.link(
+        con,
+        store.Edge("Paper A", "paper", "cites", "Paper B", "paper"),
+        source_doc=doc,
+        producer="test",
+    )
+    assert len(calls) == 1
+    calls.clear()
+    other = _doc(con, "Another source. " * 20, "Other")
+    store.document_facts(con, [doc, other])
+    assert len(calls) == 1
