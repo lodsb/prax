@@ -170,3 +170,26 @@ def test_similarity_and_match() -> None:
     assert refs.match([(1, 0.9), (2, 0.88), (3, 0.83)]) == ([1, 2], "ambiguous")
     assert refs.match([(1, 0.5)]) == ([], "none")
     assert refs.match([]) == ([], "none")
+
+
+def test_a_reference_list_is_known_in_the_librarys_languages() -> None:
+    """Finding 28 of the 2026-11-11 quality review: French, Spanish and
+    Italian reference lists were read as prose; the citations pass's title
+    stopwords were English, in the store."""
+    from prax.text import references
+
+    for heading in (
+        "Références",
+        "Bibliographie",
+        "Referencias",
+        "Bibliografía",
+        "Bibliografia",
+        "Quellenverzeichnis",
+        "7. References",
+    ):
+        assert references.is_bibliography_heading(heading), heading
+    assert not references.is_bibliography_heading("Related work")
+    from prax.store.graph import citations
+
+    skip = citations._skip_tokens()
+    assert {"using", "für", "pour", "para", "per"} <= skip

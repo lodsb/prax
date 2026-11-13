@@ -195,12 +195,16 @@ def _placeholder_entities(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def _reference_entities(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    # 64: "Surname et al. [12, 13]" runs past the 24 this was until 2026-11-09
-    short = con.execute(
-        "SELECT id, name, type FROM entities WHERE length(name) <= 64"
+    # every name, as extraction tests every name: a cap of 64 characters
+    # left a long "Surname et al. [12, …, 20]" dropped by the one and never
+    # listed by the other (the quality review of 2026-11-11, finding 9);
+    # the lexicon read once, not once a name
+    lex = ontology.lexicon()
+    rows = con.execute(
+        "SELECT id, name, type FROM entities WHERE name GLOB '*[0-9]*'"
     ).fetchall()
     return _with_edge_counts(
-        con, [r for r in short if ontology.reference_name(r["name"] or "")]
+        con, [r for r in rows if ontology.reference_name(r["name"] or "", lex)]
     )
 
 

@@ -109,8 +109,26 @@ _INLINE_MARK = re.compile(r"(?<=[.\d)\]])\s+(?=\[\d{1,4}\]\s)")
 _LINE_MARK = re.compile(
     r"\n\s*(?=(?:[-*•]\s*)?(?:\[\d{1,4}\]|\(\d{1,4}\)|\d{1,4}\.)\s)"
 )
-# the bibliography headings the chunker and the pass recognise
-_BIBLIOGRAPHY = ("references", "bibliography", "literatur", "works cited", "literature")
+# the bibliography headings the chunker and the pass recognise, in the
+# library's languages: a French or Spanish paper's reference list was read
+# as prose, with no cites edges and no word of it (the quality review of
+# 2026-11-11, finding 28). Here and not in a lexicon: the chunker reads it,
+# and ``prax.text`` imports nothing of prax
+_BIBLIOGRAPHY = (
+    "references",
+    "bibliography",
+    "literatur",
+    "works cited",
+    "literature",
+    "quellen",
+    "quellenverzeichnis",
+    "références",
+    "bibliographie",
+    "referencias",
+    "bibliografía",
+    "bibliografia",
+    "riferimenti bibliografici",
+)
 
 
 _STRAY = re.compile(r"[´`ˆ¨˜]")  # an accent the extractor set beside its letter

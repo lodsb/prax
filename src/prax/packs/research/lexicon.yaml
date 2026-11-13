@@ -55,3 +55,15 @@ venues:
   spelled_units: [first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth, eleventh, twelfth, thirteenth, fourteenth, fifteenth, sixteenth, seventeenth, eighteenth, nineteenth]
   spelled_tens: {twenty: 20, thirty: 30, forty: 40, fifty: 50}
   spelled_tenths: {twentieth: 20, thirtieth: 30, fortieth: 40, fiftieth: 50}
+
+# The citations pass (`store.graph.citations`): the words a reference's
+# title is not matched by, so the few searches it makes for an entry are
+# spent on what names the paper ("für", "pour" and "using" name nothing).
+# A list per language, like craft's ingredient words.
+citations:
+  title_skip:
+    en: [for, with, from, using, based, analysis, approach, method, methods, model, models, system, systems, study, new, via, towards, toward]
+    de: [und, für, mit, von, der, die, das, den, dem, des, ein, eine, einer, zur, zum, über, eines, analyse, ansatz, methode, modell, system, studie, neue, neuer]
+    fr: [pour, avec, les, des, une, sur, dans, par, analyse, approche, méthode, modèle, système, étude, nouvelle, nouveau, vers]
+    es: [para, con, los, las, una, del, por, sobre, análisis, enfoque, método, modelo, sistema, estudio, nuevo, nueva, hacia]
+    it: [per, con, gli, una, del, della, delle, dei, sul, analisi, approccio, metodo, modello, sistema, studio, nuovo, nuova, verso]

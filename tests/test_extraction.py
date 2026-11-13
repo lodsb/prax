@@ -669,6 +669,20 @@ def test_a_number_the_text_refers_by_is_no_name_at_any_pass() -> None:
     assert not hasattr(repair, "REFERENCE_NAME")
 
 
+def test_a_reference_number_is_known_in_the_librarys_languages() -> None:
+    """Findings 9 and 10 of the 2026-11-11 quality review: the words a
+    number follows are the lexicon's, German and French among them, and a
+    short title with its number is a name where only surnames are not."""
+    for name in ("Abb. 3", "Abbildung 3", "Tabelle 2", "Gl. (4)", "Kapitel 5"):
+        assert ontology.reference_name(name), name
+    for name in ("Tableau 2", "Figura 1", "Müller u. a. [3]"):
+        assert ontology.reference_name(name), name
+    for name in ("Hochreiter and Schmidhuber [12, 13]", "Dupont et Martin [4]"):
+        assert ontology.reference_name(name), name
+    for name in ("BERT [4]", "Long Short-Term Memory [7]", "Deep Residual Learning"):
+        assert not ontology.reference_name(name), name
+
+
 def test_every_claude_request_is_built_and_counted_once() -> None:
     # one runtime builds every request to Claude, and what a call used is
     # counted once: by the ledger's accumulator, or by the caller's result

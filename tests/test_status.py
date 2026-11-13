@@ -89,3 +89,18 @@ def test_retracted_is_its_own_state() -> None:
         "retracted"
     )
     assert status.stale_rel("retracted") == "invalidates"
+
+
+def test_every_language_of_a_key_has_its_stale_words() -> None:
+    """Finding 27 of the 2026-11-11 quality review: the keys named Spanish
+    and Italian, the states did not, so "Estado: obsoleto" was kept as an
+    unknown state, never stale; and front matter read the English key."""
+    from prax.text import status
+
+    for line in ("Estado: obsoleto", "Stato: deprecato", "Zustand: veraltet"):
+        got = status.read(f"# Note\n\n{line}\n", "docs/n.md")
+        assert got is not None and got.stale, line
+    got = status.read("---\nzustand: veraltet\n---\n# Note\n", "docs/n.md")
+    assert got is not None and got.state == "superseded"
+    got = status.read("---\nretracted: 2026-03-01\n---\n# Note\n", "docs/n.md")
+    assert got is not None and (got.state, got.since) == ("retracted", "2026-03-01")

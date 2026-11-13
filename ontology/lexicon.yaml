@@ -180,6 +180,68 @@ not_a_name:
     - several
     - some
     - other
+  # what a text refers to by a number: with one after it ("Fig. 3",
+  # "Abb. 3", "Tabelle 2", "Gl. (4)", "Kapitel 5") the name is that number,
+  # not a thing (``ontology.reference_name``; quality review 2026-11-11,
+  # finding 10). Matched whole, case aside
+  referred_by:
+    - ref
+    - ref.
+    - reference
+    - fig
+    - fig.
+    - figure
+    - table
+    - tab
+    - tab.
+    - eq
+    - eq.
+    - equation
+    - section
+    - sec
+    - sec.
+    - chapter
+    - ch
+    - ch.
+    - abb
+    - abb.
+    - abbildung
+    - tabelle
+    - gl
+    - gl.
+    - gleichung
+    - abschnitt
+    - kapitel
+    - kap.
+    - tableau
+    - équation
+    - chapitre
+    - figura
+    - tabla
+    - ecuación
+    - capítulo
+    - sección
+    - tabella
+    - equazione
+    - capitolo
+    - sezione
+  # how a citation joins its surnames: after one ("Smith et al. [12]",
+  # "Müller u. a. [3]") or between two or three ("Hochreiter and
+  # Schmidhuber [7]"). Such a name with a bracketed number is a citation
+  # where a title belongs; a short title with its number ("BERT [4]",
+  # "Long Short-Term Memory [7]") is a name (finding 9)
+  cited_after:
+    - et al.
+    - et al
+    - u. a.
+    - u.a.
+  cited_with:
+    - and
+    - "&"
+    - und
+    - et
+    - y
+    - e
   # a name that begins with one of these is not a thing at all, whatever
   # its case
   never_start:
@@ -343,18 +405,22 @@ not_a_venue:
 # of the data live on the NAS" is a sentence, not a status (the quality
 # review of 2026-10-05, finding 7).
 status:
+  # every language a key is in has its state words below too: a key the
+  # states do not cover kept a stale note's word as an unknown state,
+  # never stale (the quality review of 2026-11-11, finding 27;
+  # tests/test_status.py holds the two together)
   keys: [status, zustand, statut, estado, stato]
   states:
-    retired: [retired, withdrawn, archived, abandoned, zurückgezogen, archiviert, eingestellt, retiré, archivé, abandonné]
-    superseded: [superseded, replaced, obsolete, outdated, ersetzt, überholt, veraltet, abgelöst, remplacé, obsolète, périmé]
-    invalid: [invalid, invalidated, void, wrong, ungültig, falsch, invalide]
-    retracted: [retracted, widerrufen, rétracté]
-    deprecated: [deprecated, abgekündigt, déprécié]
-    current: [current, active, accepted, final, approved, valid, aktuell, gültig, aktiv, actuel]
-    draft: [draft, proposed, wip, entwurf, brouillon]
+    retired: [retired, withdrawn, archived, abandoned, zurückgezogen, archiviert, eingestellt, retiré, archivé, abandonné, retirado, archivado, abandonado, ritirato, archiviato, abbandonato]
+    superseded: [superseded, replaced, obsolete, outdated, ersetzt, überholt, veraltet, abgelöst, remplacé, obsolète, périmé, obsoleto, sustituido, reemplazado, sostituito, superato]
+    invalid: [invalid, invalidated, void, wrong, ungültig, falsch, invalide, inválido, erróneo, invalido, errato]
+    retracted: [retracted, widerrufen, rétracté, retractado, ritrattato]
+    deprecated: [deprecated, abgekündigt, déprécié, desaconsejado, deprecato]
+    current: [current, active, accepted, final, approved, valid, aktuell, gültig, aktiv, actuel, vigente, actual, válido, aceptado, attuale, valido, approvato]
+    draft: [draft, proposed, wip, entwurf, brouillon, borrador, propuesto, bozza, proposto]
   # what makes a line that opens with a state word a status: "Superseded
   # by …", "Retired since 2026-10", "Veraltet seit …"
-  after: [by, since, "on", as of, in favour of, in favor of, durch, seit, am, ab, par, depuis]
+  after: [by, since, "on", as of, in favour of, in favor of, durch, seit, am, ab, par, depuis, por, desde, da, dal]
 
 # the words of a notice on a page that is not what the page says: a
 # copyright block, a licence, a reprint permission. A passage's citation

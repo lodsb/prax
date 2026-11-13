@@ -543,15 +543,15 @@ they block, then by cost. Sizes are the review's.
 
 **Languages and the owner's library, an hour each.**
 
-- [ ] 9. `BRACKETED_WORDS = 3` drops a title of one to three words that
+- [x] (2026-11-13) 9. `BRACKETED_WORDS = 3` drops a title of one to three words that
       carries its citation as a reference number: tell a citation by its
       shape; count on a copy how many listed entities are titles.
-- [ ] 10. `reference_name` knows English words only for figure, table,
+- [x] (2026-11-13) 10. `reference_name` knows English words only for figure, table,
       equation, chapter: a `numbered:` list in the lexicon, shared with
       `figures._CAPTION_LINE`.
-- [ ] 27. The status lexicon's keys cover five languages, its states
+- [x] (2026-11-13) 27. The status lexicon's keys cover five languages, its states
       three, and front matter reads `status:` only.
-- [ ] 28. The citations pass's bibliography headings and title stopwords
+- [x] (2026-11-13) 28. The citations pass's bibliography headings and title stopwords
       are English and German, in the store: into the research pack's
       lexicon.
 

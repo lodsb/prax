@@ -191,10 +191,17 @@ def read(
     w = words if words is not None else lexicon_words()
     front = _front_matter(text)
     if front:
+        # the lexicon's keys, ``status`` among them: front matter read the
+        # English key alone (the quality review of 2026-11-11, finding 27)
+        key = next(
+            (k for k in ("status", *w.keys) if front.get(k.lower())), "status"
+        ).lower()
+        if key != "status" and key in front:
+            front = {**front, "status": front[key]}
         first = (front.get("status") or "").split()[:1]
         state = w.state(first[0]) if first else None
         since = None
-        for key in ("retired", "superseded", "deprecated", "invalidated"):
+        for key in ("retired", "superseded", "deprecated", "invalidated", "retracted"):
             if front.get(key):
                 state = state or w.state(key) or key
                 found = _DATE.search(front[key])

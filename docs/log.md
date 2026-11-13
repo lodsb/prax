@@ -11632,3 +11632,46 @@ Tests: `test_schema.py::test_every_edge_column_is_written_and_restated`,
 `test_models.py::test_one_rule_says_two_addresses_are_one_server`,
 `test_heal.py::test_formula_readings_a_replacing_read_dropped_come_back`;
 the references pass's own tests in `test_maintain.py`.
+
+## 2026-11-13: a reference, a status and a bibliography in the library's languages (quality findings 9, 10, 27, 28)
+
+**10.** `ontology.reference_name`, the one test that a number a text
+refers by is no name, knew English words only. "Abb. 3", "Tabelle 2",
+"Gl. (4)" and "Tableau 2" reached the graph as entities. The words are
+the lexicon's now (`not_a_name.referred_by`, in English, German, French,
+Spanish and Italian), and the pattern is built from them, cached on the
+list.
+
+**9.** A name around a bracketed number was dropped when what was left
+had three words or fewer. That took "BERT [4]" and "Long Short-Term
+Memory [7]" for citations. It is a citation now by its shape: one
+surname with `cited_after` ("Smith et al. [12]", "Müller u. a. [3]"), or
+two or three surnames joined by `cited_with` ("Hochreiter and
+Schmidhuber [7]", "Dupont et Martin [4]"). A lone capitalised word with
+its number ("Smith [3]", "BERT [4]") is kept as a name; a surname alone
+cannot be told from a short title. The heal pass's listing had a cap of
+64 characters, so a long citation was dropped by extraction and never
+listed. It now reads every name holding a digit, with the lexicon read
+once (`reference_name(name, lex)`).
+
+**27.** The status lexicon's keys named Spanish and Italian, and its
+states held no word of either. "Estado: obsoleto" was kept as an unknown
+state, never stale. The states and `after` words now cover all five key
+languages. Front matter reads every lexicon key, not `status` alone, and
+a `retracted:` date is read like `retired:`. `test_status.py` reads a
+stale line in each language.
+
+**28.** The bibliography headings were English and German, so a French,
+Spanish or Italian reference list was read as prose: no reference
+chunks, no `cites` edges. `text.references` has Références,
+Bibliographie, Referencias, Bibliografía, Bibliografia, Riferimenti
+bibliografici, Quellen and Quellenverzeichnis. The headings stay in
+`prax.text`, which the chunker reads and which imports nothing of prax.
+Such a document gets reference chunks at its next parse or rechunk. The
+citations pass's title stopwords were an English list in the store; they
+are the research pack's `citations.title_skip`, a list per language,
+read once per reference list.
+
+Tests: `test_extraction.py::test_a_reference_number_is_known_in_the_librarys_languages`,
+`test_status.py::test_every_language_of_a_key_has_its_stale_words`,
+`test_references.py::test_a_reference_list_is_known_in_the_librarys_languages`.

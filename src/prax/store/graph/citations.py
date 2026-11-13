@@ -17,6 +17,7 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from prax.graph import ontology
 from prax.text import arxiv, references
 
 from ..base import LIVE, NotFound, _reading, live, meta_of, now
@@ -46,26 +47,22 @@ class _Progress(Protocol):
 
 REFERENCES_PRODUCER = "references"
 _TITLE_TOKEN = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
-_SKIP_TOKENS = references._NOISE | {
-    "for",
-    "with",
-    "from",
-    "using",
-    "based",
-    "analysis",
-    "approach",
-    "method",
-    "methods",
-    "model",
-    "models",
-    "system",
-    "systems",
-    "study",
-    "new",
-    "via",
-    "towards",
-    "toward",
-}
+
+
+def _skip_tokens() -> frozenset[str]:
+    """The words a reference's title is not matched by: an entry's own
+    noise (``references._NOISE``) and the research pack's
+    ``citations.title_skip``, a list per language (English only in this
+    module until the quality review of 2026-11-11, finding 28)."""
+    section = ontology.lexicon().section("citations") or {}
+    words = {
+        str(w).lower()
+        for ws in (section.get("title_skip") or {}).values()
+        for w in ws or []
+    }
+    return frozenset(references._NOISE | words)
+
+
 CANDIDATES = 10  # library documents scored per entry
 
 
@@ -121,12 +118,17 @@ def _library(con: sqlite3.Connection) -> dict[int, dict[str, Any]]:
     return lib
 
 
-def _candidates(con: sqlite3.Connection, ref: references.Reference) -> list[int]:
+def _candidates(
+    con: sqlite3.Connection,
+    ref: references.Reference,
+    skip: frozenset[str] | None = None,
+) -> list[int]:
     """Library documents whose field shares the reference's title words:
     the title's content tokens OR-ed over the document field, BM25's
     top ``CANDIDATES``."""
     toks = [t.lower() for t in _TITLE_TOKEN.findall(ref.title)]
-    toks = [t for t in toks if t not in _SKIP_TOKENS]
+    skip = skip if skip is not None else _skip_tokens()
+    toks = [t for t in toks if t not in skip]
     if len(toks) < 2:
         return []
     expr = " OR ".join(f'"{t}"' for t in toks[:12])
@@ -157,6 +159,7 @@ def resolve_references(
     ``entries`` are the entries' texts (the reference chunks, or a
     bibliography's text split)."""
     out: list[tuple[int, str, float, references.Reference]] = []
+    skip = _skip_tokens()  # once a list, not once an entry
     for entry in entries:
         ref = references.parse(entry)
         if not ref.title:
@@ -168,7 +171,7 @@ def resolve_references(
             out.append((by_arxiv[ref.arxiv], "arxiv", 1.0, ref))
             continue
         scored = []
-        for cid in _candidates(con, ref):
+        for cid in _candidates(con, ref, skip):
             d = lib.get(cid)
             if d is None or cid == doc_id:
                 continue

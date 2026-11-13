@@ -669,6 +669,11 @@ class Lexicon:
     exact: frozenset[str] = frozenset()
     vague_start: tuple[str, ...] = ()
     never_start: tuple[str, ...] = ()
+    # a number a text refers by, and how a citation joins its surnames
+    # (``reference_name``)
+    referred_by: tuple[str, ...] = ()
+    cited_after: tuple[str, ...] = ()
+    cited_with: tuple[str, ...] = ()
     # which end of a part_of is the part (``part_of_suspect``)
     part: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
     numbered: tuple[str, ...] = ()
@@ -744,6 +749,9 @@ def parse_lexicon(text: str, packs: Iterable[str] = ()) -> Lexicon:
         exact=frozenset(str(x).lower() for x in (words.get("exact") or [])),
         vague_start=seq(words.get("vague_start")),
         never_start=seq(words.get("never_start")),
+        referred_by=seq(words.get("referred_by")),
+        cited_after=seq(words.get("cited_after")),
+        cited_with=seq(words.get("cited_with")),
         part=cues(parts.get("part")),
         numbered=seq(parts.get("numbered")),
         whole=cues(parts.get("whole")),
@@ -805,33 +813,79 @@ def _folded(name: str) -> str:
 
 # A number a text refers by is never a name: a bare one or a run of them
 # ("12", "3, 4"), a reference, figure, table, equation, section or chapter
-# number ("[12]", "fig. 3", "eq. (2)"), and a short name around a bracketed
-# reference ("supporting document [34]")
+# number ("[12]", "fig. 3", "Abb. 3"), and surnames around a bracketed
+# reference ("Smith et al. [12]"); the words are the lexicon's
 _NUMBERS = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
-_NUMBERED = re.compile(
-    r"^(?:\[|\()?\s*"
-    r"(?:ref\.?|reference|fig\.?|figure|table|eq\.?|equation|section|sec\.?"
-    r"|chapter|ch\.?)"
-    r"\s*\(?\d{1,4}(?:\s*[-–,]\s*\d{1,4})?\)?\s*(?:\]|\))?$",
-    re.IGNORECASE,
-)
 _BRACKETED = re.compile(r"\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]")
-BRACKETED_WORDS = 3  # a name around a bracketed reference of this many words
+# a surname as a citation prints it: a capital, then letters, an
+# apostrophe or a hyphen ("O'Neil", "Müller-Lyer")
+_SURNAME = re.compile(r"^[^\W\d_][\w'’-]*$")
 
 
-def reference_name(name: str) -> bool:
+@functools.lru_cache(maxsize=8)
+def _numbered(words: tuple[str, ...]) -> re.Pattern[str]:
+    """ "Fig. 3", "Abb. (4)", "Tabelle 2-3": a word of ``words`` and a
+    number after it, the word's full stop optional."""
+    alts = "|".join(
+        re.escape(w.rstrip(".")) + r"\.?"
+        for w in sorted({w.rstrip(".") for w in words}, key=len, reverse=True)
+    )
+    return re.compile(
+        r"^(?:\[|\()?\s*(?:" + (alts or r"(?!)") + r")"
+        r"\s*\(?\d{1,4}(?:\s*[-–,]\s*\d{1,4})?\)?\s*(?:\]|\))?$",
+        re.IGNORECASE,
+    )
+
+
+def _cited_as(rest: str, after: tuple[str, ...], joins: tuple[str, ...]) -> bool:
+    """Whether what stands beside a bracketed number is surnames as a
+    citation prints them: one with a word of ``after`` ("Smith et al."),
+    two or three joined by ``joins`` ("Smith and Jones"), or nothing."""
+    text = " ".join(rest.replace(",", " ").split())
+    if not text:
+        return True
+    low = text.lower()
+    tail = next(
+        (
+            t
+            for t in sorted(after, key=len, reverse=True)
+            if low == t.lower() or low.endswith(" " + t.lower())
+        ),
+        None,
+    )
+    if tail is not None:
+        text = text[: len(text) - len(tail)].strip()
+    split = (
+        r"\s+(?:" + "|".join(re.escape(j) for j in joins) + r")\s+" if joins else "$^"
+    )
+    parts = [p for p in re.split(split, text, flags=re.IGNORECASE) if p]
+    if not parts or not all(_SURNAME.match(p) and p[0].isupper() for p in parts):
+        return False
+    return (tail is not None and len(parts) == 1) or 2 <= len(parts) <= 3
+
+
+def reference_name(name: str, lex: Lexicon | None = None) -> bool:
     """Whether a name is only a number the text refers by. Extraction drops
     such an end, the review rules on it and the heal pass lists the ones
     written before. Until 2026-11-09 each had a pattern of its own, so "Fig.
     3" was written by extraction and then listed by heal (structure review
-    finding 24). A short name around a bracketed reference ("Smith et al.
-    [12]", a citation where a title belongs) is one too."""
+    finding 24). The words a number follows are the lexicon's
+    (``not_a_name.referred_by``), in the library's languages, where they
+    were English in code (quality review 2026-11-11, finding 10). Surnames
+    around a bracketed reference ("Smith et al. [12]", "Hochreiter and
+    Schmidhuber [7]") are a citation where a title belongs; a short title
+    with its number ("BERT [4]", "Long Short-Term Memory [7]") is a name,
+    which a count of three words dropped (finding 9). ``lex`` is the
+    lexicon a caller in a loop holds: ``lexicon()`` stats its files."""
     plain = name.strip()
-    if _NUMBERS.match(plain) or _NUMBERED.match(plain):
+    if _NUMBERS.match(plain):
         return True
-    return bool(_BRACKETED.search(plain)) and (
-        len(_BRACKETED.sub("", plain).split()) <= BRACKETED_WORDS
-    )
+    lex = lex or lexicon()
+    if _numbered(lex.referred_by).match(plain):
+        return True
+    if not _BRACKETED.search(plain):
+        return False
+    return _cited_as(_BRACKETED.sub(" ", plain), lex.cited_after, lex.cited_with)
 
 
 def part_of_suspect(
