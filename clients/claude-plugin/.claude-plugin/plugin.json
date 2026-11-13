@@ -1,7 +1,7 @@
 {
   "name": "prax",
   "displayName": "prax",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Your library in every Claude Code session: search it, ask it, walk its graph, file findings back into it, and keep a project's written knowledge in it.",
   "author": { "name": "lodsb", "url": "https://github.com/lodsb" },
   "repository": "https://github.com/lodsb/prax",

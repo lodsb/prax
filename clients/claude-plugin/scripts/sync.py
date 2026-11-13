@@ -11,8 +11,9 @@ what was run) and the agent's memory files go as well:
 
     archive: [transcripts, memory]
 
-Runs with whatever ``python`` the hook finds; when that interpreter has
-no prax, and ``PRAX_PYTHON`` names one that does, it hands over to it.
+Started by ``sync.sh``, which finds a Python (``PRAX_PYTHON`` first, never
+the Windows Store's stub); when that interpreter has no prax, and
+``PRAX_PYTHON`` names one that does, it hands over to it.
 Quiet on success; a project that did not opt in is left alone. Never
 fails the session: a door that is down is a warning on stderr."""
 
@@ -48,11 +49,16 @@ def main() -> int:
         from prax_cli.main import main as prax
     except ImportError:
         other = os.environ.get("PRAX_PYTHON")
-        if other and Path(other).resolve() != Path(sys.executable).resolve():
+        if (
+            other
+            and Path(other).is_file()
+            and Path(other).resolve() != Path(sys.executable).resolve()
+        ):
             return subprocess.call([other, __file__])
         print(
-            "prax sync: no prax in this interpreter; set PRAX_PYTHON to the"
-            " one that has it",
+            f"prax sync: no prax in {sys.executable}; set PRAX_PYTHON to the"
+            " Python prax is installed in"
+            + (f" (it names {other}, which is no file)" if other else ""),
             file=sys.stderr,
         )
         return 0

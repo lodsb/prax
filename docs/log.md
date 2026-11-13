@@ -11559,3 +11559,27 @@ genre clear theirs; `docs/meta.md` said it did.
 41 was already true: no route catches a plain `KeyError` since findings
 14 and 24. Tests: `test_document_nodes.py::test_an_edge_reads_the_ontology_once`,
 `test_step_stamps.py::test_a_title_clears_the_titles_steps_tried_mark`.
+
+## 2026-11-13: the session-end hook finds a Python (plugin 0.1.1)
+
+The MotorPlatterExperiments session (tt01) found that the plugin's
+session-end sync had never run on the desktop. The hook's command was a
+bare `python`, which Git Bash resolved to the Microsoft Store's stub
+(`WindowsApps\python`): "Python was not found", exit 49, swallowed at the
+session's end. `sync.py`'s hand-over to `PRAX_PYTHON` was inside the
+script that never started.
+
+The hook now runs `sh scripts/sync.sh`. The launcher takes `PRAX_PYTHON`
+when it names a file, then `py -3`, `python3` and `python`, and skips
+anything under `WindowsApps`. It says on stderr when it finds none and
+never fails the session. `sync.py`'s own hand-over to a `PRAX_PYTHON`
+that names no file raised a traceback; it is a warning now.
+`.gitattributes` keeps `*.sh` at LF.
+
+tt01 also reported that the hook syncs only with a `.prax-project` file,
+whatever the manifest's `auto_sync` says. That was the installed copy:
+`~/.claude/plugins/cache/prax/prax/0.1.0`, installed 2026-09-12, before
+20c1fdf made the manifest the opt-in (`prax sync --if-auto`). The plugin
+kept the version 0.1.0 through that change, so an update had nothing to
+replace. It is 0.1.1 now, and `/plugin update prax` brings the current
+hook. Test: `test_claude_plugin.py::test_the_hook_finds_a_python_and_never_the_stores_stub`.

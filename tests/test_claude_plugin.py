@@ -7,6 +7,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +32,10 @@ def test_the_plugin_is_well_formed() -> None:
     assert "PRAX_DOOR" in mcp["mcpServers"]["prax"]["env"]
     hooks = json.loads((PLUGIN / "hooks" / "hooks.json").read_text("utf-8"))
     (end,) = hooks["hooks"]["SessionEnd"]
-    assert "scripts/sync.py" in end["hooks"][0]["command"]
+    # a launcher that finds a Python, not a bare `python` (the Store's stub
+    # on Windows, which never ran the hook)
+    assert "scripts/sync.sh" in end["hooks"][0]["command"]
+    assert (PLUGIN / "scripts" / "sync.sh").is_file()
     assert (PLUGIN / "scripts" / "sync.py").is_file()
     skill = (PLUGIN / "skills" / "prax" / "SKILL.md").read_text("utf-8")
     assert skill.startswith("---\nname: prax\ndescription: ")
@@ -136,3 +141,39 @@ def test_the_hook_archives_transcripts_and_memory_when_asked(
         assert memory.json()["total"] == 1
         sessions = client.get("/documents", params={"source": "claude"})
         assert sessions.json()["total"] == 1
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="no POSIX shell")
+def test_the_hook_finds_a_python_and_never_the_stores_stub(tmp_path: Path) -> None:
+    """The hook's command was a bare ``python``, on a Windows machine the
+    Microsoft Store's stub: the sync never started and nothing said so
+    (the tt01 session, 2026-11-13). The launcher takes ``PRAX_PYTHON``
+    first and skips a stub under ``WindowsApps``."""
+    launcher = PLUGIN / "scripts" / "sync.sh"
+
+    def fake(folder: Path, name: str, says: str) -> Path:
+        folder.mkdir(parents=True, exist_ok=True)
+        script = folder / name
+        script.write_bytes(f'#!/bin/sh\necho "{says} $*"\n'.encode())
+        script.chmod(0o755)
+        return script
+
+    chosen = fake(tmp_path / "venv", "python", "chosen")
+    env = {**os.environ, "PRAX_PYTHON": str(chosen)}
+    got = subprocess.run(
+        ["sh", str(launcher)], env=env, capture_output=True, text=True, check=True
+    )
+    assert got.stdout.startswith("chosen ") and "sync.py" in got.stdout
+    stub = fake(tmp_path / "WindowsApps", "python", "STUB")
+    bare = os.pathsep.join(
+        [str(stub.parent), *(p for p in ("/usr/bin", "/bin") if Path(p).is_dir())]
+    )
+    env = {k: v for k, v in os.environ.items() if k != "PRAX_PYTHON"}
+    got = subprocess.run(
+        ["sh", str(launcher)],
+        env={**env, "PATH": bare},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "STUB" not in got.stdout

@@ -91,6 +91,12 @@ it started. Run what the plugin runs, by hand:
 - It waits silently: the server is fine (stop it with Ctrl-C). Then
   Claude Code did not see your variables: start it again from a
   terminal that has them, and reconnect with `/mcp`.
+- The session-end sync never runs: the hook starts `scripts/sync.sh`,
+  which takes `PRAX_PYTHON`, then `py -3`, `python3` and `python`, and
+  never the Microsoft Store's stub under `WindowsApps`; it says on
+  stderr when it finds none. Before 0.1.1 the hook ran a bare `python`,
+  on Windows often that stub, and nothing said so. An installed copy
+  keeps its version's files: `/plugin update prax`, then a new session.
 
 Once it connects, the `health` tool says the rest: the address it uses,
 whether the door answers, whether your token is accepted, and whether a

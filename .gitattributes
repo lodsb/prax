@@ -1,2 +1,3 @@
 # Test fixtures are byte-exact copies of real library files; never normalize.
 tests/fixtures/** -text
+*.sh text eol=lf
