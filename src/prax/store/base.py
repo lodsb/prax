@@ -1624,7 +1624,13 @@ def init_db(con: sqlite3.Connection) -> int:
 # the migration that gave an entity its document: the nodes written before
 # it are linked by ``_claim_document_nodes`` as the store passes it
 DOCUMENT_NODES = 69
-# a migration's Python half, run in the migration's own transaction
+# a migration's Python half, run in the migration's own transaction. Unlike
+# its SQL, migration 69's half is the living rule (``_node_doc``), which
+# ``link`` and the heal's repair use too: a store that crosses 69 later
+# gets the rule as it is then, the rule the heal applies to a store that
+# crossed it earlier, and the half only fills a node with no document. A
+# half that rewrites or removes what is there is frozen like its SQL (the
+# quality review of 2026-11-11, C2, which asked to freeze this one)
 AFTER_MIGRATION: dict[int, Callable[[sqlite3.Connection], Any]] = {
     DOCUMENT_NODES: _claim_document_nodes,
 }

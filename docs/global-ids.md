@@ -97,7 +97,13 @@ now.
   goes out and comes back land on its own rows: a friend's library
   exports our entity under its own `gid`, with ours among the aliases.
   It keeps `name`, `type` and `labels`, which a receiving library
-  resolves on.
+  resolves on. A node that is a document's (`entities.doc_id`, migration
+  69) also says `doc_hash`, the original's hash (`store.node_hashes`;
+  added 2026-11-13, optional, so an older reader passes over it). The
+  import keeps the node on the local document of that hash
+  (`store.claim_node_by_hash`): before its links for a node that exists
+  here, after them for one the import made. A link would otherwise claim
+  the node for a local document of the same title.
 - **`edge`** names its ends by `gid` (`src_gid`, `dst_gid`) beside the
   names, and carries its own `gid`. Its `source_hash` stays.
 - **INFERRED edges with premises are left out.** The receiving library

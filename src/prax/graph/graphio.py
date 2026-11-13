@@ -141,24 +141,28 @@ def _entity_lines(
     con: sqlite3.Connection, edges: list[dict[str, Any]]
 ) -> Iterator[str]:
     """The entities the edges reach, by type and name, each with its gid,
-    its aliases and its labels."""
+    its aliases and its labels; a node that is a document says which, as
+    ``doc_hash`` (the original's hash, its global id), an optional field
+    of format 2 that an older reader passes over."""
     gids = {(e["src"], e["src_type"]): e["src_gid"] for e in edges} | {
         (e["dst"], e["dst_type"]): e["dst_gid"] for e in edges
     }
     names = sorted(gids)
     labels = store.labels_of_entities(con, names)
     aliases = store.folded_gids(con, sorted(gids.values()))
+    hashes = store.node_hashes(con, names)
     for name, etype in names:
-        yield _line(
-            {
-                "kind": "entity",
-                "name": name,
-                "type": etype,
-                "gid": gids[(name, etype)],
-                "aliases": aliases.get(gids[(name, etype)], []),
-                "labels": labels.get((name, etype), []),
-            }
-        )
+        line: dict[str, Any] = {
+            "kind": "entity",
+            "name": name,
+            "type": etype,
+            "gid": gids[(name, etype)],
+            "aliases": aliases.get(gids[(name, etype)], []),
+            "labels": labels.get((name, etype), []),
+        }
+        if (name, etype) in hashes:
+            line["doc_hash"] = hashes[(name, etype)]
+        yield _line(line)
 
 
 def _page_lines(con: sqlite3.Connection, slugs: list[str]) -> Iterator[str]:
@@ -342,8 +346,24 @@ def _import_by_gid(
             raise ValueError(f"edge {r.get('gid')}: an end with no entity line")
         return src, dst
 
+    # a node of a document held here is that document, by its hash, not by
+    # its title (finding 8): a node there already is claimed before a link
+    # could claim it by title, and one the import makes after its first link
+    by_hash = [
+        (landed[r["gid"]], local[str(r["doc_hash"])])
+        for r in records
+        if r["kind"] == "entity"
+        and r.get("doc_hash")
+        and r.get("gid") in landed
+        and str(r["doc_hash"]) in local
+    ]
+    for landing, doc in by_hash:
+        store.claim_node_by_hash(con, landing.name, landing.type, doc)
     keep = _import_edges(con, records, rep, local, titles, source, ends)
     rep.retired = store.end_unconfirmed(con, producer, keep, run=rep.run)
+    for landing, doc in by_hash:
+        if landing.state == "new":
+            store.claim_node_by_hash(con, landing.name, landing.type, doc, replace=True)
 
 
 def _by_name(r: dict[str, Any]) -> tuple[store.Landing, store.Landing]:

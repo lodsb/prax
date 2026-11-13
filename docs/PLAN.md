@@ -579,7 +579,7 @@ they block, then by cost. Sizes are the review's.
       29 is open: extraction's selection, the markup and private passes.
 - [x] (2026-11-13) 30. The lost-readings ailment looks at figures only, though
       formulas are carried too.
-- [ ] 8. The graph export does not say which document a node is: a
+- [x] (2026-11-13) 8. The graph export does not say which document a node is: a
       `doc_hash` on a document node's line, claimed by hash on import
       (an afternoon).
 
@@ -606,7 +606,10 @@ they block, then by cost. Sizes are the review's.
 - [ ] C2. Migration 69's Python half is the living node-claim rule that
       `link` and the heal use, so a later change to it changes what the
       migration does on a store upgraded afterwards: a frozen copy for
-      the migration.
+      the migration. Not done, for the owner to decide (2026-11-13): the
+      half only fills a node with no document, and a store crossing 69
+      later gets the rule the heal already applies to the others; the
+      reasoning is at `AFTER_MIGRATION`. A half that rewrites is frozen.
 
 ## Stages
 

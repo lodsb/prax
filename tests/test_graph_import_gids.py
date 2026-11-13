@@ -316,3 +316,31 @@ def test_an_entity_line_without_its_gid_is_refused(
     other = _other(monkeypatch, tmp_path)
     with pytest.raises(ValueError, match="no gid"):
         graphio.import_lines(other, broken, source="laptop")
+
+
+def test_a_node_lands_on_its_document_by_hash_not_by_title(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Finding 8 of the 2026-11-11 quality review: an entity line of a
+    document's node says the document's hash, and the import keeps the node
+    on the document of that hash here, where a link claimed it by title."""
+    lines = _theirs(con)
+    paper = next(
+        json.loads(line)
+        for line in lines
+        if json.loads(line).get("kind") == "entity"
+        and json.loads(line).get("name") == "WDF paper"
+    )
+    theirs = store.node_document(con, "WDF paper", "paper")
+    assert theirs is not None
+    held = store.get_document(con, theirs)
+    assert held is not None and paper["doc_hash"] == held["hash"]
+    other = _other(monkeypatch, tmp_path)
+    # here, another text of that title came first, and the same bytes later
+    decoy = int(
+        store.ingest_text(other, "Something else. " * 40, title="WDF paper")["doc_id"]
+    )
+    same = int(store.ingest_text(other, PAPER, title="Wave digital filters")["doc_id"])
+    assert decoy < same
+    graphio.import_lines(other, lines, source="laptop")
+    assert store.node_document(other, "WDF paper", "paper") == same

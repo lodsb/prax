@@ -36,7 +36,14 @@ from ..base import _NOW, NotFound, _reading, _serialized, run_name
 
 LIKELY_PAGE = 100  # foreign entities likely the same as ours, a page
 from .decisions import queue_review
-from .edges import Edge, canonical_entity, end_edges, link, with_aliases
+from .edges import (
+    Edge,
+    canonical_entity,
+    end_edges,
+    link,
+    node_document,
+    with_aliases,
+)
 from .labels import add_label
 from .lookups import entities_by_gid, entity_answering
 
@@ -316,6 +323,49 @@ def add_foreign_labels(
     return _add_labels(
         con, source, landing.gid, landing.entity_id, f"import:{source}", run
     )
+
+
+@_reading
+def node_hashes(
+    con: sqlite3.Connection, nodes: list[tuple[str, str]]
+) -> dict[tuple[str, str], str]:
+    """The original's hash of each node that is a document's
+    (``entities.doc_id``, migration 69; ``node_document``): what an export
+    writes on an entity line, so an import finds the node's document by its
+    global id (invariant 2), not by its title (the quality review of
+    2026-11-11, finding 8). A document the viewer may not see is left out."""
+    out: dict[tuple[str, str], str] = {}
+    for name, etype in nodes:
+        doc = node_document(con, name, etype)
+        if doc is None:
+            continue
+        row = con.execute("SELECT hash FROM documents WHERE id = ?", (doc,)).fetchone()
+        if row is not None and row[0]:
+            out[(name, etype)] = str(row[0])
+    return out
+
+
+@_serialized
+def claim_node_by_hash(
+    con: sqlite3.Connection,
+    name: str,
+    etype: str,
+    doc_id: int,
+    *,
+    replace: bool = False,
+) -> bool:
+    """Keep ``doc_id`` as the document the node ``name`` of ``etype`` is:
+    an imported node whose document, named by its hash, is held here. A
+    node that is a document already keeps it, unless ``replace`` (a node
+    this import made, which its first link claimed by title)."""
+    held = "" if replace else " AND doc_id IS NULL"
+    cur = con.execute(
+        "UPDATE entities SET doc_id = ? WHERE name = ? AND type = ?"
+        f" AND canonical_id IS NULL{held}",
+        (doc_id, name, etype),
+    )
+    con.commit()
+    return cur.rowcount > 0
 
 
 @_serialized

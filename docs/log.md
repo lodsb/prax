@@ -11675,3 +11675,33 @@ read once per reference list.
 Tests: `test_extraction.py::test_a_reference_number_is_known_in_the_librarys_languages`,
 `test_status.py::test_every_language_of_a_key_has_its_stale_words`,
 `test_references.py::test_a_reference_list_is_known_in_the_librarys_languages`.
+
+## 2026-11-13: an exported node says its document's hash (quality finding 8; C2 argued)
+
+**8.** A `prax-graph/2` entity line did not say which document a node
+is, so an import's first link claimed the node for a local document of
+the same title, the lowest id. A friend's "Introduction" landed on ours.
+An entity line of a document's node now carries `doc_hash`, the
+original's hash, from `entities.doc_id` (`store.node_hashes`). It is an
+optional field of format 2, which an older reader passes over. The
+import keeps the node on the local document of that hash
+(`store.claim_node_by_hash`). A node that exists here is claimed before
+the links, so no link claims it by title. A node the import made is
+claimed after them, replacing the title's claim. A node whose document
+is not held here is still claimed by title when a link reaches it, as a
+local extraction's is. `docs/global-ids.md` says the field. Test:
+`test_graph_import_gids.py::test_a_node_lands_on_its_document_by_hash_not_by_title`.
+
+**C2, not done.** The critic asked for migration 69's Python half to get
+a frozen copy of the node rule, so a later change to the rule would not
+change what the migration does on a store upgraded afterwards. The half
+only fills a node with no document. A store that crosses 69 later gets
+the rule the heal already applies to stores that crossed it earlier, and
+a frozen copy would give it a worse one. The comment at `AFTER_MIGRATION`
+says so, and that a half which rewrites or removes is frozen like its
+SQL. The owner decides.
+
+Still open from the review: 21 (a settings registry, which would refuse
+unknown keys in `prax.yaml`, a stage), 29 (extraction, markup and private
+as stamps, half a day), and C1 (`store/base.py` at 1,864 lines, split
+past 2,000).
