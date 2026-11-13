@@ -162,11 +162,28 @@ class Pass:
     def post(self, step: str, body: dict[str, Any]) -> dict[str, Any]:
         """Results to the door, with what the paid calls behind them used
         (``prax.ml.usage``, as ``spent``), which the door writes to the
-        ledger: one way home for every step's spending."""
+        ledger.
+
+        How a step's spending goes home, said once: a paid call records into
+        ``prax.ml.usage`` (``ClaudeRuntime.create``, a keyed
+        ``OpenAIRuntime.chat``, ``top_logprobs``) and this post carries it,
+        which is the way for a new step. A result that carries its usage
+        itself is charged by its own ``take_in``, and its call is made with
+        ``record=False`` so it is charged once: an ``Extraction``'s
+        (extract, promote), the Claude adjudicator's ``usage``, a reading's
+        ``usage`` (parse). A post the door did not take keeps its spending
+        for the next one (quality review 2026-11-11, findings 19 and 35)."""
         spent = usage.take()
         if spent:
             body = {**body, "spent": spent}
-        got: dict[str, Any] = self.door.post_json(f"/work/{step}", body)
+        try:
+            got: dict[str, Any] = self.door.post_json(f"/work/{step}", body)
+        except Exception:
+            # the door did not take it (restarting, an error): the next
+            # post carries the spending, so the ledger still sees it
+            for model, tokens in spent.items():
+                usage.record(model, tokens)
+            raise
         return got
 
     def note(self, text: str, **extra: Any) -> None:

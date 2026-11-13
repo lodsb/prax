@@ -15,6 +15,7 @@ from prax.graph import ontology
 from prax.text import names
 
 from ..base import (
+    LIST_PAGE,
     NotFound,
     _guards,
     _reading,
@@ -113,7 +114,7 @@ def hub_graph(
     A node carries ``docs``, the documents that say something of it in
     what is drawn, and ``region``, the region of the library it is in
     (level 0 of ``entity_communities``; absent outside the partition)."""
-    limit = max(1, min(limit, 200))
+    limit = max(1, min(limit, LIST_PAGE))
     docs, docs_args = "", tuple[str, ...]()
     if domain:
         onto = ontology.current()
@@ -149,7 +150,7 @@ def hub_graph(
     if entities is not None:
         pick = "e.id IN (SELECT value FROM json_each(?))"
         pick_args = (json.dumps(sorted(set(entities))),)
-        limit = max(1, min(len(entities), 200))
+        limit = max(1, min(len(entities), LIST_PAGE))
     nodes = _hubs(
         con,
         f"""
@@ -398,7 +399,7 @@ def candidates_page(
         "SELECT c.a, c.b, c.type, c.score, c.p_same, c.held"
         + where
         + " ORDER BY c.held IS NULL, c.score DESC, c.a, c.b LIMIT ? OFFSET ?",
-        [*args, max(1, min(limit, 200)), max(0, offset)],
+        [*args, max(1, min(limit, LIST_PAGE)), max(0, offset)],
     ).fetchall()
     sides = _sides(con, [x for r in rows for x in (r["a"], r["b"])])
     items = []
@@ -427,7 +428,12 @@ def candidates_page(
             " AND eb.canonical_id IS NULL GROUP BY c.type"
         ).fetchall()
     )
-    return {"total": int(total), "types": by_type, "items": items}
+    return {
+        "total": int(total),
+        "limit": max(1, min(limit, LIST_PAGE)),
+        "types": by_type,
+        "items": items,
+    }
 
 
 MERGE_TYPES = ("concept", "method", "tool", "dataset", "venue")
@@ -495,10 +501,12 @@ def merges_page(
     # one word apart first: the smaller list and the more often wrong (a
     # sample of twenty: costs, traversals, MIDI files, archive calls)
     found.sort(key=lambda t: (t[0] != "one word apart", t[1]["into_name"], t[1]["id"]))
-    page = found[max(0, offset) : max(0, offset) + max(1, min(limit, 200))]
+    limit = max(1, min(limit, LIST_PAGE))
+    page = found[max(0, offset) : max(0, offset) + limit]
     sides = _sides(con, [x for _, r in page for x in (r["id"], r["into_id"])])
     return {
         "total": len(found),
+        "limit": limit,
         "items": [
             {
                 "why": why,

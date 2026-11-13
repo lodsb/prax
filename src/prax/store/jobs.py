@@ -21,6 +21,7 @@ from typing import Any, NotRequired, Self, TypedDict, cast
 from .base import (
     _INDEX_LOCK,
     _NOW,
+    LIST_PAGE,
     NotFound,
     _indexes,
     _reading,
@@ -500,7 +501,7 @@ def capture_requests(
     rows = con.execute(
         f"SELECT {REQUEST_FIELDS} FROM capture_requests WHERE state = ?"
         " ORDER BY id LIMIT ?",
-        (state, max(1, min(limit, 200))),
+        (state, max(1, min(limit, LIST_PAGE))),
     ).fetchall()
     return [_request_row(r) for r in rows]
 

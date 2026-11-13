@@ -145,6 +145,7 @@ class FakeRuntime:
         max_tokens=2000,
         temperature=0.0,
         repeat_penalty=1.0,
+        record=True,
     ):
         self.calls.append(
             {

@@ -275,7 +275,10 @@ def photo_faces(doc_id: int, request: Request) -> list[dict[str, Any]]:
 
 @router.get("/faces")
 def faces_page(
-    request: Request, order: str = "least", offset: int = 0, limit: Page = 100
+    request: Request,
+    order: str = "least",
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.FACES_PAGE)] = 100,
 ) -> dict[str, Any]:
     """Faces to look at with their crops, and their counts by score and
     size (``store.faces_page``). Not a named token's route."""
@@ -305,7 +308,10 @@ def face_similar(
 
 @router.get("/faces/groups")
 def face_groups(
-    request: Request, offset: int = 0, limit: Page = 30, event: int | None = None
+    request: Request,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.GROUPS_PAGE)] = 30,
+    event: int | None = None,
 ) -> dict[str, Any]:
     """The face groups with faces to name, each with its firmest open faces
     (``store.face_groups``, made by the facegroups pass); with ``event``,
@@ -315,7 +321,10 @@ def face_groups(
 
 @router.get("/faces/matches")
 def face_matches(
-    request: Request, offset: int = 0, limit: Page = 30, person: int | None = None
+    request: Request,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.GROUPS_PAGE)] = 30,
+    person: int | None = None,
 ) -> dict[str, Any]:
     """The open faces that are probably someone already named, by person
     (``store.face_matches``); with ``person``, that person's all. Not a

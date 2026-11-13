@@ -303,3 +303,52 @@ def test_the_door_asks_for_no_reading_from_a_priced_model(data_dir: Path) -> Non
     models.reset()
     assert not pipeline.free("vision")
     assert pipeline.free("formulas")
+
+
+def test_spending_the_door_did_not_take_goes_with_the_next_post() -> None:
+    """Finding 35 of the 2026-11-11 quality review: a post that fails (the
+    door restarting) keeps its spending on the worker for the next one."""
+    from prax.ml import usage
+    from prax.steps.base import Pass
+
+    class Door:
+        def __init__(self) -> None:
+            self.bodies: list[dict[str, object]] = []
+            self.down = True
+
+        def post_json(self, path: str, body: dict[str, object]) -> dict[str, object]:
+            if self.down:
+                raise ConnectionError("the door is restarting")
+            self.bodies.append(body)
+            return {}
+
+    usage.clear()
+    door = Door()
+    p = Pass(door)
+    usage.record("m@host", {"input_tokens": 100, "output_tokens": 10})
+    with pytest.raises(ConnectionError):
+        p.post("extract", {"results": []})
+    door.down = False
+    p.post("extract", {"results": []})
+    assert door.bodies[0]["spent"] == {
+        "m@host": {"input_tokens": 100, "output_tokens": 10}
+    }
+    assert usage.take() == {}
+
+
+def test_a_ledger_row_that_fails_is_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def broken(*a: object, **kw: object) -> None:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(budget, "note", broken)
+    with caplog.at_level("WARNING"):
+        leases.note_spend(
+            None,  # type: ignore[arg-type]
+            "extract",
+            {"input_tokens": 5},
+            model="m",
+            doc_id=3,
+        )
+    assert "spending not recorded: step extract, model m" in caplog.text

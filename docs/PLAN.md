@@ -446,25 +446,29 @@ they block, then by cost. Sizes are the review's.
 
 **Wrong now, an hour each.**
 
-- [ ] 5. The UI's `lib.js` keeps its own list of stale states, without
+- [x] (2026-11-13) 5. The UI's `lib.js` keeps its own list of stale states, without
       `retracted`: the document read carries `stale` from
       `store.staleness`, drawn with `staleNote`.
-- [ ] 6. `sync_facts` keys a fact by its `ontology_version`, so any
+- [x] (2026-11-13) 6. `sync_facts` keys a fact by its `ontology_version`, so any
       module bump makes the next project sync end and restate every
       link and status edge. Key without the version; test: sync, bump an
       unrelated module, sync, nothing ended.
-- [ ] 7. A refreshed note whose first heading changed leaves its node on
+- [x] (2026-11-13) 7. A refreshed note whose first heading changed leaves its node on
       the retired copy: `retire_document` with `duplicate_of` moves the
       nodes whatever the title. The note's slug through its sync key is
       AU 3.
-- [ ] 4. Unretiring one document of a clean-up in the format before
+- [x] (2026-11-13) 4. Unretiring one document of a clean-up in the format before
       2026-11-07 drops its list of ended edges: the format upgraded once
       in `init_db` (an `AFTER_MIGRATION` half), no legacy branch.
-- [ ] 18 and 38. List routes say at most 500 in OpenAPI while the store
+      Done as a read, not a rewrite: `unretire_document` records the
+      old list first (`record_old_endings`, which `restore_set` shares).
+      377 live documents keep the old format; converting them all in
+      `init_db` is the owner's call.
+- [x] (2026-11-13) 18 and 38. List routes say at most 500 in OpenAPI while the store
       returns at most 50 to 200: `AtMost(<the store's cap>)` per route,
       and the applied `limit` echoed. `/traverse` says `minimum: 1`
       while 0 means the most: `minimum: 0` and the description.
-- [ ] 39. `POST /graph/restore` takes a retirement's or clean-up's run
+- [x] (2026-11-13) 39. `POST /graph/restore` takes a retirement's or clean-up's run
       and restates its facts while the documents stay retired: refuse it
       naming `unretire`, and `NotFound` for a run that did nothing.
 
@@ -492,16 +496,22 @@ they block, then by cost. Sizes are the review's.
 - [x] 16. The calibrated adjudicator reads an HTTP 401 or a wrong model
       as "not sure": a server error raises when every pair failed.
       Done 2026-11-12 (`LocalAdjudicator.decide`).
-- [ ] 17, 19 and 35. Spending: the judges' calls to a keyed, priced
+- [x] 17, 19 and 35. Spending: the judges' calls to a keyed, priced
       server never reach the ledger (`top_logprobs` records, the pool
       threads' usage handed back); spending reaches the door by four
       routes in two shapes (`payload.spent` the one, a stage); a failed
       ledger write leaves no trace (a warning, and the bag refilled).
       17 done 2026-11-12: `top_logprobs` records a keyed server's use
       under `model@host`, and `calibration.each` carries the pool
-      threads' bags to the asking thread. 19 and 35 are open.
-- [ ] 36. One maintenance pass that raises skips the rest: each pass
-      caught, the job failed naming it.
+      threads' bags to the asking thread. 19 and 35 done 2026-11-13:
+      the local extractor calls a keyed server with `record=False` (its
+      `Extraction` carries the usage, as the Claude extractor's does),
+      `Pass.post` says which way a step's spending goes, refills the bag
+      when the door did not take a post, and `note_spend` logs a row it
+      could not write.
+- [x] 36. One maintenance pass that raises skips the rest: each pass
+      caught, the job failed naming it. Done 2026-11-13
+      (`maintain.PassesFailed`).
 - [x] 20 and 37. A mistyped switch raises only when a parse computes its
       stamp, and marks every document it touches as failed for good:
       `config.check()` at the door's and `prax up`'s start, and a

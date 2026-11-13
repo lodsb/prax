@@ -567,8 +567,10 @@ test("staleNote: the state, the date and what replaced it, as a link", () => {
   assert.match(html, /href="#doc\/12">Plan &lt;v2&gt;<\/a>/);
   assert.equal(lib.staleNote(null), "");
   assert.match(lib.staleNote({ state: "invalid", by: "graph", replaced_by: [] }), /another document says so/);
-  const line = lib.dateLine({ status: { state: "retired", since: "2026-09", words: "Retired 2026-09" } }, {});
-  assert.match(line, /class="stale"[^>]*>retired 2026-09/);
+  // the page draws what the door says is stale, whatever the state's word
+  const line = lib.dateLine({}, { stale: { state: "retracted", since: "2026-09", by: "sync", replaced_by: [] } });
+  assert.match(line, /class="stale"[^>]*>retracted 2026-09/);
+  assert.doesNotMatch(lib.dateLine({ status: { state: "retired" } }, {}), /stale/);
 });
 
 test("staleSources: a page's sources no longer current, each with its replacement", () => {

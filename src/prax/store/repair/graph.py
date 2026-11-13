@@ -16,6 +16,7 @@ from prax.graph import ontology
 from prax.text import glyphs, language, names
 
 from ..base import (
+    LIST_PAGE,
     LIVE,
     NotFound,
     _node_doc,
@@ -331,7 +332,8 @@ def split_names_page(
         pairs = {(min(x, y), max(x, y)) for x in ids for y in ids if x != y}
         if not pairs <= decided:
             open_groups.append(g)
-    page = open_groups[max(0, offset) : max(0, offset) + max(1, min(limit, 200))]
+    limit = max(1, min(limit, LIST_PAGE))
+    page = open_groups[max(0, offset) : max(0, offset) + limit]
     items = []
     for g in page:
         parts = [
@@ -341,7 +343,7 @@ def split_names_page(
         for part in parts:
             part["document"] = entity_named_in(con, int(part["id"]))
         items.append({"name": g["name"], "parts": parts})
-    return {"total": len(open_groups), "items": items}
+    return {"total": len(open_groups), "limit": limit, "items": items}
 
 
 def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:

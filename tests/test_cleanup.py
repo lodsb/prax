@@ -210,3 +210,35 @@ def test_a_folder_of_ones_own(client: TestClient) -> None:
     _doc(con, "/nas/papers/new.pdf", "A new paper. " * 30, "New")
     seen = client.get("/cleanup/folder", params={"folder": "old_users/Users"}).json()
     assert seen["total"] == 1 and seen["folder"] == "old_users/Users"
+
+
+def test_one_document_of_an_old_clean_up_is_taken_back_with_its_facts(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 4 of the 2026-11-11 quality review: taking back one document
+    of a clean-up from before 2026-11-07 states its ended facts again; the
+    list in its meta was dropped and nothing came back."""
+    eula = _doc(con, "/nas/Windows/System32/eula.rtf", "Terms. " * 60, "Eula")
+    store.link(
+        con,
+        store.Edge("Eula", "document", "published_by", "Vendor", "organization"),
+        source_doc=eula,
+    )
+    edge = con.execute("SELECT id FROM edges WHERE source_doc = ?", (eula,)).fetchone()[
+        0
+    ]
+    store.retire_document(con, eula, reason="clean-up")
+    meta = json.loads(
+        con.execute("SELECT meta FROM documents WHERE id = ?", (eula,)).fetchone()[0]
+    )
+    meta["retired"].update(run="cleanup-older", ended=[edge])
+    con.execute("UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), eula))
+    con.commit()
+    assert store.unretire_document(con, eula)["edges"] == 1
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+            (eula,),
+        ).fetchone()[0]
+        == 1
+    )

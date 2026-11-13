@@ -33,6 +33,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..base import _NOW, NotFound, _reading, _serialized, run_name
+
+LIKELY_PAGE = 100  # foreign entities likely the same as ours, a page
 from .decisions import queue_review
 from .edges import Edge, canonical_entity, end_edges, link, with_aliases
 from .labels import add_label
@@ -346,7 +348,7 @@ def foreign_likely(
         FROM foreign_entities f WHERE f.state = 'likely'
         ORDER BY held DESC, f.source, f.name LIMIT ? OFFSET ?
         """,
-        (max(1, min(limit, 100)), max(0, offset)),
+        (max(1, min(limit, LIKELY_PAGE)), max(0, offset)),
     ).fetchall()
     items = []
     for r in rows:
@@ -368,7 +370,12 @@ def foreign_likely(
                 "candidate": dict(cand) if cand is not None else None,
             }
         )
-    return {"total": int(total), "offset": offset, "items": items}
+    return {
+        "total": int(total),
+        "offset": offset,
+        "limit": max(1, min(limit, LIKELY_PAGE)),
+        "items": items,
+    }
 
 
 def _free_name(con: sqlite3.Connection, name: str, etype: str, source: str) -> str:

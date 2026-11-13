@@ -285,3 +285,26 @@ def test_a_reference_list_is_found_by_the_chunkers_own_headings(
         for heading in ("Cited Literature", "7. References", "Acknowledgements")
     ]
     assert sorted(store.bibliographies(con)) == ids[:2]
+
+
+def test_a_pass_that_raises_leaves_the_others_to_run(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding 36 of the 2026-11-11 quality review: the passes after a
+    failed one still run, and the failed job row names the pass."""
+    import importlib
+
+    maintain_mod = importlib.import_module("prax.store.maintain")
+
+    def broken(con: sqlite3.Connection, job: object) -> dict[str, object]:
+        raise KeyError("doc 7")
+
+    monkeypatch.setitem(maintain_mod._RUN, "fields", broken)
+    with pytest.raises(maintain_mod.PassesFailed) as got:
+        store.maintain(con, only=["fields", "dedupe"])
+    assert got.value.failed == ["fields"]
+    assert got.value.report["fields"]["error"] == "KeyError: 'doc 7'"
+    assert "groups" in got.value.report["dedupe"]
+    row = store.list_jobs(con)["recent"][0]
+    assert row["status"] == "failed"
+    assert row["note"].startswith("PassesFailed: fields: KeyError")

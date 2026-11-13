@@ -494,7 +494,9 @@ class RequestDone(BaseModel):
 
 @router.get("/captures/requests")
 def requests_list(
-    request: Request, state: str = "waiting", limit: Page = 20
+    request: Request,
+    state: str = "waiting",
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 20,
 ) -> dict[str, Any]:
     """The captures the door could not fetch and the extension may:
     ``waiting`` (what it fetches next, oldest first), ``done``, ``failed``

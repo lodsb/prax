@@ -4,6 +4,7 @@ duplicates and the captures of one page."""
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from typing import Any
 
@@ -262,20 +263,34 @@ def _move_nodes_off(
     con: sqlite3.Connection, doc_id: int, duplicate_of: int | None
 ) -> int:
     """Move the nodes that are ``doc_id`` (``entities.doc_id``) to a live
-    document of their name as it is retired: the copy it is a duplicate of
-    (a re-synced note), else the live namesake of the lowest id. A node
-    kept the retired copy, so a project's members listed the old version
-    and its staleness was missed (the safety review of 2026-11-11). A node
-    with no live namesake stays where it is. Does not commit."""
+    document as it is retired: the copy it is a duplicate of or the text
+    that replaced it (a re-synced note), whatever its title now, else the
+    live namesake of the lowest id. A node kept the retired copy, so a
+    project's members listed the old version and its staleness was missed
+    (the safety review of 2026-11-11); a note whose first heading changed
+    did so still (the quality review of 2026-11-11, finding 7). A node with
+    no live document to go to stays where it is. Does not commit."""
     n = 0
+    live_of = (
+        duplicate_of is not None
+        and duplicate_of != doc_id
+        and con.execute(
+            f"SELECT 1 FROM documents WHERE id = ? AND {LIVE}", (duplicate_of,)
+        ).fetchone()
+        is not None
+    )
     for ent, name in con.execute(
         "SELECT id, name FROM entities WHERE doc_id = ?", (doc_id,)
     ).fetchall():
-        row = con.execute(
-            f"SELECT id FROM documents WHERE title = ? AND id != ? AND {LIVE}"
-            " ORDER BY id = ? DESC, id LIMIT 1",
-            (name, doc_id, duplicate_of),
-        ).fetchone()
+        row: tuple[Any, ...] | sqlite3.Row | None = (
+            (duplicate_of,)
+            if live_of
+            else con.execute(
+                f"SELECT id FROM documents WHERE title = ? AND id != ? AND {LIVE}"
+                " ORDER BY id LIMIT 1",
+                (name, doc_id),
+            ).fetchone()
+        )
         if row is not None:
             con.execute(
                 "UPDATE entities SET doc_id = ? WHERE id = ?", (int(row[0]), ent)
@@ -308,15 +323,40 @@ def _replacements(con: sqlite3.Connection, doc_id: int) -> list[int | None]:
 
 
 @_serialized
+def record_old_endings(
+    con: sqlite3.Connection, run: str, retirements: list[dict[str, Any]]
+) -> None:
+    """A clean-up from before 2026-11-07 kept the edges it ended in each
+    document's ``meta.retired.ended``, not in ``edge_endings``: record them
+    as ``run``'s endings, at the retirement's time, so ``_restore_run``
+    finds them. Each retirement is the ``meta.retired`` dict (``ended``,
+    ``at``); one recorded already is left. Does not commit."""
+    for retired in retirements:
+        ended = retired.get("ended") or []
+        if isinstance(ended, str):
+            ended = json.loads(ended)
+        con.executemany(
+            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
+            " VALUES (?, ?, ?)",
+            [(int(e), run, retired.get("at")) for e in ended],
+        )
+
+
 def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """Bring a retired document back into the index (its text artifact is
     re-chunked) and state the edges its retirement ended again, as new
     edges (``_restore_run``: the ended ones stay history), with what held
     the old ids moved onto them. An edge a duplicate's retirement moved to
     its keeper stays there. A retirement from before its run was recorded
-    (2026-11-10) brings no edges back: a new extraction pass re-reads it."""
+    (2026-11-10) brings no edges back: a new extraction pass re-reads it.
+    A clean-up's from before 2026-11-07 kept what it ended in the
+    document's meta; that list becomes the run's endings first
+    (``record_old_endings``), where it was dropped with the meta (the
+    quality review of 2026-11-11, finding 4)."""
     meta = get_meta(con, doc_id)
     retired = meta.pop("retired", None) or {}
+    if retired.get("run"):
+        record_old_endings(con, str(retired["run"]), [retired])
     restored = (
         _restore_run(con, retired["run"], source_doc=doc_id)
         if retired.get("run")

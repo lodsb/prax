@@ -31,6 +31,7 @@ thing is one job, so the Jobs view shows which pass it is on.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import time
 from collections import Counter
@@ -106,6 +107,7 @@ from .retrieval import (
     replace_acronyms,
 )
 
+_log = logging.getLogger(__name__)
 Log = Callable[[str], None]
 
 PASSES = (
@@ -1110,18 +1112,42 @@ def maintain(
         return _run(con, chosen, own, log)
 
 
+class PassesFailed(RuntimeError):
+    """Passes of a maintenance run raised; the others ran. The message
+    names each with its error, which the failed job row keeps as its note;
+    ``report`` is what every pass did, a failed one as ``{error, seconds}``."""
+
+    def __init__(self, report: dict[str, Any], failed: list[str]) -> None:
+        self.report = report
+        self.failed = failed
+        super().__init__(
+            "; ".join(f"{name}: {report[name]['error']}" for name in failed)
+        )
+
+
 def _run(
     con: sqlite3.Connection, chosen: list[str], job: Job, log: Log | None
 ) -> dict[str, Any]:
+    """Each chosen pass in turn. One that raises is logged with its name
+    and the rest still run (a bad document in an early pass would otherwise
+    stop the passes after it every night); then ``PassesFailed`` names them."""
     out: dict[str, Any] = {}
+    failed: list[str] = []
     for name in chosen:
         t0 = time.monotonic()
         job.update(note=name)
-        result = _RUN[name](con, job)
+        try:
+            result = _RUN[name](con, job)
+        except Exception as exc:  # noqa: BLE001 - logged, named, raised after the rest
+            _log.exception("maintenance pass %s failed", name)
+            result = {"error": f"{type(exc).__name__}: {exc}"}
+            failed.append(name)
         result["seconds"] = round(time.monotonic() - t0, 1)
         out[name] = result
         if log:
             log(f"{name}: {result}")
+    if failed:
+        raise PassesFailed(out, failed)
     job.update(
         note="done: " + ", ".join(f"{k} {v['seconds']} s" for k, v in out.items())
     )

@@ -302,6 +302,7 @@ def faces_page(
     return {
         "order": order,
         "total": sum(scores),
+        "limit": limit,
         "pictures": pictures,
         "vectored": vectored,
         "by_score": dict(

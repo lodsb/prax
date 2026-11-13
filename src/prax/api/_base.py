@@ -39,7 +39,12 @@ class AtMost:
 
     def __get_pydantic_json_schema__(self, schema: Any, handler: Any) -> Any:
         out = handler(schema)
-        out.update(minimum=1, maximum=self.most)
+        out.update(minimum=0 if self.zero_is_most else 1, maximum=self.most)
+        if self.zero_is_most:
+            said = out.get("description")
+            out["description"] = (
+                f"{said} " if said else ""
+            ) + f"0 asks for the most, {self.most}."
         return out
 
 

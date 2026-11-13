@@ -6,7 +6,6 @@ each retirement ends its facts under, which each unretire states again
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any
 
@@ -15,6 +14,7 @@ from prax.text import clutter
 from ..base import LIVE, NotFound, _reading, _serialized, meta_of, rows_in, run_name
 from ..documents import (
     live_photo_clip,
+    record_old_endings,
     retire_document,
     unretire_document,
 )
@@ -206,12 +206,9 @@ def restore_set(con: sqlite3.Connection, run: str) -> dict[str, Any]:
     ).fetchall()
     if not rows:
         raise NotFound(f"no clean-up named {run}")
-    for r in rows:
-        con.executemany(
-            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
-            " VALUES (?, ?, ?)",
-            [(int(e), run, r["at"]) for e in json.loads(r["ended"] or "[]")],
-        )
+    record_old_endings(
+        con, run, [{"ended": r["ended"] or "[]", "at": r["at"]} for r in rows]
+    )
     # the first document's unretire states the whole set's edges again
     # (its run is the set's), the rest find them stated
     restated = sum(int(unretire_document(con, int(r["id"]))["edges"]) for r in rows)

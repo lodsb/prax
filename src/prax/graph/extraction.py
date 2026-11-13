@@ -760,6 +760,10 @@ class LocalExtractor:
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             repeat_penalty=self.repeat_penalty,
+            # the extraction carries its usage home (``Extraction.usage``),
+            # which the door charges; the runtime's own record would charge
+            # a keyed server twice (quality review 2026-11-11, finding 19)
+            record=False,
         )
 
 

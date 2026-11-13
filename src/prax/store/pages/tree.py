@@ -94,15 +94,19 @@ PROJECT_MEMBERS = 500  # members a project page's read lists
 def _members(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """What is part of a project: the documents and pages with a live
     ``part_of`` edge to it, the viewer's to see, ``PROJECT_MEMBERS`` at
-    most, ``count`` all of them."""
+    most, ``count`` all of them. A document is listed once, under its
+    title: a note whose heading changed has a node under each title, both
+    kept on the current text (the quality review of 2026-11-11, finding
+    7)."""
     hidden = hidden_documents(con)
     rows = list(
         {
             (str(r["name"]), str(r["type"])): r
             for r in con.execute(
-                "SELECT DISTINCT s.name, s.type, s.doc_id, x.source_doc"
-                " FROM entities t JOIN edges x ON x.dst = t.id"
+                "SELECT DISTINCT s.name, s.type, s.doc_id, x.source_doc,"
+                " d.title AS now FROM entities t JOIN edges x ON x.dst = t.id"
                 " JOIN entities s ON s.id = x.src"
+                " LEFT JOIN documents d ON d.id = s.doc_id"
                 " WHERE t.doc_id = ? AND x.rel = 'part_of' AND x.valid_to IS NULL"
                 " ORDER BY s.name",
                 (doc_id,),
@@ -111,11 +115,21 @@ def _members(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
             if doc_visible(r["source_doc"], hidden)
         }.values()
     )
-    items = [
-        {"title": str(r["name"]), "type": r["type"], "doc_id": r["doc_id"]}
-        for r in rows
-        if r["doc_id"] not in hidden
-    ]
+    seen: dict[int, int] = {}  # a document's place in items
+    items: list[dict[str, Any]] = []
+    for r in rows:
+        if r["doc_id"] in hidden:
+            continue
+        item = {
+            "title": str(r["now"] or r["name"]),
+            "type": r["type"],
+            "doc_id": r["doc_id"],
+        }
+        if r["doc_id"] is None:
+            items.append(item)
+        elif r["doc_id"] not in seen:
+            seen[int(r["doc_id"])] = len(items)
+            items.append(item)
     return {"count": len(items), "items": items[:PROJECT_MEMBERS]}
 
 

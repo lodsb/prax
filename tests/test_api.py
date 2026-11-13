@@ -791,3 +791,29 @@ def test_every_list_route_declares_and_clamps_its_limit(client: TestClient) -> N
     assert client.get("/people", params={"limit": 10**6}).status_code == 200
     got = client.get("/jobs", params={"limit": 0})
     assert got.status_code == 200
+
+
+def test_a_list_routes_limit_is_the_stores(client: TestClient) -> None:
+    """Quality review 2026-11-11, findings 18 and 38: the schema's maximum
+    is what the store answers at most, and a page says the limit it used;
+    /traverse's limit takes 0 for the most, which the schema now says."""
+    schema = client.get("/openapi.json").json()
+
+    def bounds(path: str) -> tuple[int, int]:
+        p = next(
+            x
+            for x in schema["paths"][path]["get"]["parameters"]
+            if x["name"] == "limit"
+        )
+        s = next(s for s in p["schema"].get("anyOf") or [p["schema"]] if "maximum" in s)
+        return s["minimum"], s["maximum"]
+
+    assert bounds("/graph/merges") == (1, store.LIST_PAGE)
+    assert bounds("/graph/imports/likely") == (1, store.LIKELY_PAGE)
+    assert bounds("/faces/groups") == (1, store.GROUPS_PAGE)
+    assert bounds("/documents/genre-sample") == (1, store.GENRE_SAMPLE_MOST)
+    assert bounds("/traverse")[0] == 0
+    got = client.get("/graph/merges", params={"limit": 10**6}).json()
+    assert got["limit"] == store.LIST_PAGE
+    got = client.get("/graph/candidates", params={"limit": 7}).json()
+    assert got["limit"] == 7

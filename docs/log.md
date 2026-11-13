@@ -11442,3 +11442,78 @@ reported `gone` and stays live, as any gone file does. Tests:
 `test_register.py` (3), `test_projects.py::test_a_register_is_its_questions_each_with_its_state`,
 `::test_what_about_a_subject_is_its_questions_open_first`,
 `test_mcp.py::test_about_reads_a_project_register`.
+
+## 2026-11-13: quality findings 19, 35, 36, 5, 6, 7, 4, 18, 38, 39
+
+The quality review of 2026-11-11 (`docs/eval/quality-review-2026-11-11.md`),
+ten findings in one stage.
+
+**36.** `maintain._run` caught nothing, so one pass that raised skipped
+every pass after it (`private` and `rules` behind an early `references`).
+The failed job's note named the exception, not the pass. Now each pass is
+caught, logged with its name, and the rest run. The run then raises
+`PassesFailed`, whose message names each failed pass with its error, and
+the job row keeps it as its note.
+
+**35.** `note_spend` swallowed a failed ledger write without a word; it
+logs it at WARNING with step, model, run, document and usage.
+`Pass.post` took the usage bag before it posted, so a post the door did
+not take (a restart) lost the spending. The bag is now refilled and the
+next post carries it. If the door wrote the row and only the answer was
+lost, the batch is counted twice. That is rarer, and an overcount is
+safer for a spending limit than an undercount.
+
+**19.** Of the four ways spending went home, three had been made
+consistent by findings 17 and the safety review. The one that still
+charged twice was the local extractor on a keyed server: the runtime
+recorded the call in the bag (`payload.spent`), and the extraction
+carried the same usage (`Extraction.usage`, charged by `take_in`).
+`OpenAIRuntime.chat` takes `record=`, as `ClaudeRuntime.create` does, and
+the local extractor passes `record=False`, as the Claude extractor
+already did. `Pass.post`'s docstring now says which way a step's
+spending goes: through the bag, unless a result carries its own usage
+and its call is made with `record=False`.
+
+**5.** The document page drew a stale mark from its own list of states,
+which lacked `retracted`. It now draws `GET /get`'s `stale` (from
+`store.staleness`) with `staleNote`, so a document made stale by an edge
+or a later version is marked too.
+
+**6.** `sync_facts` keyed a fact by the composed ontology version, so a
+bump of any module ended and restated every project's link and status
+facts on the next sync. The version is out of the key. A fact written
+under an older version is kept while the current ontology still accepts
+its relation and types (`check_edge`), and ended otherwise.
+
+**7.** A refreshed note whose first heading changed left its node on the
+retired copy: `_move_nodes_off` looked for a live document of the node's
+name. A node now moves to the document that replaced or duplicates it,
+whatever its title. A project's members list a document once, under its
+title now, where both of its nodes would have listed it twice.
+
+**4.** Unretiring one document of a clean-up from before 2026-11-07
+dropped the list of facts it had ended, kept in `meta.retired.ended`,
+and brought none back. `record_old_endings` (shared with `restore_set`)
+records that list as the run's endings first. The review asked for the
+format to be upgraded once at start-up. 377 live documents carry it, and
+rewriting them is the owner's call, so the fix reads the old format where
+it is needed and changes nothing until a document is taken back.
+
+**18 and 38.** Twenty-four list routes said 500 at most in OpenAPI, and
+the store answered at most 50 to 200. The 200s are one constant,
+`store.LIST_PAGE`; the imports page's 100 is `LIKELY_PAGE` and the genre
+sample's 50 `GENRE_SAMPLE_MOST`. Each route is typed with its store's
+cap, and the offset pages say the `limit` they used (candidates, merges,
+split names, likely imports, faces, face groups, suspected, quality).
+`/traverse`'s limit says `minimum: 0` and that 0 asks for the most.
+
+**39.** `restore_run` took a retirement's or a clean-up's run and stated
+its facts again while the documents stayed retired. It now refuses a run
+that a document's `meta.retired.run` names, unless it is the document's
+own unretire, and names the verb to use. A run that wrote and ended
+nothing is `NotFound`, as `restore_set` says. The three undo verbs still
+answer in three shapes, a change to their callers left for now.
+
+Tests: `test_maintain.py`, `test_budget.py` (2), `test_models.py`,
+`test_schemaorg.py`, `test_document_nodes.py`, `test_cleanup.py`,
+`test_api.py`, `test_unretire.py`, and the UI's `dateLine`.

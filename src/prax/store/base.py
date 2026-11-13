@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Generic, ParamSpec, Required, TypedDict, TypeVar
 
 from prax import config, packs
-from prax.errors import NotFound  # noqa: F401  the store's miss, store.NotFound
+from prax.errors import NotFound  # the store's miss, store.NotFound
 from prax.graph import ontology
 from prax.ml import faces as faces_ml
 from prax.ml import vectors
@@ -68,6 +68,12 @@ def live(alias: str | None = None) -> str:
 
 
 LIVE = live()
+
+# a page of a list a store read answers at most, where it has no cap of
+# its own: the door types those routes' limit with it, so the schema a
+# client reads and what the store does agree (quality review
+# 2026-11-11, finding 18)
+LIST_PAGE = 200
 
 
 _indexes: dict[tuple[str, bool], vectors.VectorIndex] = {}  # (path, writable)
@@ -476,7 +482,36 @@ def _restore_run(
     the edges it ended of that document, and none of the run's own. A
     clean-up retires a set under one run, and taking one document of it
     back stated the facts of the whole set while the rest stayed retired
-    (the safety review of 2026-11-11)."""
+    (the safety review of 2026-11-11).
+
+    Without ``source_doc``, a run that retired documents (a retirement's,
+    a clean-up's: ``meta.retired.run``) is refused (ValueError): its undo
+    is ``unretire_document`` or ``restore_set``, which bring the documents
+    back with their facts, where this stated the facts again and left the
+    documents retired. A run that wrote nothing and ended nothing is
+    ``NotFound``, as ``restore_set`` says it (the quality review of
+    2026-11-11, finding 39)."""
+    if source_doc is None:
+        retiring = con.execute(
+            "SELECT id FROM documents WHERE json_extract(meta, '$.retired.run') = ?"
+            " LIMIT 1",
+            (run,),
+        ).fetchone()
+        if retiring is not None:
+            raise ValueError(
+                f"run {run} retired documents (document {retiring[0]} among"
+                " them): take them back with unretire (POST /doc/{id}/unretire)"
+                " or, for a clean-up, its restore (POST /cleanup-restore)"
+            )
+        if (
+            con.execute("SELECT 1 FROM edges WHERE run = ? LIMIT 1", (run,)).fetchone()
+            is None
+            and con.execute(
+                "SELECT 1 FROM edge_endings WHERE run = ? LIMIT 1", (run,)
+            ).fetchone()
+            is None
+        ):
+            raise NotFound(f"no run named {run} wrote or ended a fact")
     # not what an undo of the run stated again: a run that ends its own
     # edges (a sync's links:) restates them under its own name, and a second
     # undo ended them for good (the safety review of 2026-11-11)

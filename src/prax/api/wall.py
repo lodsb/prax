@@ -3,7 +3,7 @@ document is personal, and a person's answer about one."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from prax import store
 from prax.graph import ontology
 
-from ._base import Page, _con
+from ._base import AtMost, _con
 
 router = APIRouter()
 
@@ -108,7 +108,7 @@ def private_rules(request: Request) -> dict[str, Any]:
 def documents_suspected(
     request: Request,
     offset: int = 0,
-    limit: Page = 30,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 30,
     state: str = "suspected",
     referenced: bool = False,
 ) -> dict[str, Any]:
@@ -140,7 +140,7 @@ def media_pictures(
     by: str,
     key: str,
     offset: int = 0,
-    limit: Page = store.MEDIA_PAGE,
+    limit: Annotated[int, AtMost(store.MEDIA_PAGE_MAX)] = store.MEDIA_PAGE,
 ) -> dict[str, Any]:
     """One page of a group's photos and recordings, for the gallery."""
     return store.media_pictures(_con(request), by, key, offset=offset, limit=limit)

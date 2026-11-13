@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
+import pytest
+
 from prax import store
 from prax.graph import ontology
 from prax.text import dates, schemaorg
@@ -239,3 +241,34 @@ def test_facts_are_kept_ended_and_added_by_what_is_stated(
         ]
         is None
     )
+
+
+def test_a_bump_of_another_module_restates_nothing(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding 6 of the 2026-11-11 quality review: a fact written under an
+    earlier ontology version is kept while the current one accepts it, and
+    ended when it no longer does."""
+    import dataclasses
+
+    from prax.graph import ontology
+
+    doc = store.ingest_text(con, "A text. " * 20, title="T")["doc_id"]
+    a = store.Edge("T", "document", "authored_by", "Ada", "person")
+    said = [store.Stated(a, doc, "by Ada")]
+    assert store.sync_facts(con, said, producer="p", run="r1", doc=doc).states == [
+        "added"
+    ]
+    was = ontology.current()
+    bumped = dataclasses.replace(was, version=was.version + "+other9")
+    monkeypatch.setattr(ontology, "current", lambda: bumped)
+    got = store.sync_facts(con, said, producer="p", run="r2", doc=doc)
+    assert (got.states, got.ended) == (["kept"], 0)
+    gone = dataclasses.replace(
+        bumped,
+        version=bumped.version + "x",
+        relations={k: v for k, v in was.relations.items() if k != "authored_by"},
+    )
+    monkeypatch.setattr(ontology, "current", lambda: gone)
+    got = store.sync_facts(con, said, producer="p", run="r3", doc=doc)
+    assert (got.states, got.ended) == (["refused"], 1)

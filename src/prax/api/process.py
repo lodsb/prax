@@ -3,7 +3,7 @@ from it, an extraction or a reading asked for, the readings queue."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 import yaml
 from fastapi import APIRouter, HTTPException, Request
@@ -14,7 +14,7 @@ from prax.capture import routes
 from prax.graph import ontology
 from prax.parsers import quality
 
-from ._base import Page, _con
+from ._base import AtMost, Page, _con
 from .passes import request_fixes, request_groups
 
 router = APIRouter()
@@ -121,7 +121,10 @@ def genres() -> dict[str, Any]:
 
 @router.get("/documents/genre-sample")
 def genre_sample(
-    request: Request, state: str = "open", offset: int = 0, limit: Page = 10
+    request: Request,
+    state: str = "open",
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.GENRE_SAMPLE_MOST)] = 10,
 ) -> dict[str, Any]:
     """The documents to label on the Review page's "genre" tab (``open``),
     a model's labels to check (``check``, and ``ruled`` for those a domain
@@ -396,7 +399,10 @@ def cancel_reading(doc_id: int, request: Request) -> dict[str, bool]:
 
 @router.get("/documents/quality")
 def documents_quality(
-    request: Request, check: str | None = None, offset: int = 0, limit: Page = 30
+    request: Request,
+    check: str | None = None,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 30,
 ) -> dict[str, Any]:
     """What the checks of a text found (stage AO, ``store.quality_page``):
     how many documents each check flags, and with ``check`` those documents

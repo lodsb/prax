@@ -416,3 +416,34 @@ def test_a_judges_calls_to_a_keyed_server_reach_the_ledger(
         "http://127.0.0.1:1/v1", "tiny", [{"role": "user", "content": "?"}]
     )
     assert usage.take() == {}
+
+
+def test_an_extraction_on_a_keyed_server_is_charged_once(
+    cfg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finding 19 of the 2026-11-11 quality review: the local extractor's
+    usage goes home in its ``Extraction`` only, not also through the
+    runtime's accumulator, which made the door charge it twice."""
+    from prax.graph import extraction
+    from prax.ml import usage
+
+    def fake_post(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+        return {
+            "choices": [{"message": {"content": ""}}],
+            "usage": {"prompt_tokens": 1000, "completion_tokens": 200},
+        }
+
+    monkeypatch.setattr(models, "post_json", fake_post)
+    monkeypatch.setenv("GPU_KEY", "secret")
+    rt = models.OpenAIRuntime("http://gpu-box:8080/v1", "m", api_key_env="GPU_KEY")
+    usage.clear()
+    got = extraction.LocalExtractor(rt).extract(
+        extraction.DocumentInput(1, "A note", "", "Some words. " * 20)
+    )
+    assert got.usage["input_tokens"] == 1000
+    assert usage.take() == {}
+    # a call that does not carry its usage itself still records it
+    rt.chat("s", "u")
+    assert usage.take() == {
+        "m@gpu-box:8080": {"input_tokens": 1000, "output_tokens": 200}
+    }

@@ -12,6 +12,7 @@ from typing import Any
 from prax.graph import ontology
 
 from ..base import (
+    LIST_PAGE,
     LIVE,
     MetaLike,
     NotFound,
@@ -743,6 +744,7 @@ def suspected_page(
             (state,),
         ).fetchone()[0]
         where += " AND held = 0" if referenced else " AND held = 1"
+    limit = max(1, min(limit, LIST_PAGE))
     total = con.execute("SELECT count(*)" + where, (state,)).fetchone()[0]
     order = (
         " ORDER BY (json_extract(meta, '$.private.cues') LIKE '%strong:%'"
@@ -756,7 +758,7 @@ def suspected_page(
         + where
         + order
         + " LIMIT ? OFFSET ?",
-        (state, max(1, min(limit, 200)), max(0, offset)),
+        (state, limit, max(0, offset)),
     ).fetchall()
     items = []
     for r in rows:
@@ -774,7 +776,12 @@ def suspected_page(
                 "decided": (meta.get("sensitivity") or {}).get("at"),
             }
         )
-    return {"total": int(total), "items": items, "referenced": int(aside)}
+    return {
+        "total": int(total),
+        "limit": limit,
+        "items": items,
+        "referenced": int(aside),
+    }
 
 
 @_reading

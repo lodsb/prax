@@ -14,6 +14,7 @@ from prax.graph import ontology
 from prax.text import dates
 
 from ..base import (
+    LIST_PAGE,
     VIEWER,
     NotFound,
     _reading,
@@ -847,7 +848,7 @@ def changes(
     way round does not bury what the library learned (AL step 9, G3). A
     document hidden from the viewer counts as absent (the wall)."""
     begin, end, begin_date, end_date = _span(since, until)
-    limit = max(1, min(int(limit), 200))
+    limit = max(1, min(int(limit), LIST_PAGE))
     hidden = hidden_documents(con)
     filters = _change_filters(con, hidden, entity, rel, domain, derived)
     if filters is None:

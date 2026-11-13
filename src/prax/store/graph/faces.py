@@ -394,6 +394,7 @@ def face_groups(
     limit = max(1, min(limit, GROUPS_PAGE))
     return {
         "total": len(lines),
+        "limit": limit,
         "grouped": sum(line["open"] for line in lines),
         "done": done,
         "built_at": built[0],

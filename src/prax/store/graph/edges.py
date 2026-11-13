@@ -17,6 +17,7 @@ from prax.text import dates, mimes, quotes
 from ..base import (
     _NOW,
     END_BATCH,
+    LIST_PAGE,
     LIVE,
     NotFound,
     _claim_node,
@@ -100,7 +101,7 @@ def find_entities(
         GROUP BY e.id
         ORDER BY degree DESC, e.name LIMIT ?
         """,
-        (pattern, pattern, max(1, min(limit, 200))),
+        (pattern, pattern, max(1, min(limit, LIST_PAGE))),
     ).fetchall()
     hidden = hidden_documents(con)
     out = []
@@ -818,14 +819,17 @@ def _sync_facts(
     ``restore_run`` takes it back.
 
     The same fact is the same ends by name and type, relation, document,
-    world date, confidence and ontology version, and the same quote
-    unless ``quotes_count`` is off (a project's link keeps its first
-    words). A re-read that finds the same facts writes nothing. Ending
-    each and stating it again under a new id, which the markup and
-    reference passes did until 2026-11-10, left what points at an edge
-    (premises, a face's name, a correction) on an ended one, and filled
-    the changes with facts that had not changed (structure review
-    finding 16).
+    world date and confidence, and the same quote unless ``quotes_count``
+    is off (a project's link keeps its first words). The ontology's
+    version is not part of it: a fact written under an earlier version is
+    kept while the current one still accepts its relation and types, so a
+    bump of an unrelated module (kitchen's) restates nothing (quality
+    review 2026-11-11, finding 6). A re-read that finds the same facts
+    writes nothing. Ending each and stating it again under a new id, which
+    the markup and reference passes did until 2026-11-10, left what points
+    at an edge (premises, a face's name, a correction) on an ended one,
+    and filled the changes with facts that had not changed (structure
+    review finding 16).
 
     ``defer`` leaves a fact that is live from another reading (any
     producer, any document) to it, counted ``existing``. A world date the
@@ -833,6 +837,7 @@ def _sync_facts(
     scope = "e.source_doc = ?" if doc is not None else "e.run = ?"
     args: tuple[Any, ...] = (doc if doc is not None else run, producer)
     held: dict[tuple[Any, ...], list[int]] = {}
+    older: set[int] = set()  # written under another version than the current
     for r in con.execute(
         "SELECT e.id, e.source_doc, s.name AS src, s.type AS src_type, e.rel,"
         " t.name AS dst, t.type AS dst_type, e.evidence, e.world_from,"
@@ -850,11 +855,12 @@ def _sync_facts(
             r["dst_type"],
             r["world_from"],
             r["confidence"],
-            r["ontology_version"],
             r["evidence"] if quotes_count else None,
         )
         held.setdefault(key, []).append(int(r["id"]))
-    version = ontology.current().version
+        if r["ontology_version"] != ontology.current().version:
+            older.add(int(r["id"]))
+    onto = ontology.current()
     # this reading's own edges are not another's: a changed quote is restated
     ours_all = {i for ids in held.values() for i in ids}
     kept: set[int] = set()
@@ -877,7 +883,6 @@ def _sync_facts(
             e.dst_type,
             begin,
             fact.confidence,
-            version,
             fact.evidence if quotes_count else None,
         )
         if key in stated:  # the same fact twice in one reading
@@ -885,6 +890,11 @@ def _sync_facts(
             continue
         stated.add(key)
         ours = held.get(key)
+        if ours and ours[0] in older:
+            try:
+                onto.check_edge(e.src_type, e.rel, e.dst_type)
+            except ValueError:
+                ours = None  # no longer accepted: ended, and refused below
         if ours:
             kept.add(ours[0])
             states.append("kept")

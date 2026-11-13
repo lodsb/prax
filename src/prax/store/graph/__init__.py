@@ -180,6 +180,7 @@ from .geo import (  # noqa: F401
 from .imports import (  # noqa: F401
     FOREIGN_STATES,
     FOREIGN_VERDICTS,
+    LIKELY_PAGE,
     Landing,
     add_foreign_labels,
     decide_foreign,
@@ -269,6 +270,7 @@ from .paths import (  # noqa: F401
 )
 from .people import (  # noqa: F401
     DEPICTS,
+    PEOPLE_LIMIT,
     PERSON_TYPE,
     people,
     person_page,

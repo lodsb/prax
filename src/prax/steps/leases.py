@@ -12,12 +12,14 @@ which hands the items out again, as it should.
 
 from __future__ import annotations
 
-import contextlib
+import logging
 import sqlite3
 import time
 from typing import Any
 
 from prax import store
+
+_log = logging.getLogger(__name__)
 
 LEASE_SECONDS = 900
 # a worker's "not yet" (the server it needs is loading or down) keeps the
@@ -146,5 +148,16 @@ def note_spend(
     reported name is what the row carries."""
     from prax.ml import budget
 
-    with contextlib.suppress(Exception):  # a ledger row is never worth an error
+    try:
         budget.note(con, step, usage, doc_id=doc_id, run=run, model=model)
+    except Exception:  # noqa: BLE001 - a ledger row is never worth an error
+        # but a lost row is money the daily limit never sees: say so
+        _log.warning(
+            "spending not recorded: step %s, model %s, run %s, doc %s, usage %s",
+            step,
+            model,
+            run,
+            doc_id,
+            usage,
+            exc_info=True,
+        )

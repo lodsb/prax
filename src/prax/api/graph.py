@@ -133,7 +133,7 @@ def changes(
     derived: bool = False,
     rereadings: bool = False,
     corrections: bool = False,
-    limit: Page = store.CHANGES_SHOWN,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = store.CHANGES_SHOWN,
 ) -> dict[str, Any]:
     """What changed in a period (``store.changes``): on record time the
     facts prax wrote and ended in it, on world time (``world``) the facts
@@ -355,7 +355,9 @@ def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str
 
 
 @router.get("/entities")
-def entities(q: str, request: Request, limit: Page = 20) -> list[dict[str, Any]]:
+def entities(
+    q: str, request: Request, limit: Annotated[int, AtMost(store.LIST_PAGE)] = 20
+) -> list[dict[str, Any]]:
     """Entities whose name contains ``q``, most connected first."""
     return store.find_entities(_con(request), q, limit=limit)
 
@@ -363,7 +365,7 @@ def entities(q: str, request: Request, limit: Page = 20) -> list[dict[str, Any]]
 @router.get("/graph/overview")
 def graph_overview(
     request: Request,
-    limit: Page = 30,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 30,
     min_shared: int = 2,
     domain: str | None = None,
     page: int | None = None,
@@ -480,7 +482,10 @@ def graph_document(doc_id: int, request: Request) -> dict[str, Any]:
 
 @router.get("/graph/candidates")
 def graph_candidates(
-    request: Request, type: str | None = None, offset: int = 0, limit: Page = 30
+    request: Request,
+    type: str | None = None,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 30,
 ) -> dict[str, Any]:
     """The likely pairs nobody has decided, closest names first, each side
     with its edges and a document naming it (the review page's "same
@@ -531,7 +536,9 @@ def graph_decide(req: DecideReq, request: Request) -> dict[str, Any]:
 
 @router.get("/graph/split-names")
 def graph_split_names(
-    request: Request, offset: int = 0, limit: Page = 30
+    request: Request,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 30,
 ) -> dict[str, Any]:
     """Names held by things of unrelated types that nobody has settled,
     each part with its edges and a document naming it."""
@@ -539,7 +546,11 @@ def graph_split_names(
 
 
 @router.get("/graph/merges")
-def graph_merges(request: Request, offset: int = 0, limit: Page = 30) -> dict[str, Any]:
+def graph_merges(
+    request: Request,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.LIST_PAGE)] = 30,
+) -> dict[str, Any]:
     """Merges worth a second look: one word apart, or a name folded into a
     narrower one (``store.merges_page``)."""
     return store.merges_page(_con(request), offset=offset, limit=limit)
@@ -636,7 +647,9 @@ async def graph_import(
 
 @router.get("/graph/imports/likely")
 def graph_imports_likely(
-    request: Request, offset: int = 0, limit: Page = 30
+    request: Request,
+    offset: int = 0,
+    limit: Annotated[int, AtMost(store.LIKELY_PAGE)] = 30,
 ) -> dict[str, Any]:
     """Another library's entities whose name a thing here answers to, waiting
     with their edges for an answer (``store.foreign_likely``)."""
@@ -805,7 +818,11 @@ def graph_event_join(candidate_id: int, request: Request) -> dict[str, Any]:
 
 
 @router.get("/people")
-def people(request: Request, q: str = "", limit: Page = 50) -> list[dict[str, Any]]:
+def people(
+    request: Request,
+    q: str = "",
+    limit: Annotated[int, AtMost(store.PEOPLE_LIMIT)] = 50,
+) -> list[dict[str, Any]]:
     """Persons, the most photographed and connected first; ``q`` narrows
     them by name (``store.people``)."""
     return store.people(_con(request), q=q, limit=limit)
@@ -826,7 +843,7 @@ def pictures(
     candidate: int | None = None,
     place: int | None = None,
     offset: int = 0,
-    limit: Page = store.PICTURES_PAGE,
+    limit: Annotated[int, AtMost(store.PICTURES_PAGE_MAX)] = store.PICTURES_PAGE,
 ) -> dict[str, Any]:
     """One page of a set of pictures, the gallery's (``store.picture_set``):
     a person's, an event's, an event candidate's or a place's. The

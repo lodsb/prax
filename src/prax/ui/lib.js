@@ -1127,10 +1127,10 @@ function dateLine(meta, doc) {
   const day = (s) => esc(String(s || "").slice(0, 10));
   if (doc && doc.added_at) bits.push(`<span class="muted" title="when it came into the library">added ${day(doc.added_at)}</span>`);
   if (doc && doc.parsed_at && day(doc.parsed_at) !== day(doc.added_at)) bits.push(`<span class="muted" title="when its text was last read">read ${day(doc.parsed_at)}</span>`);
-  const st = (meta || {}).status;
-  if (st && ["retired", "superseded", "invalid", "deprecated"].includes(st.state)) {
-    bits.push(`<span class="stale" title="${esc(st.words || "")}">${esc(st.state)}${st.since ? " " + esc(st.since) : ""}</span>`);
-  }
+  // no longer current, as the door says it (GET /get's `stale`, from
+  // store.staleness: its own status, an edge reaching it, a later version);
+  // the page keeps no list of its own of which states are stale
+  if (doc && doc.stale) bits.push(staleNote(doc.stale));
   return bits.join(" · ");
 }
 

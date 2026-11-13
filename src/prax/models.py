@@ -416,6 +416,7 @@ class Runtime(Protocol):
         temperature: float = 0.0,
         repeat_penalty: float = 1.0,
         stop: list[str] | None = None,
+        record: bool = True,
     ) -> tuple[str, dict[str, int]]: ...
 
 
@@ -477,8 +478,12 @@ class OpenAIRuntime:
         repeat_penalty: float = 1.0,
         stop: list[str] | None = None,
         images: list[tuple[bytes, str]] | None = None,
+        record: bool = True,
     ) -> tuple[str, dict[str, int]]:
-        """``images`` are ``(bytes, media type)`` pairs sent before the
+        """``record=False`` keeps what a keyed server's call used out of
+        the ledger's accumulator, for a caller that carries the usage home
+        itself (an ``Extraction``'s), as ``ClaudeRuntime.create`` has it.
+        ``images`` are ``(bytes, media type)`` pairs sent before the
         user text as data URLs; the server needs a multimodal projector
         (llama-server ``--mmproj``) or answers about text alone."""
         content: Any = user
@@ -507,7 +512,7 @@ class OpenAIRuntime:
         )
         text = (data["choices"][0]["message"].get("content") or "").strip()
         u = data.get("usage") or {}
-        if self.api_key_env:
+        if self.api_key_env and record:
             # a server that takes a key is a service that bills (a local
             # llama-server takes none): its use goes home like Claude's,
             # under the runtime's name, which prax.yaml prices or which costs

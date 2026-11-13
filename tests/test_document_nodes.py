@@ -208,3 +208,23 @@ def test_a_pictures_node_outlives_the_text_it_is_given(
     assert store.doc_node_ids(con, one) == before
     # the other camera's picture of the same file name is still its own
     assert store.document_node(con, two)[0] == f"IMG_0001.JPG (#{two})"
+
+
+def test_a_note_retitled_by_its_sync_hands_its_node_on(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 7 of the 2026-11-11 quality review: a refreshed note whose
+    first heading changed moves its node to the new text, and the project
+    lists the note once, under its new title."""
+    store.write_page(con, "lab", "# Lab\n", title="Lab", kind="project")
+    old = _doc(con, "Sensor notes, first. " * 20, "Sensor notes (lab)")
+    store.add_to_project(con, "lab", old, promote=False)
+    new = _doc(con, "Sensor notes, second. " * 20, "Sensor notes, raa2p (lab)")
+    store.retire_document(con, old, reason="synced again", replaced_by=new)
+    store.add_to_project(con, "lab", new, promote=False)
+    name, etype = "Sensor notes (lab)", "document"
+    assert store.node_document(con, name, etype) == new
+    members = store.get_page(con, "lab")["members"]
+    assert members["count"] == 1
+    assert members["items"][0]["doc_id"] == new
+    assert members["items"][0]["title"] == "Sensor notes, raa2p (lab)"

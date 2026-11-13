@@ -10,6 +10,8 @@ import json
 import sqlite3
 from typing import Any
 
+import pytest
+
 from prax import store
 from prax.store.repair.common import _repair_edges, _repair_entities
 
@@ -210,4 +212,26 @@ def test_a_second_retirement_keeps_the_run_the_undo_needs(
     )
     store.retire_document(con, doc, reason="first")
     store.retire_document(con, doc, reason="again", run="cleanup-y")
+    assert store.unretire_document(con, doc)["edges"] == 1
+
+
+def test_a_retirements_run_is_not_restored_as_a_repair(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 39 of the 2026-11-11 quality review: the generic restore
+    refuses a run that retired documents (it stated their facts again and
+    left them retired) and says a run nobody wrote is not there."""
+    doc = _doc(con, "Notes on a mixer. " * 20, "Mixer")
+    store.link(
+        con,
+        store.Edge("Mixer", "document", "authored_by", "Ada", "person"),
+        source_doc=doc,
+    )
+    store.retire_document(con, doc, reason="old")
+    run = store.get_meta(con, doc)["retired"]["run"]
+    with pytest.raises(ValueError, match="unretire"):
+        store.restore_run(con, run)
+    assert not _live(con, doc)
+    with pytest.raises(store.NotFound):
+        store.restore_run(con, "no-such-run")
     assert store.unretire_document(con, doc)["edges"] == 1

@@ -37,6 +37,8 @@ from ..base import (
 )
 from .meta import _due, _put_meta, get_meta, sure_labels
 
+GENRE_SAMPLE_MOST = 50  # documents a person labels in one sitting
+
 GENRE_OPENING = 1500  # characters of the text a labeller reads beside the summary
 
 # Where a document came from, as the sample draws it: each source in turn,
@@ -327,7 +329,7 @@ def genre_sample(
     ``labelled``, ``to_check`` and ``skipped`` count what is done so far."""
     if state not in ("open", "labelled", "check", "ruled"):
         raise ValueError("state is open, check, ruled or labelled")
-    limit = max(1, min(limit, 50))
+    limit = max(1, min(limit, GENRE_SAMPLE_MOST))
     offset = max(0, offset)
     cols = (
         "id, title, mime, meta, text_hash, source_url, original_path,"

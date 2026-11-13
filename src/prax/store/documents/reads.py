@@ -19,6 +19,7 @@ from prax.text import arxiv, dates
 
 from ..base import (
     _TOKEN,
+    LIST_PAGE,
     LIVE,
     UNASSIGNED,
     Document,
@@ -1386,15 +1387,17 @@ def quality_page(
     out: dict[str, Any] = {"checks": counts}
     if check is None:
         return out
+    limit = max(1, min(limit, LIST_PAGE))
     rows = con.execute(
         "SELECT d.id, d.title, d.mime, json_extract(d.meta, '$.text_source'),"
         " f.value" + _CURRENT_QUALITY + " AND json_extract(f.value, '$.check') = ?"
         " ORDER BY json_extract(f.value, '$.count') DESC, d.id LIMIT ? OFFSET ?",
-        (check, max(1, min(limit, 200)), max(0, offset)),
+        (check, limit, max(0, offset)),
     ).fetchall()
     out.update(
         check=check,
         total=counts.get(check, 0),
+        limit=limit,
         items=[
             {
                 "id": r[0],
