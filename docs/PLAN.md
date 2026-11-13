@@ -462,8 +462,8 @@ they block, then by cost. Sizes are the review's.
       in `init_db` (an `AFTER_MIGRATION` half), no legacy branch.
       Done as a read, not a rewrite: `unretire_document` records the
       old list first (`record_old_endings`, which `restore_set` shares).
-      377 live documents keep the old format; converting them all in
-      `init_db` is the owner's call.
+      377 live documents kept the old format; migration 70 converted
+      them (the owner, 2026-11-13: "do 4"), and the read is gone.
 - [x] (2026-11-13) 18 and 38. List routes say at most 500 in OpenAPI while the store
       returns at most 50 to 200: `AtMost(<the store's cap>)` per route,
       and the applied `limit` echoed. `/traverse` says `minimum: 1`
@@ -536,10 +536,15 @@ they block, then by cost. Sizes are the review's.
 
 **Settings.**
 
-- [ ] 21. (half done 2026-11-13: documented, and a test holds it) About fifteen settings the code reads are documented nowhere,
+- [x] (2026-11-13) 21. About fifteen settings the code reads are documented nowhere,
       and a mistyped key in a section is ignored: a settings registry in
       `prax.config` (key, variable, type, default, a line), a test
       against `prax.example.yaml`, packs adding rows. A stage.
+      Done in two halves: the howto's table with a test that every key
+      read is documented, then `config.KEYS` (a pack's `setting_keys`
+      beside it), which `config.check` holds `prax.yaml` to at the door's
+      and the worker's start; a test holds the table to the code's
+      reads.
 
 **Languages and the owner's library, an hour each.**
 
@@ -601,17 +606,23 @@ they block, then by cost. Sizes are the review's.
 
 **Structure (the critic's).**
 
-- [ ] C1. `store/base.py` grew from 1,080 to 1,799 lines with eight
+- [x] (2026-11-13) C1. `store/base.py` grew from 1,080 to 1,799 lines with eight
       concerns, and the next stage or two takes it past the 2,000-line
       split: a `base` package of parts (tokens and viewers, the index
       files, node claiming with edge ending and restore). A stage.
-- [ ] C2. Migration 69's Python half is the living node-claim rule that
+      Split at 1,903 lines (the owner: "do 6") into common, locks,
+      endings, nodes, wall, indexes, schema and tokens, none past 390.
+- [x] (2026-11-13) C2. Migration 69's Python half is the living node-claim rule that
       `link` and the heal use, so a later change to it changes what the
       migration does on a store upgraded afterwards: a frozen copy for
       the migration. Not done, for the owner to decide (2026-11-13): the
       half only fills a node with no document, and a store crossing 69
       later gets the rule the heal already applies to the others; the
       reasoning is at `AFTER_MIGRATION`. A half that rewrites is frozen.
+      Frozen after all (the owner: "do 3"): `_migration_69_nodes` writes
+      the rule of 2026-11-13 out, and the heal's
+      `unlinked-document-nodes` applies the living one after it, which
+      answers the objection.
 
 ## Stages
 

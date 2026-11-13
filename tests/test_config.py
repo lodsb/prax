@@ -254,3 +254,60 @@ def test_every_setting_the_code_reads_is_documented() -> None:
 
     missing = sorted(f"{k} ({at})" for k, at in keys.items() if not named(k))
     assert missing == []
+
+
+def test_a_mistyped_key_is_refused_at_the_start(data_dir: Path) -> None:
+    """Finding 21 of the 2026-11-11 quality review, its second half: a key
+    the code does not read was read as absent, and its default served
+    without a word. ``config.check`` names it; a nested key is walked to
+    its leaf, a known key's own value is not, and a section with a grammar
+    of its own is left to its reader."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / config.CONFIG_NAME).write_text(
+        "door:\n  sqlite_cahce_mb: 64\n  sqlite_cache_mb: 64\n"
+        "faces:\n  match:\n    line: 0.5\n    lines: 0.5\n"
+        "places:\n  roots:\n    anything: {here: D:/x}\n"
+        "maths:\n  timeout_s: 3\n  timeout: 3\n"
+        "run:\n  door: {}\n",
+        "utf-8",
+    )
+    assert config.unknown_keys() == [
+        "door.sqlite_cahce_mb",
+        "faces.match.lines",
+        "maths.timeout",
+    ]
+    with pytest.raises(config.ConfigError) as got:
+        config.check()
+    assert "door.sqlite_cahce_mb is not a setting" in str(got.value)
+
+
+def test_every_key_the_code_reads_is_in_the_table() -> None:
+    """``config.KEYS`` is what ``check`` holds a section to: a key the code
+    reads and the table lacks would stop a door whose prax.yaml sets it,
+    and a key the table names that nothing reads is a typo let through."""
+    import ast
+
+    root = Path(__file__).resolve().parents[1] / "src" / "prax"
+    readers = {"setting", "number", "whole", "flag", "words", "mode"}
+    read: set[str] = set()
+    for p in root.rglob("*.py"):
+        for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            f = node.func
+            name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
+            first = node.args[0]
+            if (
+                name in readers
+                and isinstance(first, ast.Constant)
+                and isinstance(first.value, str)
+                and first.value.split(".", 1)[0] in config.KEYS
+                and "." in first.value
+            ):
+                read.add(first.value)
+    # prax.ml.sessions reads these by a section it is given
+    for section in ("embeddings", "rerank"):
+        read |= {f"{section}.{k}" for k in ("providers", "threads", "arena")}
+    table = {f"{s}.{k}" for s, keys in config.KEYS.items() for k in keys}
+    assert sorted(read - table) == []
+    assert sorted(table - read) == []

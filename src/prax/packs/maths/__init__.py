@@ -79,4 +79,5 @@ MANIFEST = Pack(
     steps={"equations": "prax.packs.maths.formulas"},
     watched=("equations",),
     settings="maths",
+    setting_keys=("python", "timeout_s"),
 )

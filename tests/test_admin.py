@@ -51,7 +51,7 @@ def test_a_tokens_last_use_is_kept_once_an_hour(
     # within the hour a use writes nothing
     con = store.thread_connection()
     assert store.note_token_use(con, "laptop") is False
-    monkeypatch.setattr(store.base, "TOKEN_USE_EVERY", 0.0)
+    monkeypatch.setattr(store.base.tokens, "TOKEN_USE_EVERY", 0.0)
     assert store.note_token_use(con, "laptop") is True
 
 

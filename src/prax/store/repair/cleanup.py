@@ -14,7 +14,6 @@ from prax.text import clutter
 from ..base import LIVE, NotFound, _reading, _serialized, meta_of, rows_in, run_name
 from ..documents import (
     live_photo_clip,
-    record_old_endings,
     retire_document,
     unretire_document,
 )
@@ -196,19 +195,14 @@ def restore_set(con: sqlite3.Connection, run: str) -> dict[str, Any]:
     keep their ending and ``held_at`` still says what prax held while the
     set was retired (invariant 8). A duplicate comes back without what
     moved to its first copy, which keeps it. A clean-up from before
-    2026-11-07 kept its ended edges in ``meta.retired.ended``; they are
-    recorded as the run's endings first."""
+    2026-11-07 kept its ended edges in ``meta.retired.ended``; migration
+    70 recorded them as the run's endings."""
     rows = con.execute(
-        "SELECT id, json_extract(meta, '$.retired.ended') AS ended,"
-        " json_extract(meta, '$.retired.at') AS at"
-        " FROM documents WHERE json_extract(meta, '$.retired.run') = ?",
+        "SELECT id FROM documents WHERE json_extract(meta, '$.retired.run') = ?",
         (run,),
     ).fetchall()
     if not rows:
         raise NotFound(f"no clean-up named {run}")
-    record_old_endings(
-        con, run, [{"ended": r["ended"] or "[]", "at": r["at"]} for r in rows]
-    )
     # the first document's unretire states the whole set's edges again
     # (its run is the set's), the rest find them stated
     restated = sum(int(unretire_document(con, int(r["id"]))["edges"]) for r in rows)

@@ -88,7 +88,6 @@ from .library import (  # noqa: F401
     is_retired,
     live_captures_of,
     note_recapture,
-    record_old_endings,
     retire_document,
     similarity,
     unretire_document,

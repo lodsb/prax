@@ -75,7 +75,8 @@ revisit threshold, under "Decision thresholds" below.
    step's logic calls up inside a function (`tests/test_invariants.py`).
    A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
-   before it: `documents` (meta, places, text, library, domains,
+   before it: `base` (common, locks, endings, nodes, wall, indexes,
+   schema, tokens), `documents` (meta, places, text, library, domains,
    genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
    context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures, imports, citations, schemaorg), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces), `pages` (texts, pointers, tree, reads,
@@ -526,7 +527,8 @@ reference `docs/ask.md`.
   `embeddings`, `vectors`, `rerank`, `parse`, `citations`, `door`,
   `ontology`, `paths`). A module never invents an environment variable
   of its own. It names a setting, and the matching `PRAX_*` variable
-  overrides it for one run. Environment-only: the data directory, the
+  overrides it for one run. A key no reader names is refused at
+  start (`config.KEYS`, `config.check`). Environment-only: the data directory, the
   config path, the token, the door's address, and the per-run switches.
 - A worker holds the configuration and the code it started with. It
   stops after five passes that fail the same way, so `prax up` starts

@@ -48,3 +48,5 @@ class Pack:
     chunk_marks: dict[str, str] = field(default_factory=dict)
     extra: str | None = None  # the pyproject extra it needs
     settings: str | None = None  # its section in prax.yaml
+    # the keys that section may hold (``config.KEYS``); any other is refused
+    setting_keys: tuple[str, ...] = ()

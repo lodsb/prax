@@ -225,17 +225,144 @@ SWITCHES = (
 )
 
 
+# The keys a section of prax.yaml may hold, for every section whose keys
+# the code reads one by one by dotted path; a key under a nested one
+# (``faces.match.line``) is written with its dots. A key named here may
+# hold anything below it (``places.roots`` names a host's shares). The
+# sections left out have a grammar their reader checks: ``models`` and
+# ``steps`` (prax.models), ``domains``, ``run`` (prax.host.roles),
+# ``schedule`` (prax.host.schedule) and ``packs``, a list. A test holds
+# the table to the code's reads (the quality review of 2026-11-11,
+# finding 21: a mistyped key was read as absent, and its default served
+# without a word).
+_SESSION = ("providers", "threads", "arena")  # prax.ml.sessions, per section
+KEYS: dict[str, frozenset[str]] = {
+    section: frozenset(keys)
+    for section, keys in {
+        "embeddings": ("model", "variant", "door_providers", *_SESSION),
+        "vectors": ("dtype", "ef", "serve"),
+        "rerank": ("model", "variant", "url", "depth", *_SESSION),
+        "parse": (
+            "arxiv_id",
+            "choose_reader",
+            "comments",
+            "figures",
+            "formula_readings",
+            "languages",
+            "layout_window",
+            "marker_mode",
+            "marker_url",
+            "marker_version",
+            "max_layout_mb",
+            "ocr_gpu",
+            "ocr_language",
+            "ocr_max_pages",
+            "vision_dpi",
+            "vision_max_pages",
+            "vision_pages",
+        ),
+        "citations": ("mailto",),
+        "door": (
+            "clock_seconds",
+            "cors_origins",
+            "fetch_private",
+            "inbox_scan_seconds",
+            "max_upload_mb",
+            "sqlite_cache_mb",
+            "sqlite_journal_mb",
+            "sqlite_mmap_mb",
+            "vector_save_seconds",
+        ),
+        "ontology": ("dir",),
+        "graph": (
+            "edges",
+            "label_languages",
+            "language",
+            "min_documents",
+            "neighbours",
+            "per_type",
+        ),
+        "extraction": ("standard_names", "world_dates"),
+        "paths": ("backup", "llama_server", "models"),
+        "sources": ("github.token", "github.user"),
+        "host": ("commit_reserve_mb",),
+        "budget": ("daily_usd", "monthly_usd"),
+        "private": (
+            "head",
+            "names",
+            "paths",
+            "referenced",
+            "strong",
+            "weak",
+            "weak_needed",
+        ),
+        "places": ("live_clips.suffixes", "live_clips.tags", "reference", "roots"),
+        "faces": (
+            "groups.floor",
+            "groups.min_samples",
+            "groups.min_size",
+            "groups.neighbours",
+            "match.line",
+            "match.margin",
+            "match.neighbours",
+            "model",
+        ),
+        "events": (
+            "burst_hours",
+            "folder_share",
+            "gap_hours",
+            "min_photos",
+            "place_share",
+        ),
+        **{p.settings: p.setting_keys for p in packs.PACKS if p.settings},
+    }.items()
+}
+
+
+def unknown_keys(data: dict[str, Any] | None = None) -> list[str]:
+    """Every key of ``prax.yaml`` (or ``data``) under a section of ``KEYS``
+    that the table does not name, dotted (``door.sqlite_cahce_mb``)."""
+
+    def walk(section: str, node: Any, prefix: str) -> Iterator[str]:
+        if not isinstance(node, dict):
+            return
+        known = KEYS[section]
+        for key, value in node.items():
+            path = f"{prefix}{key}"
+            if path in known:
+                continue
+            if isinstance(value, dict) and any(k.startswith(f"{path}.") for k in known):
+                yield from walk(section, value, f"{path}.")
+            else:
+                yield f"{section}.{path}"
+
+    doc = document() if data is None else data
+    return [
+        key
+        for section in sorted(KEYS)
+        if section in doc
+        for key in walk(section, doc[section], "")
+    ]
+
+
 def check() -> None:
-    """Every switch read once; a ``ConfigError`` naming each bad one. A
-    mistyped switch was found only when a parse read it, and failed the
-    batch or every document it touched (the quality review of 2026-11-11,
-    findings 20 and 37)."""
+    """Every switch read once and every key of a known section named; a
+    ``ConfigError`` naming each bad one. A mistyped switch was found only
+    when a parse read it, and failed the batch or every document it
+    touched (the quality review of 2026-11-11, findings 20 and 37); a
+    mistyped key was never found (finding 21)."""
     bad = []
     for s in SWITCHES:
         try:
             flag(s.dotted, s.env, s.default)
         except ConfigError as exc:
             bad.append(str(exc))
+    for key in unknown_keys():
+        section = key.split(".", 1)[0]
+        bad.append(
+            f"{key} is not a setting; {section} knows"
+            f" {', '.join(sorted(KEYS[section]))}"
+        )
     if bad:
         raise ConfigError("; ".join(bad))
 

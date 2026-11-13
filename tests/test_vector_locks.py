@@ -54,7 +54,7 @@ def test_a_single_vector_is_read_under_the_lock(
     path = base._index_path("locks")
     _main(path)
     lock = CountingLock()
-    monkeypatch.setattr(base, "_INDEX_LOCK", lock)
+    monkeypatch.setattr(base.indexes, "_INDEX_LOCK", lock)
     assert base._get_vector(path, 3) is not None
     assert lock.taken >= 1
 

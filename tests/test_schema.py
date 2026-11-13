@@ -243,7 +243,7 @@ def test_a_migrations_python_half_commits_with_it(
     monkeypatch.setitem(
         store.base.AFTER_MIGRATION,
         store.base.DOCUMENT_NODES,
-        store.base._claim_document_nodes,
+        store.base._migration_69_nodes,
     )
     assert store.init_db(con) == store.migrations()[-1][0]
     con.close()

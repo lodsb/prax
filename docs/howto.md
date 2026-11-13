@@ -1985,6 +1985,13 @@ has a `PRAX_*` variable that overrides it for one run.
 this guide nor `prax.example.yaml` names (the quality review of
 2026-11-11, finding 21).
 
+A key the code does not read stops the door and the worker at their
+start: `door: {sqlite_cahce_mb: 64}` is refused with the keys `door`
+knows, where it was once read as absent and the default served. The
+keys of each section are `config.KEYS`; a pack's are its manifest's
+`setting_keys`. `models`, `steps`, `domains`, `run`, `schedule` and
+`packs` are checked by their own readers.
+
 ## 3l. Captures: uploads, sent pages, fetched URLs, the drop folder
 
 Everything that is not a curated import comes in as a capture

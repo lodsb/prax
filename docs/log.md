@@ -11742,3 +11742,68 @@ type, default and document, and `config.document()` refusing an unknown
 key inside a known section. That refusal would stop a door whose
 `prax.yaml` holds a stray key at its next start, so it waits for the
 owner.
+
+## 2026-11-13 (evening): the owner's six decisions
+
+The owner answered the morning's list with "do 1/2/3/4/5/6".
+
+**1. Push and restart.** e160a4c..85b25d4 pushed; `prax up --restart
+door` and `--restart worker` at 21:33, so the worker carries the spending
+fixes of a61ddcb.
+
+**2. Finding 21, the other half.** `config.KEYS` names the keys of every
+section the code reads key by key: a nested one with its dots
+(`faces.match.line`), a known key holding anything below it
+(`places.roots`). A pack names its section's keys in its manifest
+(`Pack.setting_keys`; maths: `python`, `timeout_s`). `config.check`,
+called at the door's and the worker's start, refuses every other key
+with the keys its section knows. `models`, `steps`, `domains`, `run`,
+`schedule` and `packs` keep their own readers' checks. The live
+`prax.yaml` passes (`config.unknown_keys()` is empty). Tests:
+`test_config.py::test_a_mistyped_key_is_refused_at_the_start` and
+`::test_every_key_the_code_reads_is_in_the_table`, which holds the table
+to the code's reads both ways (`annotate.mode` and `prax.ml.sessions`'
+per-section reads included).
+
+**3. C2.** Migration 69's half is `_migration_69_nodes`, the rule of
+this day written out, with no call to `_node_doc`. My objection was that
+a store crossing 69 later would get a worse rule than the living one.
+It does not hold: the heal's `unlinked-document-nodes` applies the
+living rule to whatever the migration left. Test: the upgrade test runs
+with `_node_doc` replaced by a function that fails.
+
+**4. Finding 4's old format.** Migration 70 moves each
+`meta.retired.ended` list into `edge_endings`, at the retirement's time,
+and removes the list. Read-only on the live store: 377 documents of 4
+runs, 1,034 edges, none recorded yet, every edge present. With the
+format gone, `record_old_endings` and its two callers' branches are
+gone too. The tests run the migration's SQL over a store that holds
+the old list.
+
+**5. The pointer index: not needed, and a wrong number corrected.** The
+AU step 4 entry said a pointer into another project costs 0.26 s,
+scanning every document's meta. It does not. `project_documents`' query
+is served by `idx_documents_source` (migration 10), and
+`resolve_pointer` takes 1-2 ms on the live store (read-only, warm and
+cold). A scratch copy of the documents table without that index took
+142 ms, which is probably where the 0.26 s came from. The migration I
+wrote for it is withdrawn. The test that stays,
+`test_invariants.py::test_a_projects_documents_are_read_through_their_index`,
+fails if the query stops using the index.
+
+**6. C1.** `store/base.py`, at 1,903 lines, is a package of eight parts
+in this order: `common` (the shapes, the meta keys, `live`, batching ids),
+`locks`, `endings`, `nodes`, `wall` (with the connections), `indexes`,
+`schema` (migrations, `init_db`, the archive) and `tokens`. None is
+longer than 390 lines. The cut follows the file's own section marks.
+The dependencies form a chain with no cycle (a script read every name
+each part uses). `__init__` re-exports every name, the private ones too,
+so `store.base._serialized` and `from ..base import …` work as before.
+A test that patched a module global now patches the part that reads it
+(`base.locks.LOCK_WAIT_SLOW`, `base.indexes._INDEX_LOCK`,
+`base.tokens.TOKEN_USE_EVERY`). The live-spelling test reads
+`base/common.py` as the one place `live` is written. A frozen migration
+half marks its own spelling.
+
+Checks: ruff, format, mypy (Windows and Linux), 90 UI tests, pytest 1,884
+passed and 4 skipped.

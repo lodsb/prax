@@ -20,8 +20,8 @@ def test_a_long_hold_and_a_long_wait_are_logged(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setattr(base, "LOCK_WAIT_SLOW", 0.05)
-    monkeypatch.setattr(base, "LOCK_HOLD_SLOW", 0.1)
+    monkeypatch.setattr(base.locks, "LOCK_WAIT_SLOW", 0.05)
+    monkeypatch.setattr(base.locks, "LOCK_HOLD_SLOW", 0.1)
 
     inside = threading.Event()
 

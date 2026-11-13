@@ -493,9 +493,10 @@ def test_a_live_document_is_spelled_one_way() -> None:
     raw = [
         f"{p.relative_to(SRC)}:{i}"
         for p in sorted((SRC / "store").rglob("*.py"))
-        if p.name != "base.py"
+        if p.relative_to(SRC / "store").as_posix() != "base/common.py"
         for i, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1)
-        if "'$.retired')" in line and "IS NULL" in line
+        # a migration's frozen half keeps its own spelling (C2)
+        if "'$.retired')" in line and "IS NULL" in line and "frozen" not in line
     ]
     assert not raw, "the live test spelled by hand: " + "; ".join(raw)
 
@@ -517,6 +518,26 @@ def test_the_live_spelling_is_served_by_its_index(tmp_path: Path) -> None:
         # two indexes are partial on that WHERE (0010, 0032): either one
         # chosen says the planner matched the spelling
         assert any(i in plan for i in LIVE_INDEXES), plan
+    con.close()
+
+
+def test_a_projects_documents_are_read_through_their_index(tmp_path: Path) -> None:
+    """``project_documents``, what a sync and a ``prax:`` pointer to another
+    project read, is served by ``idx_documents_source`` (migration 10), not
+    by a scan of every document's meta: 142 ms without the index on a copy
+    of the owner's 33,524 documents, 1 ms with it (2026-11-13; the 0.26 s
+    the log said on 2026-11-12 was not the query's)."""
+    from prax import store
+
+    con = store.connect(tmp_path / "prax.db")
+    store.init_db(con)
+    seen: list[str] = []
+    con.set_trace_callback(seen.append)
+    store.project_documents(con, "lab", ["a/b.md"])
+    con.set_trace_callback(None)
+    sql = next(s for s in seen if "$.project.key" in s)
+    plan = " ".join(str(r[-1]) for r in con.execute("EXPLAIN QUERY PLAN " + sql))
+    assert "USING INDEX idx_documents_source" in plan, plan
     con.close()
 
 

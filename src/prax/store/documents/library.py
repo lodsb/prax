@@ -4,7 +4,6 @@ duplicates and the captures of one page."""
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 from typing import Any
 
@@ -323,25 +322,6 @@ def _replacements(con: sqlite3.Connection, doc_id: int) -> list[int | None]:
 
 
 @_serialized
-def record_old_endings(
-    con: sqlite3.Connection, run: str, retirements: list[dict[str, Any]]
-) -> None:
-    """A clean-up from before 2026-11-07 kept the edges it ended in each
-    document's ``meta.retired.ended``, not in ``edge_endings``: record them
-    as ``run``'s endings, at the retirement's time, so ``_restore_run``
-    finds them. Each retirement is the ``meta.retired`` dict (``ended``,
-    ``at``); one recorded already is left. Does not commit."""
-    for retired in retirements:
-        ended = retired.get("ended") or []
-        if isinstance(ended, str):
-            ended = json.loads(ended)
-        con.executemany(
-            "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
-            " VALUES (?, ?, ?)",
-            [(int(e), run, retired.get("at")) for e in ended],
-        )
-
-
 def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """Bring a retired document back into the index (its text artifact is
     re-chunked) and state the edges its retirement ended again, as new
@@ -349,14 +329,10 @@ def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     the old ids moved onto them. An edge a duplicate's retirement moved to
     its keeper stays there. A retirement from before its run was recorded
     (2026-11-10) brings no edges back: a new extraction pass re-reads it.
-    A clean-up's from before 2026-11-07 kept what it ended in the
-    document's meta; that list becomes the run's endings first
-    (``record_old_endings``), where it was dropped with the meta (the
-    quality review of 2026-11-11, finding 4)."""
+    A clean-up's from before 2026-11-07, which kept what it ended in the
+    document's meta, was moved into ``edge_endings`` by migration 70."""
     meta = get_meta(con, doc_id)
     retired = meta.pop("retired", None) or {}
-    if retired.get("run"):
-        record_old_endings(con, str(retired["run"]), [retired])
     restored = (
         _restore_run(con, retired["run"], source_doc=doc_id)
         if retired.get("run")

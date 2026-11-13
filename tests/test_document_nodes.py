@@ -10,7 +10,7 @@ import sqlite3
 import pytest
 
 from prax import store
-from prax.store.base import _claim_document_nodes
+from prax.store.base import _migration_69_nodes
 from prax.store.repair.graph import (
     _page_node_twins,
     _repair_page_node_twins,
@@ -95,8 +95,14 @@ def test_two_documents_of_one_title_keep_their_own(con: sqlite3.Connection) -> N
 
 
 def test_the_upgrade_links_the_nodes_written_before_it(
-    con: sqlite3.Connection,
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # frozen like the migration's SQL (the quality review of 2026-11-11,
+    # C2): the living rule may change, and the upgrade does not call it
+    def living(*a: object, **k: object) -> None:
+        raise AssertionError("migration 69's half called the living rule")
+
+    monkeypatch.setattr(store.base.nodes, "_node_doc", living)
     doc = _doc(con, "A datasheet. " * 30, "XR2206")
     other = _doc(con, "Another. " * 30, "Shared")
     later = _doc(con, "Another, later. " * 30, "Shared")
@@ -116,7 +122,7 @@ def test_the_upgrade_links_the_nodes_written_before_it(
         (shared, carol, later),
     )
     con.commit()
-    assert _claim_document_nodes(con) == 2
+    assert _migration_69_nodes(con) == 2
     assert _doc_of(con, "XR2206", "paper") == doc
     assert _doc_of(con, "Shared", "paper") == later != other
     assert _doc_of(con, "Nobody's", "paper") is None

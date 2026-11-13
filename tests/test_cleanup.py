@@ -9,7 +9,7 @@ import sqlite3
 
 from fastapi.testclient import TestClient
 
-from prax import store
+from prax import config, store
 from prax.text import clutter
 from prax.wall import auth
 
@@ -145,6 +145,14 @@ def test_a_set_is_shown_retired_and_restored_with_its_facts(
         )
 
 
+def _migrate_old_endings(con: sqlite3.Connection) -> None:
+    """Migration 70 over a store that holds the old list, as a store from
+    before 2026-11-07 meets it at its upgrade: the list becomes the run's
+    endings and goes (finding 4 of the quality review of 2026-11-11)."""
+    sql = (config.MIGRATIONS_DIR / "0070_old_cleanup_endings.sql").read_text("utf-8")
+    con.executescript(f"BEGIN;\n{sql}\nCOMMIT;")
+
+
 def test_a_clean_up_from_before_the_endings_is_restored(
     con: sqlite3.Connection,
 ) -> None:
@@ -165,7 +173,20 @@ def test_a_clean_up_from_before_the_endings_is_restored(
     )
     meta["retired"].update(run="cleanup-old", ended=[edge])
     con.execute("UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), eula))
+    con.execute("DELETE FROM edge_endings")
     con.commit()
+    _migrate_old_endings(con)
+    assert [tuple(r) for r in con.execute("SELECT edge_id, run FROM edge_endings")] == [
+        (edge, "cleanup-old")
+    ]
+    assert (
+        "ended"
+        not in json.loads(
+            con.execute("SELECT meta FROM documents WHERE id = ?", (eula,)).fetchone()[
+                0
+            ]
+        )["retired"]
+    )
     back = store.restore_set(con, "cleanup-old")
     assert back["restored"] == 1 and back["edges_restated"] == 1
     assert (
@@ -233,7 +254,9 @@ def test_one_document_of_an_old_clean_up_is_taken_back_with_its_facts(
     )
     meta["retired"].update(run="cleanup-older", ended=[edge])
     con.execute("UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), eula))
+    con.execute("DELETE FROM edge_endings")
     con.commit()
+    _migrate_old_endings(con)
     assert store.unretire_document(con, eula)["edges"] == 1
     assert (
         con.execute(
