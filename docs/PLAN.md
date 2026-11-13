@@ -651,7 +651,7 @@ they block, then by cost. Sizes are the review's.
          the web page's search box and links. A paper's work (AS) has no
          pointer yet: its name is a title, not a slug. The nlbank page
          changes when its agent writes pointers instead of ids.
-      4. **The register and "what about X".** The sync reads the project's
+      4. (done 2026-11-13) **The register and "what about X".** The sync reads the project's
          register of open questions as written: a `###` question, then
          `- key: value` lines (`status` with its first word the state, open,
          answered, retired or retracted, and its date; `asked`, `test`,
@@ -666,6 +666,14 @@ they block, then by cost. Sizes are the review's.
          two questions of 2026-11-10 ("what is known about the raa2p's period
          index, and what is open on it?", "what is open on ind01's reference
          track?").
+         Done: `prax.text.register` (a register is `REGISTER_MIN`, 2,
+         questions in a state or more), each question a document keyed
+         by its heading as written, its state in `meta.project.question`,
+         an edited one a new version; a `prax:` pointer in any synced note
+         and a question's `asked` day are `links_to` edges; the read is
+         `prax.answering.about`, `GET /projects/{name}/about` and the MCP
+         `about`. A question is its document's node, not an entity of type
+         claim: its versions, its pointer and its search come with that.
 
 - [ ] **AO. A text says what is wrong with it.** The user, 2026-10-17:
       "the most fluent workflow atm for me is to drop it into prax and

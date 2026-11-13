@@ -540,3 +540,155 @@ def test_a_note_that_becomes_a_journal_is_split(client: TestClient) -> None:
     )
     assert [p for p in out["plan"] if "entry" not in p] == []
     assert out["counts"] == {"unchanged": 3, "gone": 0}
+
+
+REGISTER_HEAD = "# Open questions\n\nRead this first.\n\n## Open\n\n"
+Q_SEED = (
+    "### Is the seed stable across boots?\n"
+    "- status: open\n"
+    "- asked: 2026-11-09, during the bring-up\n"
+    "- test: ten power cycles; see prax:r/fw/log.md#2026-11-08.\n"
+    "- why not a reset: a reset keeps the chip powered\n\n"
+)
+Q_WHEEL = (
+    "### Does the wheel bend the track?\n"
+    "- status: retracted 2026-11-10, the same day\n"
+    "- what is true: it does not\n\n"
+)
+Q_LOOP = "### Why does the loop ring?\n- test: a guarded sweep\n\n"
+
+
+def _questions(out: dict[str, Any]) -> dict[str, tuple[str, int]]:
+    return {k: v for k, v in _entries(out).items() if not k.startswith("2026")}
+
+
+def test_a_register_is_its_questions_each_with_its_state(client: TestClient) -> None:
+    """A register of open questions is a document for each question, keyed
+    by its heading, with its state; a retracted one is stale, the asked day
+    links the day's entry and a pointer what it names; an edited question
+    is a new version, and one moved to another section changes state."""
+    con = client.app.state.con
+    log = _file("log.md", _journal(DAY1, DAY2, DAY3))
+    reg = REGISTER_HEAD + Q_SEED + Q_WHEEL + Q_LOOP + "## Answered\n\n"
+    out = _sync(client, [log, _file("OPEN.md", reg)], name="r", dry_run=False)
+    qs = _questions(out)
+    assert set(qs) == {
+        "Is the seed stable across boots?",
+        "Does the wheel bend the track?",
+        "Why does the loop ring?",
+    }
+    seed = qs["Is the seed stable across boots?"][1]
+    wheel = qs["Does the wheel bend the track?"][1]
+    loop = qs["Why does the loop ring?"][1]
+    held = store.get_meta(con, seed)["project"]
+    assert held["question"] == {
+        "state": "open",
+        "asked": "2026-11-09",
+        "section": "open",
+    }
+    assert held["entry"] == "Is the seed stable across boots?"
+    assert store.get_meta(con, wheel)["status"]["state"] == "retracted"
+    assert store.get_meta(con, loop)["status"]["state"] == "open"
+    assert store.get_meta(con, loop)["project"]["question"]["state"] == "open"
+    assert (
+        store.resolve_pointer(con, "prax:r/fw/OPEN.md#does-the-wheel-bend-the-track")[
+            "doc_id"
+        ]
+        == wheel
+    )
+    # the asked day's entry and the pointer's, as links
+    day1 = _entries(out)["2026-11-08"][1]
+    day2 = _entries(out)["2026-11-09"][1]
+    linked = {
+        r[0]
+        for r in con.execute(
+            "SELECT n.name FROM edges e JOIN entities n ON n.id = e.dst"
+            " WHERE e.source_doc = ? AND e.rel = 'links_to' AND e.valid_to IS NULL",
+            (seed,),
+        )
+    }
+    names = {store.document_node(con, d)[0] for d in (day1, day2)}
+    assert names <= linked
+
+    # answered: its text changed, a new version; the loop moved, same text
+    answered = Q_SEED.replace("- status: open", "- status: answered 2026-11-12")
+    reg2 = REGISTER_HEAD + Q_WHEEL + "## Answered\n\n" + answered + Q_LOOP
+    out = _sync(client, [log, _file("OPEN.md", reg2)], dry_run=False)
+    qs = _questions(out)
+    action, seed2 = qs["Is the seed stable across boots?"]
+    assert action == "refresh" and seed2 != seed
+    assert store.later_versions(con, [seed]) == {seed: [seed2]}
+    assert store.get_meta(con, seed2)["project"]["question"]["state"] == "answered"
+    assert qs["Why does the loop ring?"] == ("unchanged", loop)
+    moved = store.get_meta(con, loop)
+    assert moved["project"]["question"]["state"] == "answered"
+    assert moved["status"]["state"] == "answered"
+
+
+Q_OFF = (
+    "### Is the seed one period off?\n"
+    "- status: retracted 2026-11-11\n"
+    "- what is true: the chip's index is wrong, not the seed\n\n"
+)
+Q_RESET = (
+    "### Does the seed survive a reset?\n"
+    "- status: answered 2026-11-12\n"
+    "- answer: yes, on ten resets\n\n"
+)
+
+
+def test_what_about_a_subject_is_its_questions_open_first(
+    client: TestClient,
+) -> None:
+    """``GET /projects/{name}/about``: the register's questions on what is
+    asked about, open first, then retracted, then answered, each with what
+    settles it and its why-not lines, and the project's documents to read;
+    a question the viewer may not see is not in it."""
+    con = client.app.state.con
+    day = "## 2026-11-12\n\nThe seed held over ten boots.\n\n"
+    log = _file("log.md", _journal(DAY1, DAY2, day))
+    reg = (
+        REGISTER_HEAD
+        + Q_SEED
+        + "## Answered\n\n"
+        + Q_RESET
+        + "## Retracted\n\n"
+        + Q_OFF
+        + Q_WHEEL
+    )
+    _sync(client, [log, _file("OPEN.md", reg)], name="seedy", dry_run=False)
+    got = client.get(
+        "/projects/seedy/about",
+        params={"q": "what is known about the seed, and what is open on it?"},
+    )
+    assert got.status_code == 200, got.text
+    out = got.json()
+    assert [(q["question"], q["state"]) for q in out["questions"]] == [
+        ("Is the seed stable across boots?", "open"),
+        ("Is the seed one period off?", "retracted"),
+        ("Does the seed survive a reset?", "answered"),
+    ]
+    seed, off, reset = out["questions"]
+    assert seed["says"].startswith("test: ten power cycles")
+    assert seed["why_not"] == ["why not a reset: a reset keeps the chip powered"]
+    assert seed["asked"] == "2026-11-09"
+    assert seed["pointer"] == "prax:seedy/fw/OPEN.md#is-the-seed-stable-across-boots"
+    assert off["says"] == "what is true: the chip's index is wrong, not the seed"
+    assert (reset["says"], reset["since"]) == (
+        "answer: yes, on ten resets",
+        "2026-11-12",
+    )
+    assert out["left_out"] == 0
+    assert "prax:seedy/fw/log.md#2026-11-12" in [r["pointer"] for r in out["read"]]
+    assert client.get("/projects/nobody/about", params={"q": "x"}).status_code == 404
+
+    from prax.answering import about
+
+    hidden = store.resolve_pointer(con, seed["pointer"])["doc_id"]
+    store.set_sensitivity(con, hidden, "personal")
+    token = store.VIEWER.set(store.Viewer("guest"))
+    try:
+        seen = about.about(con, "seedy", "the seed")
+    finally:
+        store.VIEWER.reset(token)
+    assert seed["question"] not in [q["question"] for q in seen["questions"]]

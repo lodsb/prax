@@ -4,6 +4,7 @@ process imports no store module, errors come back as {"error": ...}."""
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import subprocess
 import sys
@@ -42,6 +43,7 @@ EXPECTED_TOOLS = {
     "documents",
     "maths",
     "sync_project",
+    "about",
     "update_section",
     "capture_urls",
     "set_title",
@@ -468,3 +470,38 @@ def test_get_takes_a_pointer(proxied: TestClient) -> None:
     doc = call("get", doc_id="prax:pointer-notes")
     assert doc["id"] == page["doc_id"] and doc["pointer"] == "prax:pointer-notes"
     assert "error" in call("get", doc_id="prax:no-such-page")
+
+
+def test_about_reads_a_project_register(proxied: TestClient) -> None:
+    """``about`` (AU step 4): the register's questions on a subject, open
+    first, by one call to the door; a project there is not is an error."""
+    reg = (
+        "# Open questions\n\n## Open\n\n"
+        "### Is the clock stable?\n- status: open\n- test: a night's log\n\n"
+        "## Answered\n\n"
+        "### Does the clock drift when warm?\n- status: answered 2026-11-01\n"
+        "- answer: no\n\n"
+    )
+    raw = reg.encode()
+    got = proxied.post(
+        "/projects/sync",
+        json={
+            "remote": "github.com/synth/clocks",
+            "prefix": "",
+            "name": "clocks",
+            "dry_run": False,
+            "files": [
+                {
+                    "path": "OPEN.md",
+                    "bytes": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "text": reg,
+                }
+            ],
+        },
+    )
+    assert got.status_code == 200, got.text
+    out = call("about", project="clocks", question="what about the clock?")
+    assert [q["state"] for q in out["questions"]] == ["open", "answered"]
+    assert out["questions"][0]["says"] == "test: a night's log"
+    assert "error" in call("about", project="no-such-project", question="x")

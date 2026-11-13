@@ -112,6 +112,16 @@ def projects_list(
     return {"projects": store.list_projects(con)}
 
 
+@router.get("/projects/{name}/about")
+def projects_about(name: str, q: str, request: Request) -> dict[str, Any]:
+    """What a project's register holds on what ``q`` asks about, open
+    questions first, and its documents to read on it
+    (``prax.answering.about``)."""
+    from prax.answering import about
+
+    return about.about(_con(request), name, q)
+
+
 class TitleReq(BaseModel):
     title: str
     by: str = "agent"  # who says so: "human" from the UI

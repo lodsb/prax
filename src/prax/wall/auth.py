@@ -75,6 +75,7 @@ READER_ROUTES = _routes(
     ("GET", r"/search"),
     ("GET", r"/get/\d+"),
     ("GET", r"/resolve"),
+    ("GET", r"/projects/[^/]+/about"),
     ("GET", r"/chunk/\d+"),
     ("GET", r"/traverse"),
     ("GET", r"/edge/\d+/why"),

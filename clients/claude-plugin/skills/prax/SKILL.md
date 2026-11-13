@@ -94,6 +94,12 @@ reads under the working directory only (`PRAX_INGEST_ROOTS` widens it).
   `dry_run=false`. Its settings are kept in prax after the first sync,
   and `auto_sync=true` lets the session-end hook send them from then on.
   `/prax:sync` walks the user through it.
+- Before working out a diagnosis or a design in a project again, ask
+  `about(project, "what is known about X, and what is open on it?")`:
+  the project's register of open questions on X (open, retracted,
+  answered, with what was ruled out) and its journal entries and notes to
+  read. A question is closed in the repository, in the commit that
+  answers it, never in prax.
 
 ## Commands this plugin adds
 

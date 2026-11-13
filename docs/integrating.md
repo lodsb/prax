@@ -98,7 +98,8 @@ API and no privileged path. `prax.mcp_server` puts the same door in
 front of any MCP client as tools. Reading: `search`, `get`,
 `get_chunk`, `context`, `documents`, `references`, `cited_but_missing`,
 `status` and `health`. The graph: `traverse`, `connect`, `changes`,
-`why` and `link`. Asking: `ask` and `maths`. Pages: `get_page`,
+`why` and `link`. Asking: `ask`, `maths` and `about` (a project's
+open questions on a subject). Pages: `get_page`,
 `write_page`, `append_page`, `update_section`, `move_page` and
 `rename_page`. Bringing documents
 in: `ingest`, `ingest_file`, `capture_url`, `capture_urls` and

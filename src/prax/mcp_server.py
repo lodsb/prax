@@ -15,6 +15,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from mcp.server.mcpserver import Image, MCPServer
@@ -180,6 +181,27 @@ def get(doc_id: int | str, offset: int = 0, max_chars: int = 20000) -> dict[str,
         )
 
     return _answer(fetch)
+
+
+@mcp.tool()
+def about(project: str, question: str) -> dict[str, Any]:
+    """What a project knows about a subject and what is open on it, in one
+    read: "what is known about the seed, and what is open on it?". From
+    the project's register of open questions (synced with
+    ``sync_project``): the questions on it, open first, then retracted
+    (believed and found false: what stands on one is suspect), then
+    answered, each with its state and date, its pointer, the line that
+    settles or answered it and its ``why not`` lines, what was tried or
+    ruled out; then ``read``, the project's documents to read on it
+    (journal entries, notes) as pointers ``get`` takes. Ask it before
+    deriving a diagnosis or a design again. The register's status is the
+    repository's: close a question there, in the commit that answers it.
+    """
+    return _answer(
+        lambda: door().get_json(
+            f"/projects/{quote(project, safe='')}/about", {"q": question}
+        )
+    )
 
 
 def _picture(path: str, params: dict[str, Any] | None = None) -> Any:

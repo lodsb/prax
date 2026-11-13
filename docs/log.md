@@ -11369,3 +11369,76 @@ before the sanitizer (which drops a scheme it does not know) and opens a
 pointer typed into the search box. Not done: a paper's work (AS) has no
 pointer, its name being a title. Tests: `test_pointers.py` (3),
 `test_mcp.py::test_get_takes_a_pointer`, and the UI's pointer links.
+
+## 2026-11-13: a project's register and "what about X" (AU step 4)
+
+MotorPlatterExperiments keeps the questions it has not settled in
+`design/OPEN.md`, read at the start of a session and closed in the commit
+that answers them. Before this step a sync read it as one note, and the
+two questions of 2026-11-10 ("what is known about the raa2p's period
+index, and what is open on it?") had no read that answered them.
+
+`prax.text.register.split` reads such a file. A question is a heading
+whose fields, `- key: value` bullets with values running on over indented
+lines, include a `status` whose first word is `open`, `answered`,
+`retired` or `retracted`. A heading under a section named by a state word
+alone (`## Answered`, not `## Open questions`) is one too, its section
+giving the state when no status line does; a status line wins over its
+section. The status's date is `since`, the `asked` field's date `asked`;
+every other key is kept as written. A file is a register from two
+questions in a state (`REGISTER_MIN`), so a design note with one `- status:
+draft` stays a note, and a note's own status in its preamble makes no
+question. The head is everything else in order: the preamble and the
+sections' headings.
+
+The sync treats a register as it does a journal (step 2), with
+`_journal_rows` now `_part_rows`: the head under the file's key, each
+question under `<file key>#<heading as written>`, its state in
+`meta.project.question` (`state`, `since`, `asked`, `section`). An edited
+question (answered, a field added) is a new version, the earlier kept and
+folded. A question moved to another section with its text unchanged keeps
+its document and takes the new state. Unlike an entry, a question's words
+are read for a status, so a retracted one is stale in a search (`retracted`
+since step 1); a question with no status line takes its section's.
+
+Two new kinds of `links_to` edge come with it, for every synced note. A
+`prax:` pointer in a note's text, bare, in backticks or in a link
+(`slugs.pointers_in`), is an edge to what it names now. A question's `asked`
+day is an edge to the project's journal entries keyed by that date. A
+pointer into the project is resolved from the sync's own texts. Another
+goes through `store.resolve_pointer` once a sync: that scans the
+documents' meta for each project it tries, 0.26 s on the desktop's live
+store.
+
+The read is `prax.answering.about(con, project, query)`, `GET
+/projects/{name}/about?q=` (a reader's route) and the MCP `about`. A
+question is on the subject when the query's words (the search's stopwords
+left out, `store.STOPWORDS` now exported) are in it. Each word is weighed
+by how few of the project's questions hold it (`open` stands in every
+status line and says little), its heading counting double. A question the
+search ranks among the project's first ten (`SEARCH_FIRST`) gets half the
+rarest word's weight more. A question is shown when it scores at least
+half the best (`RELEVANT_SHARE`). The order is open, retracted,
+answered, retired, at most eight (`left_out` counts the rest). Each has
+its state and date, its pointer, the line that settles or answered it
+(`test`, `answer`, `what is true`, else the status) and its `why not`
+lines, each cut to 240 characters. Then come five of the project's other
+documents the search ranks first, as pointers. Nothing writes: the status
+is the repository's.
+
+Measured on a scratch store of the project (the working copy synced with
+hash embeddings, nothing sent anywhere): 14 questions, 300 documents, 101
+links. "What is known about the raa2p's period index, and what is open on
+it?" answers three answered questions and five documents to read (the
+optical-index notes, the board's notes), 2.6 KB, about 50 lines as indented
+JSON. "What is open on ind01's reference track?" answers one retracted and
+two answered questions, 2.3 KB. Neither subject has an open question in the
+register.
+
+Not done: a question is its document's node, not an entity of type claim
+as the plan said. Its versions, pointer and search come with the document.
+A heading renamed in the register is a new question; the old one is
+reported `gone` and stays live, as any gone file does. Tests:
+`test_register.py` (3), `test_projects.py::test_a_register_is_its_questions_each_with_its_state`,
+`::test_what_about_a_subject_is_its_questions_open_first`,
+`test_mcp.py::test_about_reads_a_project_register`.

@@ -69,6 +69,22 @@ def page_pointer(page_slug: str) -> str:
     return f"{POINTER}{page_slug}"
 
 
+# a pointer as a person writes one in a note: in a link, in backticks or
+# bare, ended by a space, a bracket, a quote or emphasis
+_IN_TEXT = re.compile(r"(?<![\w/:.-])prax:[^\s()\[\]<>`'\"*|]+")
+
+
+def pointers_in(text: str) -> list[str]:
+    """The pointers a text names, in order of first mention, a sentence's
+    full stop or comma after one left off."""
+    out: list[str] = []
+    for m in _IN_TEXT.finditer(text or ""):
+        ref = m.group(0).rstrip(".,;:!?")
+        if len(ref) > len(POINTER) and ref not in out:
+            out.append(ref)
+    return out
+
+
 def parse_pointer(ref: str) -> Pointer | None:
     """What a pointer names, or None when ``ref`` is no pointer. Percent
     escapes are read (a browser's copy of a link)."""

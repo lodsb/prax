@@ -8,6 +8,7 @@ with one as it does with ``#doc/N`` (``page_links``)."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any, Final
 
@@ -30,7 +31,8 @@ def project_documents(
     con: sqlite3.Connection, name: str, keys: list[str] | None = None
 ) -> dict[str, dict[str, Any]]:
     """A project's live synced documents by key: ``{key: {doc_id, version,
-    path, entry}}`` (``entry``, a journal entry's key, else None), those
+    path, entry, question}}`` (``entry``, a journal entry's or a register
+    question's key, else None; ``question``, a question's state), those
     its name carries and those any of ``keys`` names (a document synced
     before the manifest, under an older key)."""
     keys = keys or []
@@ -39,7 +41,8 @@ def project_documents(
         "SELECT id, json_extract(meta, '$.project.key') AS key,"
         " json_extract(meta, '$.project.version') AS version,"
         " json_extract(meta, '$.project.path') AS path,"
-        " json_extract(meta, '$.project.entry') AS entry FROM documents"
+        " json_extract(meta, '$.project.entry') AS entry,"
+        " json_extract(meta, '$.project.question') AS question FROM documents"
         " WHERE json_extract(meta, '$.source') = ?"
         f" AND {LIVE}"
         " AND (json_extract(meta, '$.project.name') = ?"
@@ -55,6 +58,7 @@ def project_documents(
                 "version": r["version"],
                 "path": r["path"],
                 "entry": r["entry"],
+                "question": json.loads(r["question"]) if r["question"] else None,
             }
     return out
 

@@ -35,7 +35,16 @@ applied:
   new version of a work (``store.state_versions``): the earlier text stays
   live, folded under the newest in a search, and carries no key any more
   (``project.later`` names the text after it). A file that becomes a
-  journal retires its whole text into its head, or with no head says so.
+  journal retires its whole text into its head, or with no head says so;
+- a register of open questions (``prax.text.register``: questions under
+  headings with ``- status:`` fields) is its questions in the same way,
+  keyed by the file's key and the question's heading as written, each
+  carrying its state (``project.question``) and read for a status like a
+  note, so a retracted one is stale; an edited question is a new version
+  (AU step 4);
+- a ``prax:<slug>`` pointer in a note is a ``links_to`` edge to what it
+  names now, and a question's ``asked`` date one to the project's journal
+  entries of that day.
 """
 
 from __future__ import annotations
@@ -43,11 +52,11 @@ from __future__ import annotations
 import functools
 import hashlib
 import sqlite3
-from typing import Any
+from typing import Any, NamedTuple
 
 from prax import client, store
 from prax.errors import NotFound
-from prax.text import journal, markup, paths
+from prax.text import journal, markup, paths, register, slugs
 
 PLAN_SHOWN = 400  # plan rows returned; the counts are always whole
 SETTINGS = ("domains", "tags", "include", "exclude")
@@ -186,8 +195,8 @@ def _file_rows(
 ) -> list[dict[str, Any]]:
     """One row a file: its path in the project and in the repository, the
     document key and the one before keys were by remote (``legacy``), its
-    version, and why it is skipped, if it is. A journal is a row for its
-    head and one for each entry (``_journal_rows``)."""
+    version, and why it is skipped, if it is. A journal or a register is
+    a row for its head and one for each part (``_part_rows``)."""
     rows: list[dict[str, Any]] = []
     for f in files:
         rel = str(f.get("path") or "").strip("/")
@@ -209,45 +218,62 @@ def _file_rows(
             "file": f,
             "why": why,
         }
-        rows.extend(_journal_rows(row) if not why else [row])
+        rows.extend(_part_rows(row) if not why else [row])
     return rows
 
 
-def _journal_rows(row: dict[str, Any]) -> list[dict[str, Any]]:
-    """A file's row, or a journal's: its head under the file's key (with
-    ``empty`` when nothing stands before the first entry) and one row an
-    entry, keyed ``<file key>#<entry key>``, its version the entry's hash.
+def _part_rows(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """A file's row, or a journal's or a register's: its head under the
+    file's key (with ``empty`` when nothing stands there) and one row a
+    part, an entry or a question, keyed ``<file key>#<part key>``, its
+    version the part's hash; a question carries its state (``question``).
     A file whose text did not come (a dry run's plan) is read as a note."""
     text = row["file"].get("text")
     if not isinstance(text, str) or not row["path"].lower().endswith(
         (".md", ".markdown")
     ):
         return [row]
+    parts: list[tuple[str, str, dict[str, Any] | None]] = []
     split = journal.split(text)
-    if split is None:
-        return [row]
-    head = split.head if split.head.strip() else ""
+    if split is not None:
+        head, kind = split.head, "entries"
+        parts = [(e.key, e.text, None) for e in split.entries]
+    else:
+        reg = register.split(text)
+        if reg is None:
+            return [row]
+        head, kind = reg.head, "questions"
+        parts = [(q.key, q.text, _question(q)) for q in reg.questions]
+    head = head if head.strip() else ""
     out = [
         {
             **row,
             "version": _hash(head)[:16] if head else "",
             "file": {**row["file"], **_bytes_of(head)},
-            "journal": len(split.entries),
+            "parts": (len(parts), kind),
             "empty": not head,
         }
     ]
-    for e in split.entries:
+    for key, part, question in parts:
         out.append(
             {
                 **row,
-                "key": f"{row['key']}#{e.key}",
-                "legacy": f"{row['legacy']}#{e.key}",
-                "version": _hash(e.text)[:16],
-                "file": {**row["file"], **_bytes_of(e.text)},
-                "entry": e.key,
+                "key": f"{row['key']}#{key}",
+                "legacy": f"{row['legacy']}#{key}",
+                "version": _hash(part)[:16],
+                "file": {**row["file"], **_bytes_of(part)},
+                "entry": key,
+                **({"question": question} if question else {}),
             }
         )
     return out
+
+
+def _question(q: register.Question) -> dict[str, Any]:
+    """What a sync keeps of a question on its document: its state, the
+    date the status gives, the day it was asked, its section's state."""
+    got = {"state": q.state, "since": q.since, "asked": q.asked, "section": q.section}
+    return {k: v for k, v in got.items() if v}
 
 
 def _hash(text: str) -> str:
@@ -289,6 +315,7 @@ def _match(
             old = have[found]
             r["doc_id"] = old["doc_id"]
             r["old_key"] = found
+            r["held_question"] = old.get("question")
             r["action"] = "unchanged" if old["version"] == r["version"] else "refresh"
             continue
         moved = by_version.get(r["version"]) if r["version"] else None
@@ -452,49 +479,98 @@ def _keep_in_step(con: sqlite3.Connection, run: str, want: Want) -> dict[str, in
     return {"added": got.count("added"), "kept": got.count("kept"), "ended": got.ended}
 
 
-Text = tuple[str, int, str, bool]  # path, document, text, whether an entry
+class Text(NamedTuple):
+    """A project's current document as the passes after a sync read it."""
+
+    path: str  # in the repository
+    doc_id: int
+    text: str
+    part: str | None  # "entry", "question", or None for a note or a head
+    question: dict[str, Any] | None  # a question's state (``_question``)
+    entry: str | None  # the part's key
 
 
 def _texts(con: sqlite3.Connection, name: str) -> list[Text]:
     """The project's current documents with their path in the repository
-    and their text: a note, a journal's head, a journal's entry."""
+    and their text: a note, a head, a journal's entry, a register's
+    question."""
     out: list[Text] = []
     for v in store.project_documents(con, name).values():
         if not v.get("path"):
             continue
         doc = store.get_document(con, int(v["doc_id"]))
+        question = v.get("question")
         out.append(
-            (
+            Text(
                 str(v["path"]),
                 int(v["doc_id"]),
                 str(doc.get("text") or "") if doc else "",
-                bool(v.get("entry")),
+                ("question" if question else "entry") if v.get("entry") else None,
+                question,
+                v.get("entry"),
             )
         )
     return out
 
 
 def _by_path(texts: list[Text]) -> dict[str, int]:
-    """What a path names: the note, or the journal's head; never an entry."""
-    return {p: d for p, d, _, entry in texts if not entry}
+    """What a path names: the note, or the head; never a part."""
+    return {t.path: t.doc_id for t in texts if not t.part}
 
 
 def _links(
     con: sqlite3.Connection, name: str, prefix: str, texts: list[Text]
 ) -> dict[str, int]:
     """Keep the project's ``links_to`` edges in step with its texts, a
-    journal's entries' among them. Returns the counts, ``unmatched`` being
-    the references to paths no document of the project has (yet)."""
+    journal's entries' and a register's questions' among them: a path, a
+    ``prax:`` pointer (to what it names now, in this project or not), and a
+    question's ``asked`` date (to the project's entries of that day).
+    Returns the counts, ``unmatched`` being the references to paths and
+    pointers nothing answers (yet)."""
     by_path = _by_path(texts)
+    by_day: dict[str, list[int]] = {}
+    for t in texts:
+        if t.part == "entry" and t.entry:
+            by_day.setdefault(t.entry, []).append(t.doc_id)
+    # a pointer into this project is found among its texts; another, by
+    # the store (a scan of the documents each), once a sync
+    own = slugs.slug(name)
+    here = {(t.path, slugs.slug(t.entry) if t.entry else None): t.doc_id for t in texts}
+    found: dict[str, int | None] = {}
+
+    def find(ref: str) -> int | None:
+        if ref not in found:
+            p = slugs.parse_pointer(ref)
+            if p is not None and p.project == own:
+                found[ref] = here.get((str(p.path), p.entry))
+            else:
+                try:
+                    found[ref] = int(store.resolve_pointer(con, ref)["doc_id"])
+                except (NotFound, ValueError):
+                    found[ref] = None
+        return found[ref]
+
     want: Want = {}
     unmatched = 0
-    for path, doc_id, text, _entry in texts:
-        for candidates, words in paths.references(text, path, prefix):
+    for t in texts:
+        doc_id = t.doc_id
+        for candidates, words in paths.references(t.text, t.path, prefix):
             hit = next((by_path[c] for c in candidates if c in by_path), None)
             if hit is None:
                 unmatched += 1
             elif hit != doc_id:
                 want.setdefault((doc_id, doc_id, hit, LINK_REL), (words, None))
+        for ref in slugs.pointers_in(t.text):
+            got = find(ref)
+            if got is None:
+                unmatched += 1
+            elif got != doc_id:
+                want.setdefault((doc_id, doc_id, got, LINK_REL), (ref, None))
+        asked = (t.question or {}).get("asked")
+        for entry in by_day.get(str(asked), []) if asked else []:
+            want.setdefault(
+                (doc_id, doc_id, entry, LINK_REL), (f"asked: {asked}", asked)
+            )
     return {**_keep_in_step(con, f"links:{name}", want), "unmatched": unmatched}
 
 
@@ -507,17 +583,21 @@ def _statuses(
     the stale note (``supersedes``, ``invalidates`` for an invalid one),
     the line for evidence and its date as the world's time. A journal's
     status is its head's; an entry's words are not read for one (a
-    correction relabels its first text superseded, not the entry)."""
+    correction relabels its first text superseded, not the entry). A
+    question's are, and without a status line its section says it."""
     from prax.text import status as status_mod
 
     by_path = _by_path(texts)
     words = status_mod.lexicon_words()
     want: Want = {}
     stale = 0
-    for path, doc_id, text, entry in texts:
-        if entry:
+    for path, doc_id, text, part, question, _key in texts:
+        if part == "entry":
             continue
         st = status_mod.read(text, path, prefix, words)
+        if st is None and question and question.get("section"):
+            section = str(question["section"])
+            st = status_mod.Status(section, None, f"## {section.capitalize()}")
         said = (
             None
             if st is None
@@ -602,8 +682,16 @@ def _apply(
         }
         if r.get("entry"):
             own["entry"] = r["entry"]
+        if r.get("question"):
+            own["question"] = r["question"]
         if action in ("unchanged", "moved"):
-            if r.get("old_key") != r["key"] or action == "moved":
+            if (
+                r.get("old_key") != r["key"]
+                or action == "moved"
+                or r.get("question", r.get("held_question")) != r.get("held_question")
+            ):
+                # a question moved to another section is the same text in
+                # another state
                 store.update_meta(con, r["doc_id"], functools.partial(_own, own, []))
             store.add_to_project(con, slug, r["doc_id"], promote=False)
             continue
@@ -611,8 +699,8 @@ def _apply(
             store.retire_document(
                 con,
                 r["doc_id"],
-                reason=f"split into its {r['journal']} entries by a sync of"
-                f" project {name}",
+                reason=f"split into its {r['parts'][0]} {r['parts'][1]} by a"
+                f" sync of project {name}",
             )
             continue
         if action not in ("add", "refresh"):
@@ -642,7 +730,7 @@ def _apply(
             store.add_domain(con, doc_id, d)
         if action == "refresh" and r.get("doc_id") and r["doc_id"] != doc_id:
             if r.get("entry"):
-                _new_version(con, name, r["doc_id"], doc_id)
+                _new_version(con, name, r["doc_id"], doc_id, bool(r.get("question")))
             else:
                 store.retire_document(
                     con,
@@ -658,8 +746,11 @@ def _apply(
         store.add_to_project(con, slug, doc_id, promote=False)
 
 
-def _new_version(con: sqlite3.Connection, name: str, old: int, new: int) -> None:
-    """An entry edited after its day: its earlier text and the new one
+def _new_version(
+    con: sqlite3.Connection, name: str, old: int, new: int, question: bool = False
+) -> None:
+    """An entry edited after its day, or a question whose status or fields
+    changed: its earlier text and the new one
     versions of one work (``store.state_versions``), the earlier kept live
     for a search to fold under the newest, without its key, so the next
     sync finds the new one by it."""
@@ -668,7 +759,11 @@ def _new_version(con: sqlite3.Connection, name: str, old: int, new: int) -> None
         [old, new],
         by=LINK_PRODUCER,
         run=f"entries:{name}",
-        evidence="an entry of a journal edited after its day",
+        evidence=(
+            "a question of a register edited"
+            if question
+            else "an entry of a journal edited after its day"
+        ),
     )
     store.update_meta(con, old, functools.partial(_earlier, new))
 

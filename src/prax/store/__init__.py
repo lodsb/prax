@@ -699,6 +699,7 @@ from .retrieval import (  # noqa: F401
     RRF_DEPTH,
     RRF_K,
     SEARCH_MODES,
+    STOPWORDS,
     VEC_EXPAND,
     VEC_SEARCH_CAP,
     acronym_expansions,

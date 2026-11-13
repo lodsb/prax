@@ -114,6 +114,7 @@ WALKED = (
     ("GET", "/search"),
     ("GET", "/get/1"),
     ("GET", "/resolve"),
+    ("GET", "/projects/x/about"),
     ("GET", "/chunk/1"),
     ("GET", "/traverse"),
     ("GET", "/edge/1/why"),
