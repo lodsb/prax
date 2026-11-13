@@ -536,7 +536,7 @@ they block, then by cost. Sizes are the review's.
 
 **Settings.**
 
-- [ ] 21. About fifteen settings the code reads are documented nowhere,
+- [ ] 21. (half done 2026-11-13: documented, and a test holds it) About fifteen settings the code reads are documented nowhere,
       and a mistyped key in a section is ignored: a settings registry in
       `prax.config` (key, variable, type, default, a line), a test
       against `prax.example.yaml`, packs adding rows. A stage.

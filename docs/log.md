@@ -11725,3 +11725,20 @@ of each document's domain subset, which the selection computes per
 document, and its failure mark holds until that version changes. The
 registry's comment, `docs/meta.md` and CLAUDE.md say so. Test:
 `test_step_stamps.py::test_a_record_of_the_original_and_an_exact_version`.
+
+## 2026-11-13: every setting the code reads is documented (quality finding 21, half)
+
+An AST scan of every `config.setting`, `number`, `whole`, `flag` and
+`words` call found twelve dotted keys that neither `prax.example.yaml`
+nor `docs/howto.md` names. Among them were the SQLite journal limit, how
+often vectors are saved, `traverse`'s second-hop caps, the private rules'
+thresholds and the rerank depth. They are a table in howto ("Settings no
+other section names"), each with its variable, default and effect.
+`test_config.py::test_every_setting_the_code_reads_is_documented` runs
+the same scan and fails on a key the guide and the template do not name.
+
+Not done, the other half: a registry of the settings, one row each with
+type, default and document, and `config.document()` refusing an unknown
+key inside a known section. That refusal would stop a door whose
+`prax.yaml` holds a stray key at its next start, so it waits for the
+owner.

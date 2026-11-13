@@ -1960,6 +1960,31 @@ Claude-kind model or llama-server for extraction. The door stays lean:
 the model lives in the server's process, not the door's (invariant 7).
 `GET /ask/config` shows what the door resolved.
 
+### Settings no other section names
+
+These are read by the code and named nowhere else in this guide. Each
+has a `PRAX_*` variable that overrides it for one run.
+
+| setting | variable | default | what it does |
+|---|---|---|---|
+| `door.sqlite_journal_mb` | `PRAX_SQLITE_JOURNAL_MB` | 16 | how large the WAL file may stay after a checkpoint, in MB; beside `door.sqlite_cache_mb` and `door.sqlite_mmap_mb` (3l) |
+| `door.vector_save_seconds` | `PRAX_VECTOR_SAVE` | 30 | how often the door writes the vector delta files while vectors arrive; a door killed between two saves reconciles what it lost at start (`store.reconcile_unsaved`) |
+| `graph.neighbours` | `PRAX_GRAPH_NEIGHBOURS` | 40 | the second hop of `traverse`: how many neighbours its map keeps in all (invariant 6) |
+| `graph.per_type` | `PRAX_GRAPH_PER_TYPE` | 12 | …and at most this many of one type |
+| `graph.min_documents` | `PRAX_GRAPH_MIN_DOCUMENTS` | 1 | …each backed by at least this many documents |
+| `graph.label_languages` | `PRAX_GRAPH_LABEL_LANGUAGES` | the expected languages that hold 5% of the documents | the languages the vocabulary pass gives a common name a label in (`graph.language` aside) |
+| `parse.vision_pages` | `PRAX_VISION_PAGES` | `scans` | which pages of a PDF the `vision-pages` reading reads: `scans` (pages with no text layer) or `all` |
+| `parse.arxiv_id` | `PRAX_ARXIV_ID` | none | the arXiv id a LaTeX-source reading is asked with, when the PDF does not print one |
+| `parse.marker_version` | `PRAX_MARKER_VERSION` | read from marker's venv, else `?` | the marker version a marker read is stamped with |
+| `private.weak_needed` | none | 2 | how many weak cues together make a document suspected of being personal (`prax.wall.private`) |
+| `private.head` | none | 5000 | how many characters of a document's text the private rules read, after its title and paths |
+| `private.referenced` | none | yes | whether an original kept by reference (a phone's photos and recordings) is suspected from its registration, so a named token sees it only after a person releases it |
+| `rerank.depth` | `PRAX_RERANK_DEPTH` | 30 | how many of the fused hits the cross-encoder rescores when reranking is on |
+
+`tests/test_config.py` fails when the code reads a setting that neither
+this guide nor `prax.example.yaml` names (the quality review of
+2026-11-11, finding 21).
+
 ## 3l. Captures: uploads, sent pages, fetched URLs, the drop folder
 
 Everything that is not a curated import comes in as a capture

@@ -214,3 +214,43 @@ def test_every_switch_the_code_reads_is_checked() -> None:
             ):
                 read.add(str(node.args[0].value))
     assert read and read == {s.dotted for s in config.SWITCHES}
+
+
+def test_every_setting_the_code_reads_is_documented() -> None:
+    """Finding 21 of the 2026-11-11 quality review: about fifteen settings
+    the code read were named in neither ``prax.example.yaml`` nor the
+    guide. A dotted key read through ``prax.config`` is named in one of
+    them: whole, or its last part as a key or in backticks."""
+    import ast
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    readers = {"setting", "number", "whole", "flag", "words"}
+    keys: dict[str, str] = {}
+    for p in (root / "src" / "prax").rglob("*.py"):
+        for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            f = node.func
+            name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
+            first = node.args[0]
+            if (
+                name in readers
+                and isinstance(first, ast.Constant)
+                and isinstance(first.value, str)
+                and "." in first.value
+            ):
+                keys.setdefault(first.value, f"{p.name}:{node.lineno}")
+    template = (root / "prax.example.yaml").read_text(encoding="utf-8")
+    guide = (root / "docs" / "howto.md").read_text(encoding="utf-8")
+
+    def named(key: str) -> bool:
+        leaf = key.rsplit(".", 1)[-1]
+        return (
+            f"`{key}`" in guide
+            or f"`{leaf}`" in guide
+            or bool(re.search(rf"\b{re.escape(leaf)}\s*:", guide + template))
+        )
+
+    missing = sorted(f"{k} ({at})" for k, at in keys.items() if not named(k))
+    assert missing == []
