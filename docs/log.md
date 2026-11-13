@@ -11583,3 +11583,52 @@ whatever the manifest's `auto_sync` says. That was the installed copy:
 kept the version 0.1.0 through that change, so an update had nothing to
 replace. It is 0.1.1 now, and `/plugin update prax` brings the current
 hook. Test: `test_claude_plugin.py::test_the_hook_finds_a_python_and_never_the_stores_stub`.
+
+## 2026-11-13: the references pass reads what is due, one edge writer, one server rule (quality findings 3, 25, 26, 30, 31, 33)
+
+**33.** The nightly references pass read every bibliography in the
+library and only then looked at the stamps. That was 11.8 s of chunks on
+the live store (5,112 bibliographies) to find, most nights, nothing to
+do. `citations._due_references` now picks the due documents first: a
+live text whose `meta.references` is not of that text or holds no links,
+among the documents with a reference chunk (`idx_chunks_reference`) or
+a stamp. Only their bibliographies are read, 500 a query. On the live
+store, read-only: 0.5 s found 181 due and 5,020 kept, and 2.3 s read the
+92 bibliographies among them. A bibliography the chunker has not cut
+into entries, never read before, now waits for a rechunk or `--again`.
+582 documents have text chunks under a references-like heading and no
+reference chunk, most of them read before.
+
+**3.** An edge row was written in two places, `_link` and `_restore_run`,
+each listing the columns by hand. `weight` was in neither, so an undo
+dropped it. `store.base.EDGE_FACT` lists the fact's columns and
+`_insert_edge` writes them; both writers use it, and `_restore_run`
+copies the old row's whole fact. `test_schema.py` holds the list to the
+table: a new column of `edges` is in `EDGE_FACT` or is one of its times.
+
+**25.** Whether two base URLs are one server was decided by two rules:
+the models' (a slash and `/v1` aside) and the worker's role lookup (a
+slash aside). A spec with `/v1` and one without found no role.
+`models.same_server` is the one rule, used by `work.role_of_step`, and
+`count_tokens` uses `_server_root`.
+
+**26.** `images=` took `(media type, bytes)` on the Claude runtime and
+`(bytes, media type)` on the OpenAI one, and `Runtime` had none. Both take
+`(media type, bytes)`, and the protocol says it.
+
+**30.** The lost-readings ailment listed documents with a figure chunk
+and counted figure readings only. `annotate.carry` has carried formula
+readings since 2026-11-07, so a paper that lost only those was never
+listed. It now takes figure or formula chunks and counts with
+`markup.READ_BY`. The name stays (`lost-figure-readings`), being its
+repair's producer.
+
+**31.** The titles hand-out read `titles_tried` in Python, past the
+registry that declares it. `title_rows(untried_only=)` filters by
+`_due("titles")` and a text in its SQL. 29, extraction's selection and
+the markup and private passes as stamps, is a half-day stage left open.
+
+Tests: `test_schema.py::test_every_edge_column_is_written_and_restated`,
+`test_models.py::test_one_rule_says_two_addresses_are_one_server`,
+`test_heal.py::test_formula_readings_a_replacing_read_dropped_come_back`;
+the references pass's own tests in `test_maintain.py`.

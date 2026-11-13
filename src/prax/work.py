@@ -206,14 +206,9 @@ def role_of_step(step: str) -> str | None:
             if served == spec.name:
                 return role
             other = models.spec(str(served))
-            if other is not None and _same_address(other.base_url, spec.base_url):
+            if other is not None and models.same_server(other.base_url, spec.base_url):
                 return role
     return None
-
-
-def _same_address(a: str | None, b: str | None) -> bool:
-    """Two base URLs that reach one server (a trailing slash aside)."""
-    return bool(a and b) and str(a).rstrip("/") == str(b).rstrip("/")
 
 
 def wanted_steps() -> dict[tuple[str, str], int]:

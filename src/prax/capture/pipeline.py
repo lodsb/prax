@@ -97,10 +97,10 @@ def titles_needed(
     # a title many documents carry is the reason only where it was asked
     # for: the watched titles step asks, and names it to the model
     shared = store.shared_titles(con) if "shared" in reasons else set()
-    for r in store.title_rows(con, ids):
+    # a guess that failed before, or nothing to guess from, is left out by
+    # the titles step's stamp (``store.STAMPS``)
+    for r in store.title_rows(con, ids, untried_only=untried_only):
         meta = r["meta"]
-        if untried_only and (meta.get("titles_tried") or not r["text_hash"]):
-            continue  # a guess that failed before, or nothing to guess from
         why = titles.needs_title(r["title"], meta)
         if (
             why is None

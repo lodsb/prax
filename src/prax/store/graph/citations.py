@@ -182,6 +182,40 @@ def resolve_references(
     return out
 
 
+DUE_BATCH = 500  # documents whose bibliographies are read in one query
+
+
+def _due_references(con: sqlite3.Connection) -> tuple[list[int], int]:
+    """The live documents the references pass reads again, and how many it
+    leaves as they are. Due: one whose stamp (``meta.references``) is not
+    of its text, or was written before the links were kept, among those
+    with a reference chunk (``idx_chunks_reference``) or a stamp. A
+    bibliography a chunker has not cut into entries yet, never read, waits
+    for a rechunk or ``again``."""
+    stale = (
+        "(json_extract(d.meta, '$.references.text_hash') IS NOT d.text_hash"
+        " OR json_extract(d.meta, '$.references.links') IS NULL)"
+    )
+    due = [
+        int(r[0])
+        for r in con.execute(
+            f"SELECT d.id FROM documents d WHERE {live('d')}"
+            " AND d.text_hash IS NOT NULL"
+            f" AND {stale}"
+            " AND (json_extract(d.meta, '$.references') IS NOT NULL"
+            " OR EXISTS (SELECT 1 FROM chunks r WHERE r.doc_id = d.id"
+            " AND r.kind = 'reference'))"
+            " ORDER BY d.id"
+        )
+    ]
+    kept = con.execute(
+        f"SELECT count(*) FROM documents d WHERE {live('d')}"
+        " AND json_extract(d.meta, '$.references') IS NOT NULL"
+        f" AND NOT {stale}"
+    ).fetchone()[0]
+    return due, int(kept)
+
+
 def link_references(
     con: sqlite3.Connection,
     *,
@@ -198,12 +232,26 @@ def link_references(
     (history kept). An id match is ``EXTRACTED``; a sure title match is
     ``INFERRED`` with its score in the evidence; each of several tied
     candidates is ``AMBIGUOUS``. A triple already live (Crossref found
-    it) is left as it is."""
+    it) is left as it is.
+
+    The nightly pass (no ``ids``, not ``again``) asks first which documents
+    are due (``_due_references``) and reads only their bibliographies: it
+    read every bibliography in the library to find, most nights, nothing to
+    do, some 14 s of chunks on the desktop's library (the quality review of
+    2026-11-11, finding 33)."""
+    stats: Counter[str] = Counter()
+    if ids or again:
+        bibs = bibliographies(con, ids=ids)
+    else:
+        due, stats["unchanged"] = _due_references(con)
+        bibs = {}
+        for i in range(0, len(due), DUE_BATCH):
+            bibs.update(bibliographies(con, ids=due[i : i + DUE_BATCH]))
+        if not bibs:
+            return dict(stats)
     lib = _library(con)
     by_doi = {v["doi"]: k for k, v in lib.items() if v["doi"]}
     by_arxiv = {v["arxiv"]: k for k, v in lib.items() if v["arxiv"]}
-    bibs = bibliographies(con, ids=ids)
-    stats: Counter[str] = Counter()
     todo = []
     for doc_id, (text_hash, text) in bibs.items():
         stamp = get_meta(con, doc_id).get("references") or {}

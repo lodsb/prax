@@ -23,6 +23,7 @@ from ..base import (
     _claim_node,
     _committing,
     _end_edges,
+    _insert_edge,
     _like_prefix,
     _read_archive,
     _reading,
@@ -284,28 +285,28 @@ def _link(
     # edge reaches it (migration 69, ``node_document``)
     _claim_node(con, src, edge.src_type, edge.src, source_doc, onto)
     _claim_node(con, dst, edge.dst_type, edge.dst, source_doc, onto)
-    cur = con.execute(
-        "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
-        " ontology_version, evidence, producer, run, valid_from,"
-        " world_from, world_from_precision, world_to, world_to_precision,"
-        " evidence_start, evidence_end, evidence_text_hash)"
-        f" VALUES (?,?,?,?,?,?,?,?,?, {_NOW}, ?,?,?,?, ?,?,?)",
-        (
-            src,
-            dst,
-            edge.rel,
-            confidence,
-            source_doc,
-            ontology_version,
-            evidence,
-            producer,
-            run,
-            *begin,
-            *end,
-            *(place if place is not None else (None, None, None)),
-        ),
+    spot = place if place is not None else (None, None, None)
+    return _insert_edge(
+        con,
+        {
+            "src": src,
+            "dst": dst,
+            "rel": edge.rel,
+            "confidence": confidence,
+            "source_doc": source_doc,
+            "ontology_version": ontology_version,
+            "evidence": evidence,
+            "producer": producer,
+            "run": run,
+            "world_from": begin[0],
+            "world_from_precision": begin[1],
+            "world_to": end[0],
+            "world_to_precision": end[1],
+            "evidence_start": spot[0],
+            "evidence_end": spot[1],
+            "evidence_text_hash": spot[2],
+        },
     )
-    return int(cur.lastrowid or 0)
 
 
 link = _serialized(_committing(_link))

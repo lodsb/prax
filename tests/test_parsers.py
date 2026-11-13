@@ -226,7 +226,7 @@ def test_a_server_with_a_projector_describes_images(
     assert out.startswith("# panel.png\n\n*Image described by qwen-vl@127.0.0.1:8080.*")
     assert "INPUT (handwritten)" in out
     image = seen["images"][0]
-    assert image[1] == "image/png" and image[0] == png
+    assert image == ("image/png", png)  # (media type, bytes) on every runtime
     assert seen["user"] == vision.PROMPT
     # the Claude-pinned name refuses a server model rather than quietly using it
     with pytest.raises(RuntimeError, match="claude-vision wants a Claude model"):
@@ -340,7 +340,7 @@ def test_vision_pages_reads_the_scanned_pages_and_keeps_the_text_layer(
 
     class FakeRuntime:
         def chat(self, system, user, **kw):
-            seen.append(kw["images"][0][0])
+            seen.append(kw["images"][0][1])  # (media type, bytes)
             assert user == parsers.vision.PAGE_PROMPT
             page = "(handwritten) Notes on the 1176: attack 800 us. " + "More. " * 400
             return page + "\n\n[Figure: a sketch]", {}

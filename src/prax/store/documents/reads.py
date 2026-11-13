@@ -920,16 +920,24 @@ TITLE_OBJECTS = frozenset({"titles_tried"})
 
 @_reading
 def title_rows(
-    con: sqlite3.Connection, ids: list[int] | None = None
+    con: sqlite3.Connection,
+    ids: list[int] | None = None,
+    *,
+    untried_only: bool = False,
 ) -> list[dict[str, Any]]:
     """``id, title, text_hash, meta`` of the live documents (or of
     ``ids``), oldest first: what a title is judged from. ``meta`` holds
     only the keys a title is judged by (``TITLE_KEYS``), read by SQLite:
     decoding every document's whole ``meta`` in Python was 75 MB of JSON
     under the GIL on each titles hand-out, 1.3 s of the door
-    (2026-10-18)."""
+    (2026-10-18). ``untried_only`` keeps the documents the titles step
+    may read, by its stamp (``_due("titles")``: no tried mark) and with a
+    text, where the hand-out read the mark in Python past the registry
+    (the quality review of 2026-11-11, finding 31)."""
     keys = ", ".join(f"json_extract(meta, '$.{k}') AS {k}" for k in TITLE_KEYS)
     sql = f"SELECT id, title, text_hash, {keys} FROM documents WHERE {LIVE}"
+    if untried_only:
+        sql += f" AND text_hash IS NOT NULL AND {_due('titles')}"
     rows = (
         con.execute(sql + " ORDER BY id")
         if ids is None

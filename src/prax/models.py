@@ -417,6 +417,7 @@ class Runtime(Protocol):
         repeat_penalty: float = 1.0,
         stop: list[str] | None = None,
         record: bool = True,
+        images: Sequence[tuple[str, bytes]] = (),
     ) -> tuple[str, dict[str, int]]: ...
 
 
@@ -453,7 +454,7 @@ class OpenAIRuntime:
         OpenAI itself), which leaves the caller with the byte budget."""
         import httpx
 
-        root = self.base_url.rstrip("/").removesuffix("/v1")
+        root = _server_root(self.base_url)
         with contextlib.suppress(Exception):
             r = httpx.post(f"{root}/tokenize", json={"content": text}, timeout=30.0)
             if r.status_code == 200:
@@ -477,20 +478,22 @@ class OpenAIRuntime:
         temperature: float = 0.0,
         repeat_penalty: float = 1.0,
         stop: list[str] | None = None,
-        images: list[tuple[bytes, str]] | None = None,
+        images: Sequence[tuple[str, bytes]] = (),
         record: bool = True,
     ) -> tuple[str, dict[str, int]]:
         """``record=False`` keeps what a keyed server's call used out of
         the ledger's accumulator, for a caller that carries the usage home
         itself (an ``Extraction``'s), as ``ClaudeRuntime.create`` has it.
-        ``images`` are ``(bytes, media type)`` pairs sent before the
+        ``images`` are ``(media type, bytes)`` pairs, the order every
+        runtime takes them in (the quality review of 2026-11-11, finding
+        26), sent before the
         user text as data URLs; the server needs a multimodal projector
         (llama-server ``--mmproj``) or answers about text alone."""
         content: Any = user
         if images:
             content = [
                 {"type": "image_url", "image_url": {"url": _data_url(data, mt)}}
-                for data, mt in images
+                for mt, data in images
             ] + [{"type": "text", "text": user}]
         messages = [{"role": "user", "content": content}]
         if system:
@@ -662,6 +665,15 @@ def _server_root(base_url: str) -> str:
     """``http://host:port`` from an OpenAI base URL (``…/v1`` stripped)."""
     root = base_url.rstrip("/")
     return root.removesuffix("/v1")
+
+
+def same_server(a: str | None, b: str | None) -> bool:
+    """Two base URLs that reach one server: a trailing slash and ``/v1``
+    aside, as llama-server answers with or without it. The one rule; the
+    worker's role lookup had its own, stricter one, so a spec without
+    ``/v1`` and one with it found no role (the quality review of
+    2026-11-11, finding 25)."""
+    return bool(a and b) and _server_root(str(a)) == _server_root(str(b))
 
 
 def get_text(url: str, timeout: float = STATUS_TIMEOUT) -> str:

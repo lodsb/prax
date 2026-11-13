@@ -176,7 +176,7 @@ def test_an_image_rides_along_as_a_data_url(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(models, "post_json", fake_post)
     rt = models.OpenAIRuntime("http://gpu-box:8080/v1", "qwen-vl")
-    text, _ = rt.chat("", "describe", images=[(b"\x89PNG....", "image/png")])
+    text, _ = rt.chat("", "describe", images=[("image/png", b"\x89PNG....")])
     assert text == "a photo"
     messages = seen["body"]["messages"]
     assert [m["role"] for m in messages] == ["user"]  # no empty system turn
@@ -447,3 +447,13 @@ def test_an_extraction_on_a_keyed_server_is_charged_once(
     assert usage.take() == {
         "m@gpu-box:8080": {"input_tokens": 1000, "output_tokens": 200}
     }
+
+
+def test_one_rule_says_two_addresses_are_one_server() -> None:
+    """Finding 25 of the 2026-11-11 quality review: the worker's role
+    lookup kept a stricter rule than the models' own, so a spec with
+    ``/v1`` and one without found no role."""
+    assert models.same_server("http://h:8080/v1", "http://h:8080/")
+    assert models.same_server("http://h:8080", "http://h:8080/v1/")
+    assert not models.same_server("http://h:8080", "http://h:8081")
+    assert not models.same_server(None, "http://h:8080")

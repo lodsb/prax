@@ -561,21 +561,23 @@ they block, then by cost. Sizes are the review's.
       times, each statting some 19 files (1,700 to 650 µs an edge with the
       `onto` passed); `document_facts` 20 times slower. Pass it, and
       memoize the stamp for a second.
-- [ ] 33. The nightly references pass reads every bibliography before
+- [x] (2026-11-13) 33. The nightly references pass reads every bibliography before
       checking what is due: the stamp in `STAMPS`, the due ids first.
 
 **Hygiene and generality.**
 
-- [ ] 3. The edge row inserted by hand in `_link` and `_restore_run`:
+- [x] (2026-11-13) 3. The edge row inserted by hand in `_link` and `_restore_run`:
       one column list. With 23: linking document nodes written twice,
       and `Ontology.kinds_of("document")`.
-- [ ] 25. Two rules for "the same server": `models.same_server`.
-- [ ] 26. `images=` takes its pair in opposite orders in the two
+- [x] (2026-11-13) 25. Two rules for "the same server": `models.same_server`.
+- [x] (2026-11-13) 26. `images=` takes its pair in opposite orders in the two
       runtimes, and the `Runtime` protocol has none.
 - [ ] 29 and 31. `STAMPS` stops before extraction, markup and private,
       and titles bypasses `_due`: an exact-match version, an
-      `on_original` record (half a day).
-- [ ] 30. The lost-readings ailment looks at figures only, though
+      `on_original` record (half a day). 31 done 2026-11-13: the titles
+      hand-out's untried filter is `_due("titles")` in `title_rows`' SQL.
+      29 is open: extraction's selection, the markup and private passes.
+- [x] (2026-11-13) 30. The lost-readings ailment looks at figures only, though
       formulas are carried too.
 - [ ] 8. The graph export does not say which document a node is: a
       `doc_hash` on a document node's line, claimed by hash on import

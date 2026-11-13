@@ -194,7 +194,7 @@ def _read_server(
     into on long transcriptions."""
     text: str
     text, _usage = runtime.chat(
-        "", prompt, images=[(data, mt)], max_tokens=max_tokens, temperature=0.2
+        "", prompt, images=[(mt, data)], max_tokens=max_tokens, temperature=0.2
     )
     return text
 

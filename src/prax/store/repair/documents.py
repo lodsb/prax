@@ -10,7 +10,7 @@ import re
 import sqlite3
 from typing import Any
 
-from prax.text import glyphs
+from prax.text import glyphs, markup
 
 from .. import documents as docs
 from ..base import (
@@ -760,14 +760,17 @@ LOST_READINGS_PRODUCER = "heal:lost-figure-readings"
 
 
 def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Documents whose text lacks figure readings an earlier text of theirs
-    had, for figures the text still holds by hash: a replacing read (marker,
-    the parser again) wrote its own text and dropped the readings, which
-    were lines of the old one (35 documents and 710 readings on
-    2026-10-06, nearly all marker's). The earlier texts are the ones the
-    parse record names by hash (``earlier_texts``). Each with how many
-    readings would come back."""
-    from prax.parsers import annotate, figures
+    """Documents whose text lacks readings an earlier text of theirs had,
+    of figures it still holds by hash or of display formulas: a replacing
+    read (marker, the parser again) wrote its own text and dropped the
+    readings, which were lines of the old one (35 documents and 710
+    readings on 2026-10-06, nearly all marker's). The earlier texts are the
+    ones the parse record names by hash (``earlier_texts``). Each with how
+    many readings would come back. Formula readings since ``annotate.carry``
+    carries them (2026-11-07): a paper that lost only those was never listed
+    (the quality review of 2026-11-11, finding 30). The ailment keeps its
+    name, which is also its repair's producer."""
+    from prax.parsers import annotate
 
     out: list[dict[str, Any]] = []
     for r in con.execute(
@@ -775,7 +778,7 @@ def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
         f" AND {LIVE}"
         " AND json_extract(meta, '$.parse_history') LIKE '%text_hash%'"
         " AND EXISTS (SELECT 1 FROM chunks c WHERE c.doc_id = d.id"
-        " AND c.kind = 'figure')"
+        " AND c.kind IN ('figure', 'formula'))"
     ):
         earlier = docs.earlier_texts(con, int(r["id"]))
         if not earlier:
@@ -785,8 +788,8 @@ def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
         except (OSError, UnicodeDecodeError):
             continue
         carried = annotate.carry([current, *earlier], current)
-        gained = len(figures.READ_BY.findall(carried)) - len(
-            figures.READ_BY.findall(current)
+        gained = len(markup.READ_BY.findall(carried)) - len(
+            markup.READ_BY.findall(current)
         )
         if gained > 0:
             out.append({"id": int(r["id"]), "title": r["title"], "readings": gained})

@@ -190,7 +190,7 @@ def test_describe_writes_the_reading_under_each_figure(
 
     class FakeRuntime:
         def chat(self, system, user, **kw):
-            seen.append(kw["images"][0][0])
+            seen.append(kw["images"][0][1])  # (media type, bytes)
             prompts.append(user)
             return "A photograph of a woman in a dark jacket, facing the camera.", {}
 

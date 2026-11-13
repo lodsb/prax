@@ -800,3 +800,32 @@ def test_a_node_left_with_its_documents_old_title_is_renamed(
     assert con.execute("SELECT name FROM entities WHERE id = ?", (node,)).fetchone()[
         0
     ] == ("scan_0042.pdf")
+
+
+def test_formula_readings_a_replacing_read_dropped_come_back(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 30 of the 2026-11-11 quality review: a paper that lost only
+    its formula readings is listed and repaired too; the check looked for
+    figure chunks and counted figure readings alone."""
+    from prax.parsers import queue
+
+    prose = "Prose about the filter of the paper. " * 10
+    doc_id = store.ingest_text(con, f"# Paper\n\n{prose}\n", title="Paper")["doc_id"]
+    formula = "$$H(s) = \\frac{1}{1 + s RC}$$\n"
+    read = (
+        f"# Paper\n\n{prose}\n\n{formula}"
+        "*Formula, as read by big@host:* a first-order low-pass.\n"
+    )
+    queue.apply_parse(con, doc_id, stamp="formulas/1", text=read, keep_source=True)
+    bare = f"# Paper\n\n{prose} By marker.\n\n{formula}"
+    queue.apply_parse(con, doc_id, stamp="marker/x", text=bare, keep_source=True)
+    found = store.health(con, only=["lost-figure-readings"])["ailments"][0]
+    assert found["count"] == 1 and found["examples"][0]["readings"] == 1
+    assert (
+        store.heal(con, only=["lost-figure-readings"])["lost-figure-readings"][
+            "repaired"
+        ]
+        == 1
+    )
+    assert "a first-order low-pass." in store.get_document(con, doc_id)["text"]

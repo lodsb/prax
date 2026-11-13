@@ -247,3 +247,14 @@ def test_a_migrations_python_half_commits_with_it(
     )
     assert store.init_db(con) == store.migrations()[-1][0]
     con.close()
+
+
+def test_every_edge_column_is_written_and_restated(con: sqlite3.Connection) -> None:
+    """Finding 3 of the 2026-11-11 quality review: the two writers of an
+    edge row listed its columns each by hand, and an undo that forgot one
+    dropped it without an error (``weight`` was in neither). A new column
+    of ``edges`` is in ``EDGE_FACT``, which both write, or it is a time."""
+    from prax.store import base
+
+    columns = {r[1] for r in con.execute("PRAGMA table_info(edges)")}
+    assert columns == set(base.EDGE_FACT) | set(base.EDGE_TIMES)

@@ -467,6 +467,49 @@ def _end_edges(
 END_BATCH = 500
 
 
+# an edge's fact as written: every column an edge is stated with and a
+# restatement copies from the ended one. The two writers of an edge row
+# (``_link``, ``_restore_run``) listed the columns each by hand, and a
+# column one forgot was dropped by every undo without an error (the
+# quality review of 2026-11-11, finding 3); ``tests/test_schema.py`` holds
+# this list to the table's columns
+EDGE_FACT = (
+    "src",
+    "dst",
+    "rel",
+    "confidence",
+    "weight",
+    "source_doc",
+    "ontology_version",
+    "evidence",
+    "producer",
+    "run",
+    "world_from",
+    "world_from_precision",
+    "world_to",
+    "world_to_precision",
+    "evidence_start",
+    "evidence_end",
+    "evidence_text_hash",
+)
+# the columns that are not the fact: its id, and when prax held it
+EDGE_TIMES = ("id", "valid_from", "valid_to", "ingested_at")
+
+
+def _insert_edge(con: sqlite3.Connection, fact: dict[str, Any]) -> int:
+    """Write one edge row, valid from now: ``fact`` names each of
+    ``EDGE_FACT``, a missing one None. Returns its id. Does not commit."""
+    unknown = set(fact) - set(EDGE_FACT)
+    if unknown:
+        raise ValueError(f"not an edge's column: {sorted(unknown)}")
+    cur = con.execute(
+        f"INSERT INTO edges ({', '.join(EDGE_FACT)}, valid_from, ingested_at)"
+        f" VALUES ({', '.join('?' * len(EDGE_FACT))}, {_NOW}, {_NOW})",
+        tuple(fact.get(c) for c in EDGE_FACT),
+    )
+    return int(cur.lastrowid or 0)
+
+
 def _restore_run(
     con: sqlite3.Connection, run: str, *, source_doc: int | None = None
 ) -> dict[str, int]:
@@ -545,33 +588,9 @@ def _restore_run(
             (r["src"], r["rel"], r["dst"], r["source_doc"]),
         ).fetchone()
         if live is None:
-            cur = con.execute(
-                "INSERT INTO edges (src, rel, dst, confidence, source_doc, evidence,"
-                " ontology_version, producer, run, world_from, world_from_precision,"
-                " world_to, world_to_precision, evidence_start, evidence_end,"
-                " evidence_text_hash, valid_from, ingested_at)"
-                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, {_NOW}, {_NOW})",
-                (
-                    r["src"],
-                    r["rel"],
-                    r["dst"],
-                    r["confidence"],
-                    r["source_doc"],
-                    r["evidence"],
-                    r["ontology_version"],
-                    r["producer"],
-                    r["run"],
-                    r["world_from"],
-                    r["world_from_precision"],
-                    r["world_to"],
-                    r["world_to_precision"],
-                    # where its quote stood is part of the evidence (migration 48)
-                    r["evidence_start"],
-                    r["evidence_end"],
-                    r["evidence_text_hash"],
-                ),
-            )
-            new_id = int(cur.lastrowid or 0)
+            # the old row's fact whole: its document, evidence and where
+            # the quote stood, producer, run and world dates
+            new_id = _insert_edge(con, {c: r[c] for c in EDGE_FACT})
             restated += 1
         else:
             new_id = int(live["id"])
