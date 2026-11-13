@@ -26,18 +26,28 @@ applied:
   (``prax.text.paths``), the words as written for evidence, producer
   ``sync`` and run ``links:<name>``. Each sync keeps them in step: a link
   that went is ended, and a path that matches nothing yet is not kept
-  anywhere, so the next sync matches it again.
+  anywhere, so the next sync matches it again;
+- a journal (``prax.text.journal``: a Markdown file of dated entries) is
+  its entries, each a document keyed by the file's key and the entry's
+  (``…/journal.md#2026-11-10b``), and its head, what stands before the
+  first entry, under the file's own key (AU step 2). A new entry is one
+  new document, not the file again. An entry edited after its day is a
+  new version of a work (``store.state_versions``): the earlier text stays
+  live, folded under the newest in a search, and carries no key any more
+  (``project.later`` names the text after it). A file that becomes a
+  journal retires its whole text into its head, or with no head says so.
 """
 
 from __future__ import annotations
 
 import functools
+import hashlib
 import sqlite3
 from typing import Any
 
 from prax import client, store
 from prax.errors import NotFound
-from prax.text import markup, paths
+from prax.text import journal, markup, paths
 
 PLAN_SHOWN = 400  # plan rows returned; the counts are always whole
 SETTINGS = ("domains", "tags", "include", "exclude")
@@ -57,6 +67,12 @@ def _title(rel: str, text: str, name: str) -> str:
     if rel.lower().endswith((".md", ".markdown")):
         first = next((w for _, level, w in markup.headings(text) if level <= 3), None)
     return f"{first.strip() if first else rel} ({name})"
+
+
+def _entry_title(rel: str, key: str, name: str) -> str:
+    """An entry's title: its key and its file, which stay when its words
+    change, so its versions are one node (``document_node``)."""
+    return f"{key} · {rel} ({name})"
 
 
 def _words(value: Any) -> list[str]:
@@ -170,7 +186,8 @@ def _file_rows(
 ) -> list[dict[str, Any]]:
     """One row a file: its path in the project and in the repository, the
     document key and the one before keys were by remote (``legacy``), its
-    version, and why it is skipped, if it is."""
+    version, and why it is skipped, if it is. A journal is a row for its
+    head and one for each entry (``_journal_rows``)."""
     rows: list[dict[str, Any]] = []
     for f in files:
         rel = str(f.get("path") or "").strip("/")
@@ -183,18 +200,63 @@ def _file_rows(
             include=settings["include"],
             exclude=settings["exclude"],
         )
-        rows.append(
+        row = {
+            "path": rel,
+            "repo_path": repo_path,
+            "key": doc_key(name, remote, repo_path, rel),
+            "legacy": f"{name}/{rel}",
+            "version": str(f.get("sha256") or "")[:16],
+            "file": f,
+            "why": why,
+        }
+        rows.extend(_journal_rows(row) if not why else [row])
+    return rows
+
+
+def _journal_rows(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """A file's row, or a journal's: its head under the file's key (with
+    ``empty`` when nothing stands before the first entry) and one row an
+    entry, keyed ``<file key>#<entry key>``, its version the entry's hash.
+    A file whose text did not come (a dry run's plan) is read as a note."""
+    text = row["file"].get("text")
+    if not isinstance(text, str) or not row["path"].lower().endswith(
+        (".md", ".markdown")
+    ):
+        return [row]
+    split = journal.split(text)
+    if split is None:
+        return [row]
+    head = split.head if split.head.strip() else ""
+    out = [
+        {
+            **row,
+            "version": _hash(head)[:16] if head else "",
+            "file": {**row["file"], **_bytes_of(head)},
+            "journal": len(split.entries),
+            "empty": not head,
+        }
+    ]
+    for e in split.entries:
+        out.append(
             {
-                "path": rel,
-                "repo_path": repo_path,
-                "key": doc_key(name, remote, repo_path, rel),
-                "legacy": f"{name}/{rel}",
-                "version": str(f.get("sha256") or "")[:16],
-                "file": f,
-                "why": why,
+                **row,
+                "key": f"{row['key']}#{e.key}",
+                "legacy": f"{row['legacy']}#{e.key}",
+                "version": _hash(e.text)[:16],
+                "file": {**row["file"], **_bytes_of(e.text)},
+                "entry": e.key,
             }
         )
-    return rows
+    return out
+
+
+def _hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _bytes_of(text: str) -> dict[str, Any]:
+    """What a row's file says of a part of it: its text, size and hash."""
+    return {"text": text, "bytes": len(text.encode("utf-8")), "sha256": _hash(text)}
 
 
 def _match(
@@ -213,6 +275,15 @@ def _match(
         found = r["key"] if r["key"] in have else None
         if found is None and r["legacy"] in have:
             found = r["legacy"]
+        if r.get("empty"):
+            # a journal with nothing before its first entry: the file's
+            # whole text, synced before it was one, is split, and else
+            # there is no document under the file's key
+            if found is not None:
+                claimed.add(found)
+                r["doc_id"] = have[found]["doc_id"]
+            r["action"] = "split" if found is not None else "none"
+            continue
         if found is not None:
             claimed.add(found)
             old = have[found]
@@ -273,6 +344,7 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
     )
     _named_may(con, req, name, held, settings, sensitivity, have, dry_run)
     gone = _match(rows, have)
+    rows = [r for r in rows if r["action"] != "none"]
     if not dry_run:
         missing = [
             r["path"]
@@ -299,7 +371,7 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
         "plan": [
             {
                 k: r[k]
-                for k in ("path", "action", "why", "doc_id", "was")
+                for k in ("path", "entry", "action", "why", "doc_id", "was")
                 if r.get(k) is not None
             }
             for r in rows
@@ -380,31 +452,43 @@ def _keep_in_step(con: sqlite3.Connection, run: str, want: Want) -> dict[str, in
     return {"added": got.count("added"), "kept": got.count("kept"), "ended": got.ended}
 
 
-def _texts(con: sqlite3.Connection, name: str) -> dict[str, tuple[int, str]]:
-    """The project's live documents by their path in the repository, with
-    their text."""
-    out: dict[str, tuple[int, str]] = {}
+Text = tuple[str, int, str, bool]  # path, document, text, whether an entry
+
+
+def _texts(con: sqlite3.Connection, name: str) -> list[Text]:
+    """The project's current documents with their path in the repository
+    and their text: a note, a journal's head, a journal's entry."""
+    out: list[Text] = []
     for v in store.project_documents(con, name).values():
         if not v.get("path"):
             continue
         doc = store.get_document(con, int(v["doc_id"]))
-        out[str(v["path"])] = (
-            int(v["doc_id"]),
-            str(doc.get("text") or "") if doc else "",
+        out.append(
+            (
+                str(v["path"]),
+                int(v["doc_id"]),
+                str(doc.get("text") or "") if doc else "",
+                bool(v.get("entry")),
+            )
         )
     return out
 
 
+def _by_path(texts: list[Text]) -> dict[str, int]:
+    """What a path names: the note, or the journal's head; never an entry."""
+    return {p: d for p, d, _, entry in texts if not entry}
+
+
 def _links(
-    con: sqlite3.Connection, name: str, prefix: str, texts: dict[str, tuple[int, str]]
+    con: sqlite3.Connection, name: str, prefix: str, texts: list[Text]
 ) -> dict[str, int]:
-    """Keep the project's ``links_to`` edges in step with its texts. Returns
-    the counts, ``unmatched`` being the references to paths no document of
-    the project has (yet)."""
-    by_path = {p: d for p, (d, _) in texts.items()}
+    """Keep the project's ``links_to`` edges in step with its texts, a
+    journal's entries' among them. Returns the counts, ``unmatched`` being
+    the references to paths no document of the project has (yet)."""
+    by_path = _by_path(texts)
     want: Want = {}
     unmatched = 0
-    for path, (doc_id, text) in texts.items():
+    for path, doc_id, text, _entry in texts:
         for candidates, words in paths.references(text, path, prefix):
             hit = next((by_path[c] for c in candidates if c in by_path), None)
             if hit is None:
@@ -415,20 +499,24 @@ def _links(
 
 
 def _statuses(
-    con: sqlite3.Connection, name: str, prefix: str, texts: dict[str, tuple[int, str]]
+    con: sqlite3.Connection, name: str, prefix: str, texts: list[Text]
 ) -> dict[str, int]:
     """What each note says of itself (``prax.text.status``): kept as
     ``meta.status`` (by ``sync``, gone when the line goes; a person's is
     never touched), and a replacement the line names as an edge from it to
     the stale note (``supersedes``, ``invalidates`` for an invalid one),
-    the line for evidence and its date as the world's time."""
+    the line for evidence and its date as the world's time. A journal's
+    status is its head's; an entry's words are not read for one (a
+    correction relabels its first text superseded, not the entry)."""
     from prax.text import status as status_mod
 
-    by_path = {p: d for p, (d, _) in texts.items()}
+    by_path = _by_path(texts)
     words = status_mod.lexicon_words()
     want: Want = {}
     stale = 0
-    for path, (doc_id, text) in texts.items():
+    for path, doc_id, text, entry in texts:
+        if entry:
+            continue
         st = status_mod.read(text, path, prefix, words)
         said = (
             None
@@ -512,17 +600,32 @@ def _apply(
             "bytes": f.get("bytes"),
             "modified": f.get("modified"),
         }
+        if r.get("entry"):
+            own["entry"] = r["entry"]
         if action in ("unchanged", "moved"):
             if r.get("old_key") != r["key"] or action == "moved":
                 store.update_meta(con, r["doc_id"], functools.partial(_own, own, []))
             store.add_to_project(con, slug, r["doc_id"], promote=False)
             continue
+        if action == "split":
+            store.retire_document(
+                con,
+                r["doc_id"],
+                reason=f"split into its {r['journal']} entries by a sync of"
+                f" project {name}",
+            )
+            continue
         if action not in ("add", "refresh"):
             continue
+        title = (
+            _entry_title(r["path"], r["entry"], name)
+            if r.get("entry")
+            else _title(r["path"], str(f["text"]), name)
+        )
         got = store.ingest_text(
             con,
             str(f["text"]),
-            title=_title(r["path"], str(f["text"]), name),
+            title=title,
             meta={
                 "source": store.PROJECT_SOURCE,
                 store.PROJECT_SOURCE: own,
@@ -538,15 +641,40 @@ def _apply(
         for d in settings["domains"]:
             store.add_domain(con, doc_id, d)
         if action == "refresh" and r.get("doc_id") and r["doc_id"] != doc_id:
-            store.retire_document(
-                con,
-                r["doc_id"],
-                reason=f"replaced by a newer sync of project {name}",
-                replaced_by=doc_id,
-                carry=(LINK_PRODUCER,),
-            )
+            if r.get("entry"):
+                _new_version(con, name, r["doc_id"], doc_id)
+            else:
+                store.retire_document(
+                    con,
+                    r["doc_id"],
+                    reason=f"replaced by a newer sync of project {name}",
+                    replaced_by=doc_id,
+                    carry=(LINK_PRODUCER,),
+                )
         r["doc_id"] = doc_id
         if sensitivity:
             # a colleague's notes: behind the wall from the first sync on
             store.set_sensitivity(con, doc_id, sensitivity, by="sync")
         store.add_to_project(con, slug, doc_id, promote=False)
+
+
+def _new_version(con: sqlite3.Connection, name: str, old: int, new: int) -> None:
+    """An entry edited after its day: its earlier text and the new one
+    versions of one work (``store.state_versions``), the earlier kept live
+    for a search to fold under the newest, without its key, so the next
+    sync finds the new one by it."""
+    store.state_versions(
+        con,
+        [old, new],
+        by=LINK_PRODUCER,
+        run=f"entries:{name}",
+        evidence="an entry of a journal edited after its day",
+    )
+    store.update_meta(con, old, functools.partial(_earlier, new))
+
+
+def _earlier(later: int, meta: store.DocumentMeta) -> None:
+    held = dict(meta.get(store.PROJECT_SOURCE) or {})
+    held["was"] = held.pop("key", None)
+    held["later"] = later
+    meta[store.PROJECT_SOURCE] = held

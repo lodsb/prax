@@ -11286,3 +11286,47 @@ is finding 21's registry.
 The errors-that-hide group is done except 19 and 35 (spending's routes
 and a failed ledger write) and 36 (one maintenance pass that raises
 skips the rest).
+
+## 2026-11-13: a journal as entries (AU step 2)
+
+A project's journal is one append-only Markdown file, 3,400 or 7,600
+lines in the MotorPlatterExperiments project. `sync_project` keys a file
+by remote and path, and a changed file is a new document (invariant 2),
+so every new entry brought the whole file back as a new document, and
+retired the old text with its facts (finding 1's fix, 2026-11-13).
+
+`prax.text.journal.split` cuts a Markdown text into its head and its
+entries. An entry is a heading whose words, after an optional `Session `,
+begin with `YYYY-MM-DD`, an optional letter and an optional parenthesis.
+The heading's level says nothing, and everything up to the next entry's
+heading is the entry's. A heading whose date is not first (`Park state
+2026-11-10`) is not an entry. A file is a journal from three entries
+(`JOURNAL_MIN`); a note with one or two dated sections stays a note. The
+key is the date, letter and parenthesis as written (`2026-09-16
+(late)`); a key that comes twice is numbered (`~2`).
+
+The sync (`prax.capture.projects._journal_rows`) plans a journal as one
+row for its head, under the file's own key, and one for each entry under
+`<file key>#<entry key>`, the entry's hash its version. A new entry is
+one `add`, the rest `unchanged`. An entry's title is its key and file
+(`2026-11-09 · log.md (name)`), which stays when its words change, so its
+versions are one node. An entry edited after its day (a `CORRECTION`
+added) is not retired: `store.state_versions`, taken out of
+`versions.decide_version` as finding 1's note asked, states the earlier
+and the new text `example_of` one work (producer `sync`, run
+`entries:<name>`). The earlier text stays live, a search folds it under
+the newest, and it loses its key (`project.was`, `project.later`) so the
+next sync finds the newest. A link inside an entry is that entry's
+`links_to`; a path names the head, never an entry. An entry's words are
+not read for a status line: a correction relabels the first text
+superseded, not the entry. A file synced whole before it became a
+journal is retired into its head, or, with nothing before its first
+entry, retired as split.
+
+Not done: a dry run sent without texts (`prax sync` without `--apply`,
+the MCP tool's dry run) plans a journal as one file, since the door
+cannot split what it was not sent. Tests: `test_journal.py` (3),
+`test_projects.py::test_a_journal_is_its_entries_and_a_new_entry_is_one_document`,
+`::test_an_entry_edited_after_its_day_is_a_version`,
+`::test_a_note_that_becomes_a_journal_is_split`. The live journals split
+on the projects' next sync, each entry then due for extraction.

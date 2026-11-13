@@ -326,6 +326,7 @@ from .versions import (  # noqa: F401
     VERSIONS_PAGE,
     decide_version,
     find_versions,
+    state_versions,
     title_key,
     undo_version,
     version_candidates,

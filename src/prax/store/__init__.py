@@ -572,6 +572,7 @@ from .graph import (  # noqa: F401
     set_community_summary,
     settle_foreign,
     split_event,
+    state_versions,
     subgraph_edges,
     sync_facts,
     title_key,

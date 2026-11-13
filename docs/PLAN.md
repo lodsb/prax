@@ -617,7 +617,7 @@ they block, then by cost. Sizes are the review's.
          acted on, found false; what stands on it is suspect), no longer folded
          into `invalid`. A `SCOPE` line says what a document covers, not
          whether it is current, and is not read.
-      2. **A journal as entries.** `sync_project` keys a file by remote and
+      2. (done 2026-11-13) **A journal as entries.** `sync_project` keys a file by remote and
          path, and a changed file is a new document (invariant 2), so an
          append-only journal of 3,400 or 7,600 lines comes back whole each
          sync. An entry is a heading whose text, after an optional
@@ -632,6 +632,12 @@ they block, then by cost. Sizes are the review's.
          with versions (`example_of`, AS): its key the file and the heading's
          date with suffix and qualifier as written, each changed text a
          version, a search folding the old under the newest.
+         Done: `prax.text.journal.split` (a journal is `JOURNAL_MIN`, 3,
+         entries or more), the sync's rows for the head and each entry,
+         `store.state_versions` taken out of `decide_version` (finding
+         1's note), a whole text synced before the split retired into the
+         head or as split. A dry run sent without texts still plans a
+         journal as one file.
       3. **`prax:<slug>`, a pointer that outlives a sync.** A slug names a
          page or a work (a journal entry, a note across its versions), never
          a document id, which a refresh retires; no host in it. The door, the

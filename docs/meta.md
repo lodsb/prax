@@ -71,7 +71,7 @@ writer, and add its row here.
 | `doi` | `str \| None` | a printed or recorded DOI (Zotero, a capture's paper) |
 | `arxiv` | `str` | an arXiv id |
 | `paper` | `dict[str, Any]` | the extension's paper: journal, date, pdf_url |
-| `project` | `dict[str, Any]` | a project's sync: key, name, path, version |
+| `project` | `dict[str, Any]` | a project's sync: key, name, path, version; a journal entry's `entry`; an entry's earlier text `was` (its key) and `later` (the next text's id) |
 | `tags` | `list[str]` | a capture's, an importer's, a person's |
 | `citations` | `dict[str, Any]` | importers.citations: OpenAlex's record |
 

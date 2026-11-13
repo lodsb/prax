@@ -434,3 +434,109 @@ def test_a_changed_note_is_read_from_its_own_text(client: TestClient) -> None:
         ).fetchone()[0]
         >= 1
     )
+
+
+JOURNAL_HEAD = "# Bring-up journal\n\nSee [the notes](notes.md).\n\n"
+
+
+def _journal(*entries: str) -> str:
+    return JOURNAL_HEAD + "".join(entries)
+
+
+DAY1 = "## 2026-11-08\n\nThe sensor reads zero.\n\n"
+DAY2 = "## 2026-11-09\n\nThe pull-up was missing; see [the notes](notes.md).\n\n"
+DAY3 = "## 2026-11-10b (late)\n\nFixed, period index steady.\n\n"
+DAY4 = "## 2026-11-11\n\nA fourth day.\n\n"
+
+
+def _entries(out: dict[str, Any]) -> dict[str, tuple[str, int]]:
+    return {
+        p["entry"]: (p["action"], p.get("doc_id", 0))
+        for p in out["plan"]
+        if "entry" in p
+    }
+
+
+def test_a_journal_is_its_entries_and_a_new_entry_is_one_document(
+    client: TestClient,
+) -> None:
+    """A journal (AU step 2) is a document for its head and one for each
+    dated entry: the next day's sync adds that day, and the rest of the
+    file is unchanged rather than a new document of the whole."""
+    con = client.app.state.con
+    files = [_file("notes.md", NOTES), _file("log.md", _journal(DAY1, DAY2, DAY3))]
+    out = _sync(client, files, name="synth-fw", dry_run=False)
+    assert out["counts"]["add"] == 5  # the note, the head, three entries
+    got = _entries(out)
+    assert sorted(got) == ["2026-11-08", "2026-11-09", "2026-11-10b (late)"]
+    entry = store.get_document(con, got["2026-11-09"][1])
+    assert entry["title"] == "2026-11-09 · log.md (synth-fw)"
+    assert entry["text"].startswith("## 2026-11-09")
+    assert store.get_meta(con, got["2026-11-09"][1])["project"]["entry"] == (
+        "2026-11-09"
+    )
+    # an entry's link is its own; a link to the journal lands on its head
+    assert out["links"]["added"] == 2
+
+    files[1] = _file("log.md", _journal(DAY1, DAY2, DAY3, DAY4))
+    out = _sync(client, files, dry_run=False)
+    assert out["counts"].get("add") == 1 and out["counts"]["unchanged"] == 5
+    assert _entries(out)["2026-11-11"][0] == "add"
+
+
+def test_an_entry_edited_after_its_day_is_a_version(client: TestClient) -> None:
+    """An entry edited later (a correction added) is a new version of a
+    work: the earlier text stays live and a search folds it under the
+    newest; it keeps no key, so the next sync finds the newest."""
+    con = client.app.state.con
+    out = _sync(
+        client, [_file("log.md", _journal(DAY1, DAY2, DAY3))], name="j", dry_run=False
+    )
+    old = _entries(out)["2026-11-09"][1]
+    fixed = DAY2 + "CORRECTION, same session: the pull-up was there.\n\n"
+    out = _sync(client, [_file("log.md", _journal(DAY1, fixed, DAY3))], dry_run=False)
+    action, new = _entries(out)["2026-11-09"]
+    assert action == "refresh" and new != old
+    assert "retired" not in store.get_meta(con, old)
+    assert store.get_meta(con, old)["project"]["later"] == new
+    assert store.later_versions(con, [old]) == {old: [new]}
+    work = store.versions_of(con, new)
+    assert work is not None and work["latest"] == new
+    assert work["work"]["name"] == "2026-11-09 · log.md (j)"
+    # the next sync with nothing changed changes nothing
+    out = _sync(client, [_file("log.md", _journal(DAY1, fixed, DAY3))], dry_run=False)
+    assert set(out["counts"]) == {"unchanged", "gone"} and out["counts"]["gone"] == 0
+
+
+def test_a_note_that_becomes_a_journal_is_split(client: TestClient) -> None:
+    """A file synced whole before it held entries is retired into its head
+    when the sync splits it; with nothing before its first entry it is
+    retired as split, and no head is made."""
+    con = client.app.state.con
+    out = _sync(
+        client, [_file("log.md", "# Log\n\nOne day.\n")], name="a", dry_run=False
+    )
+    whole = out["plan"][0]["doc_id"]
+    out = _sync(client, [_file("log.md", _journal(DAY1, DAY2, DAY3))], dry_run=False)
+    head = next(p for p in out["plan"] if "entry" not in p)
+    assert head["action"] == "refresh"
+    assert store.get_meta(con, whole)["retired"]["of"] == head["doc_id"]
+
+    out = _sync(
+        client,
+        [_file("other.md", "# Other\n\nOne day.\n")],
+        name="b",
+        prefix="b",
+        dry_run=False,
+    )
+    whole = out["plan"][0]["doc_id"]
+    out = _sync(
+        client, [_file("other.md", DAY1 + DAY2 + DAY3)], prefix="b", dry_run=False
+    )
+    assert [p["action"] for p in out["plan"] if "entry" not in p] == ["split"]
+    assert "split into its 3 entries" in store.get_meta(con, whole)["retired"]["reason"]
+    out = _sync(
+        client, [_file("other.md", DAY1 + DAY2 + DAY3)], prefix="b", dry_run=False
+    )
+    assert [p for p in out["plan"] if "entry" not in p] == []
+    assert out["counts"] == {"unchanged": 3, "gone": 0}

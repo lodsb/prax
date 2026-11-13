@@ -52,6 +52,7 @@ from ..base import (
     _ASIDE,
     LIVE,
     NotFound,
+    _committing,
     _reading,
     _serialized,
     hidden_documents,
@@ -307,6 +308,58 @@ def _keeper(con: sqlite3.Connection, a: int, b: int) -> tuple[int, int]:
     return keep, b if keep == a else a
 
 
+def _state_versions(
+    con: sqlite3.Connection, docs: list[int], *, by: str, run: str, evidence: str
+) -> dict[str, Any]:
+    """Documents stated versions of one work: each ``example_of`` it, a
+    fact sourced to the version, under ``run`` and producer ``by``, with
+    "a version of <work>, <evidence>" for its evidence. The work is the
+    one the latest, else an earlier one, is already a version of; else a
+    new one named by the latest's node, with ``(#id)`` when another work
+    has that name. A document already a version of a work is left so.
+    Returns the work, ``{id, name}``. A person's answer for a pair
+    (``decide_version``) and a project's sync of an edited journal entry
+    (``prax.capture.projects``) both state them here."""
+    order = in_order(con, docs)
+    if not order:
+        raise ValueError("versions of a work need a document")
+    latest = order[-1]
+    work = next(
+        (w for d in reversed(order) if (w := _work_of(con, d)) is not None), None
+    )
+    if work is not None:
+        name = str(
+            con.execute("SELECT name FROM entities WHERE id = ?", (work,)).fetchone()[0]
+        )
+    else:
+        name = str(document_node(con, latest)[0])
+        taken = con.execute(
+            "SELECT id FROM entities WHERE name = ? AND type = 'work'", (name,)
+        ).fetchone()
+        if taken is not None:  # another work of that title
+            name = f"{name} (#{latest})"
+    for doc in order:
+        if _work_of(con, doc) is not None:
+            continue
+        node, ntype = document_node(con, doc)
+        link(
+            con,
+            Edge(node, ntype, EXAMPLE_OF, name, "work"),
+            confidence="EXTRACTED",
+            source_doc=doc,
+            evidence=f"a version of {name!r}, {evidence}",
+            producer=by,
+            run=run,
+        )
+    found = con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = 'work'", (name,)
+    ).fetchone()
+    return {"id": int(found[0]) if found else None, "name": name}
+
+
+state_versions = _serialized(_committing(_state_versions))
+
+
 @_serialized
 def decide_version(
     con: sqlite3.Connection, candidate_id: int, verdict: str, *, by: str = PERSON
@@ -328,38 +381,9 @@ def decide_version(
     run = run_name("versions", candidate_id, unique=True)
     out: dict[str, Any] = {"id": candidate_id, "verdict": verdict, "run": run}
     if verdict == "version":
-        earlier, later = in_order(con, [a, b])
-        work = _work_of(con, later) or _work_of(con, earlier)
-        if work is not None:
-            name = str(
-                con.execute(
-                    "SELECT name FROM entities WHERE id = ?", (work,)
-                ).fetchone()[0]
-            )
-        else:
-            name = str(document_node(con, later)[0])
-            taken = con.execute(
-                "SELECT id FROM entities WHERE name = ? AND type = 'work'", (name,)
-            ).fetchone()
-            if taken is not None:  # another work of that title
-                name = f"{name} (#{later})"
-        for doc in (earlier, later):
-            node, ntype = document_node(con, doc)
-            if _work_of(con, doc) is not None:
-                continue
-            link(
-                con,
-                Edge(node, ntype, EXAMPLE_OF, name, "work"),
-                confidence="EXTRACTED",
-                source_doc=doc,
-                evidence=f"a version of {name!r}, as a person decided",
-                producer=by,
-                run=run,
-            )
-        found = con.execute(
-            "SELECT id FROM entities WHERE name = ? AND type = 'work'", (name,)
-        ).fetchone()
-        out["work"] = {"id": int(found[0]) if found else None, "name": name}
+        out["work"] = _state_versions(
+            con, [a, b], by=by, run=run, evidence="as a person decided"
+        )
     elif verdict == "copy":
         keep, twin = _keeper(con, a, b)
         retire_document(
