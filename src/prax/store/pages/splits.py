@@ -29,10 +29,10 @@ from ..graph import (
     document_node,
 )
 from ..retrieval import _FOLD
+from .pointers import page_links
 from .texts import (
     _LINK_EVIDENCE,
     PAGE_AUTHORS,
-    linked_documents,
     slugify,
 )
 from .tree import (
@@ -390,7 +390,7 @@ def _end_given_edges(
     does not link stays."""
     linked: set[str] = set()
     for child_text in texts:
-        for target in linked_documents(child_text):
+        for target in page_links(con, child_text):
             try:
                 linked.add(document_node(con, target)[0])
             except NotFound:

@@ -1331,6 +1331,18 @@ function moduleOptions(mods, counts, selected) {
   return out.join("");
 }
 
+// A pointer (prax:<slug>, AU step 3) names a page or a project's file or
+// journal entry, not a document id. The sanitizer drops a link of a scheme
+// it does not know, so a page's [title](prax:…) becomes a route of the
+// page's own (#prax/<pointer>), which asks the door what it names now.
+function pointerRoute(ref) {
+  return `#prax/${encodeURIComponent(String(ref || ""))}`;
+}
+function pointerLinks(text) {
+  return String(text || "").replace(/\]\((prax:[^)\s]+)\)/g, (_, ref) => `](${pointerRoute(ref)})`);
+}
+const isPointer = (q) => /^prax:\S+$/.test(String(q || "").trim());
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureOrWord, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, forwardTo, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, mediaKinds, mediaGroupRow, mediaCrumbs, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { pointerRoute, pointerLinks, isPointer, moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureOrWord, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, forwardTo, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, mediaKinds, mediaGroupRow, mediaCrumbs, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

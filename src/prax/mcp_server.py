@@ -152,8 +152,13 @@ def get_chunk(chunk_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
-    """Fetch one document by id (ids come from search results).
+def get(doc_id: int | str, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
+    """Fetch one document by id (ids come from search results), or by a
+    pointer: ``prax:<page>``, ``prax:<project>/<path>`` (a project's file)
+    or ``prax:<project>/<path>#<entry>`` (a journal entry), which names the
+    current text however often it was synced since. A document that has
+    one carries it as ``pointer``: write that, not the id, in a link meant
+    to last (``[title](prax:…)`` in a page).
 
     Text is windowed: ``text_len`` and ``truncated`` say whether more
     remains; call again with a larger ``offset`` to page. ``meta`` holds
@@ -164,12 +169,17 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
     replaced (a newer sync of a project's note) carries ``current``, the
     document that holds it now.
     """
-    return _answer(
-        lambda: door().get_json(
-            f"/get/{doc_id}",
+
+    def fetch() -> Any:
+        target = doc_id
+        if isinstance(target, str) and not target.strip().isdigit():
+            target = door().get_json("/resolve", {"ref": target})["doc_id"]
+        return door().get_json(
+            f"/get/{int(target)}",
             {"offset": offset, "max_chars": max_chars, "brief": True},
         )
-    )
+
+    return _answer(fetch)
 
 
 def _picture(path: str, params: dict[str, Any] | None = None) -> Any:

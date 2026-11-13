@@ -27,6 +27,14 @@ from ._base import AtMost, Page, _con, ui_url
 router = APIRouter()
 
 
+@router.get("/resolve")
+def resolve(ref: str, request: Request) -> dict[str, Any]:
+    """What a pointer names now (``prax:<page>``, ``prax:<project>/<path>``,
+    ``prax:<project>/<path>#<entry>``; ``store.resolve_pointer``): ``{pointer,
+    doc_id, title, kind}``, the document to open with ``/get``."""
+    return store.resolve_pointer(_con(request), ref)
+
+
 @router.get("/get/{doc_id}")
 def get(
     doc_id: int,
@@ -75,6 +83,11 @@ def get(
     current = store.current_of(con, doc_id)
     if current is not None:
         doc["current"] = current
+    # the name that outlives a sync: a page's, a project file's or entry's
+    # (``prax:<slug>``, AU step 3); a link written with it never goes stale
+    pointer = store.pointer_of(con, doc_id)
+    if pointer is not None:
+        doc["pointer"] = pointer
     # where its file lies, for a document prax does not hold: a referenced
     # recording or picture (AQ stage 3); a held one says nothing
     if not doc.get("held", 1):
@@ -560,7 +573,7 @@ def references_missing(req: MissingReq, request: Request) -> dict[str, Any]:
         page = store.get_page(con, store.slugify(req.page))
         if page is None:
             raise HTTPException(404, f"no page {req.page!r}")
-        ids += store.linked_documents(page["text"])
+        ids += store.page_links(con, page["text"])
     if not ids:
         raise HTTPException(400, "name the set: doc_ids, a tag, a project or a page")
     limit = req.limit

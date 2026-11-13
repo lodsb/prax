@@ -232,3 +232,8 @@ DOC_LINK = re.compile(r"\]\(#doc/(\d+)(?:[?#][^)]*)?\)")
 
 def doc_link(title: str, doc_id: int) -> str:
     return f"[{title}](#doc/{doc_id})"
+
+
+# a link by a pointer, ``[title](prax:onset-notes)``, which names a page or a
+# project's file or entry rather than a document id (``prax.text.slugs``)
+POINTER_LINK = re.compile(r"\]\((prax:[^)\s]+)\)")

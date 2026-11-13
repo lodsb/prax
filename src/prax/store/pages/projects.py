@@ -1,25 +1,23 @@
 """A project's manifest (migration 38): where its working copy is, what is
-read from it, and its documents."""
+read from it, and its documents (``pointers``)."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any, Final
+from typing import Any
 
 from ..base import (
-    LIVE,
     _reading,
     _serialized,
 )
+from .pointers import PROJECT_SOURCE, project_documents  # noqa: F401
 
 # ------------------------------------------------------------- projects
 #
 # A project's manifest (migration 38): where its working copy is, what is
 # read from it, and whether the session-end hook syncs it on its own. The
 # plan of a sync and its documents are ``prax.capture.projects``.
-
-PROJECT_SOURCE: Final = "project"  # ``meta.source`` of a synced document
 
 
 def _project_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -120,37 +118,3 @@ def note_project_sync(con: sqlite3.Connection, name: str, last: dict[str, Any]) 
         (json.dumps(last, sort_keys=True), name),
     )
     con.commit()
-
-
-@_reading
-def project_documents(
-    con: sqlite3.Connection, name: str, keys: list[str] | None = None
-) -> dict[str, dict[str, Any]]:
-    """A project's live synced documents by key: ``{key: {doc_id, version,
-    path, entry}}`` (``entry``, a journal entry's key, else None), those
-    its name carries and those any of ``keys`` names (a document synced
-    before the manifest, under an older key)."""
-    keys = keys or []
-    marks = ",".join("?" * len(keys)) or "NULL"
-    rows = con.execute(
-        "SELECT id, json_extract(meta, '$.project.key') AS key,"
-        " json_extract(meta, '$.project.version') AS version,"
-        " json_extract(meta, '$.project.path') AS path,"
-        " json_extract(meta, '$.project.entry') AS entry FROM documents"
-        " WHERE json_extract(meta, '$.source') = ?"
-        f" AND {LIVE}"
-        " AND (json_extract(meta, '$.project.name') = ?"
-        f" OR json_extract(meta, '$.project.key') IN ({marks}))"
-        " ORDER BY id",
-        (PROJECT_SOURCE, name, *keys),
-    ).fetchall()
-    out: dict[str, dict[str, Any]] = {}
-    for r in rows:
-        if r["key"] and r["key"] not in out:
-            out[str(r["key"])] = {
-                "doc_id": int(r["id"]),
-                "version": r["version"],
-                "path": r["path"],
-                "entry": r["entry"],
-            }
-    return out

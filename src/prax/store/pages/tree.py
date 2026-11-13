@@ -15,9 +15,9 @@ from ..base import (
     personal_sql,
 )
 from ..retrieval import staleness
+from .pointers import page_links
 from .texts import (
     _slug_of,
-    linked_documents,
     slugify,
 )
 
@@ -166,7 +166,7 @@ def _lifecycle(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any
     (``staleness``: superseded, retired, invalid), else ``active``; and
     ``stale_sources`` names them with what replaced each. A page is never
     changed for it: the person or the agent decides what follows."""
-    ids = [i for i in dict.fromkeys(linked_documents(text)) if i != doc_id]
+    ids = [i for i in dict.fromkeys(page_links(con, text)) if i != doc_id]
     if len(ids) < PAGE_SOURCES:
         ids += [i for i in _annotated(con, doc_id) if i not in ids and i != doc_id]
     ids = ids[:PAGE_SOURCES]
@@ -262,7 +262,7 @@ def scope_documents(
                 "SELECT text_hash FROM documents WHERE id = ?", (did,)
             ).fetchone()
             if row is not None and row[0]:
-                docs.update(linked_documents(_read_archive(row[0]).decode("utf-8")))
+                docs.update(page_links(con, _read_archive(row[0]).decode("utf-8")))
         out = frozenset(docs)
     if personal in ("hide", "only"):
         marked = {

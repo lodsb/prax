@@ -11330,3 +11330,42 @@ cannot split what it was not sent. Tests: `test_journal.py` (3),
 `::test_an_entry_edited_after_its_day_is_a_version`,
 `::test_a_note_that_becomes_a_journal_is_split`. The live journals split
 on the projects' next sync, each entry then due for extraction.
+
+## 2026-11-13: `prax:<slug>`, a pointer that outlives a sync (AU step 3)
+
+A synced note that changes is a new document (invariant 2), and since
+step 2 a journal entry edited later is a new version. A link that names
+a document id names one text: `current_of` forwards a retired one, but a
+page that lists a project's notes by id, nlbank's claims index among
+them, was rewritten after every sync to keep its ids current.
+
+A pointer names the thing rather than the text. The grammar is in
+`prax.text.slugs` (`parse_pointer`, `pointer`, `page_pointer`):
+
+- `prax:<page slug>`, a page; an old slug finds it, as `get_page` does;
+- `prax:<project>/<path in the repository>`, a project's file, the text
+  the last sync left current;
+- `prax:<project>/<path>#<entry>`, a journal entry, its newest version.
+
+The project is its name's slug and the entry its key's slug
+(`2026-09-16 (late)` is `2026-09-16-late`), so a pointer holds no space
+and stands in a Markdown link as written. No host is in it: the project
+is found by name, not by its remote. Percent escapes are read.
+
+The store's part `pages.pointers`, new between `texts` and `tree`,
+resolves them: `resolve_pointer` (`NotFound` for nothing current or
+hidden, a ValueError for no pointer), `pointer_of` (a page's, or a synced
+document's from `meta.project`, an earlier text's too), and `page_links`,
+a page's `#doc/N` and `prax:` links as documents. `project_documents` and
+`PROJECT_SOURCE` moved there from `projects`, which a part before it
+could not import. Every reader of a page's links (its `annotates`
+edges, its lifecycle, a split, `cited_but_missing` for a page) now reads
+both kinds.
+
+Where it is resolved: `GET /resolve?ref=` (a reader's route), `/get`
+says a document's `pointer`, the MCP `get` takes one for its `doc_id`,
+and the web page turns `[title](prax:…)` into its own `#prax/…` route
+before the sanitizer (which drops a scheme it does not know) and opens a
+pointer typed into the search box. Not done: a paper's work (AS) has no
+pointer, its name being a title. Tests: `test_pointers.py` (3),
+`test_mcp.py::test_get_takes_a_pointer`, and the UI's pointer links.

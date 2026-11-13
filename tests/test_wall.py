@@ -113,6 +113,7 @@ def _says(response: Any, *words: str) -> bool:
 WALKED = (
     ("GET", "/search"),
     ("GET", "/get/1"),
+    ("GET", "/resolve"),
     ("GET", "/chunk/1"),
     ("GET", "/traverse"),
     ("GET", "/edge/1/why"),

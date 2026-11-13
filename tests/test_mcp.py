@@ -458,3 +458,13 @@ def test_where_names_a_files_places_and_keeps_its_answer_small(
     got = call("where", hash=digest, limit=5)
     assert got["copies"] == 14 and len(got["places"]) == 5 and got["left_out"] == 9
     assert "error" in call("where", hash="cd" * 32)
+
+
+def test_get_takes_a_pointer(proxied: TestClient) -> None:
+    """``get`` by ``prax:<slug>`` (AU step 3): the page it names, and the
+    pointer said back for a link meant to last."""
+    con = proxied.app.state.con
+    page = store.write_page(con, "pointer-notes", "# Pointer notes\n\nKept.\n")
+    doc = call("get", doc_id="prax:pointer-notes")
+    assert doc["id"] == page["doc_id"] and doc["pointer"] == "prax:pointer-notes"
+    assert "error" in call("get", doc_id="prax:no-such-page")

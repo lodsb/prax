@@ -73,6 +73,8 @@ async function viewSearch(p) {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form));
+    // a pointer typed or pasted into the box opens what it names
+    if (isPointer(data.q)) { location.hash = pointerRoute(String(data.q).trim()); return; }
     go("search", "", data);
   });
   if (!p.q) return;

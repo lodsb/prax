@@ -34,6 +34,7 @@ from ..graph import (
     link,
     rename_entity,
 )
+from .pointers import page_links
 from .reads import (
     get_page,
 )
@@ -44,7 +45,6 @@ from .texts import (
     PAGE_LARGE,
     _page_original,
     _slug_of,
-    linked_documents,
     slugify,
 )
 from .tree import (
@@ -419,7 +419,7 @@ def _link_edges(
     the page itself, makes no edge."""
     named = set(annotates or [])
     wanted_titles: set[str] = set()
-    for target in linked_documents(text):
+    for target in page_links(con, text):
         if target == doc_id or target in named:
             continue
         try:

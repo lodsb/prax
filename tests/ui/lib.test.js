@@ -876,3 +876,15 @@ test("forwardTo: a retired copy's link opens the document that replaced it", () 
   // cannot send the page back and forth
   assert.equal(lib.forwardTo({ id: 9, current: { doc_id: 5 } }, { from: "5" }), null);
 });
+
+test("a pointer link in a page opens what the pointer names now (AU step 3)", () => {
+  assert.equal(lib.pointerRoute("prax:fw/log.md#2026-11-10b"), "#prax/prax%3Afw%2Flog.md%232026-11-10b");
+  assert.equal(
+    lib.pointerLinks("See [the log](prax:fw/log.md#2026-11-10b) and [x](#doc/4)."),
+    "See [the log](#prax/prax%3Afw%2Flog.md%232026-11-10b) and [x](#doc/4).",
+  );
+  assert.equal(lib.parseHash(lib.pointerRoute("prax:fw/log.md")).name, "prax");
+  assert.ok(lib.isPointer(" prax:onset-notes "));
+  assert.ok(!lib.isPointer("prax: notes"));
+  assert.ok(!lib.isPointer("what is prax:x"));
+});

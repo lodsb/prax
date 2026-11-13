@@ -11,7 +11,16 @@ A package of parts, each importing only from the ones before it in
 
 from __future__ import annotations
 
-ORDER = ("texts", "tree", "reads", "writes", "moves", "splits", "projects")
+ORDER = (
+    "texts",
+    "pointers",
+    "tree",
+    "reads",
+    "writes",
+    "moves",
+    "splits",
+    "projects",
+)
 
 from .moves import (  # noqa: F401
     _MOVED,
@@ -22,13 +31,18 @@ from .moves import (  # noqa: F401
     move_page,
     rename_page,
 )
-from .projects import (  # noqa: F401
+from .pointers import (  # noqa: F401
     PROJECT_SOURCE,
+    page_links,
+    pointer_of,
+    project_documents,
+    resolve_pointer,
+)
+from .projects import (  # noqa: F401
     _project_row,
     list_projects,
     note_project_sync,
     project_at,
-    project_documents,
     project_named,
     save_project,
 )

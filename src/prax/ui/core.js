@@ -203,7 +203,7 @@ const MD_CLEAN = {
 };
 function md(text) {
   // U+FFFD is a glyph the PDF's font gave no name: a box, not a question
-  const raw = marked.parse(text || "", { gfm: true, breaks: false });
+  const raw = marked.parse(pointerLinks(text || ""), { gfm: true, breaks: false });
   const html = typeof DOMPurify === "undefined" ? esc(raw) : DOMPurify.sanitize(raw, MD_CLEAN);
   return html.replace(/\uFFFD/g, '<span class="lost" title="a glyph the document\u2019s font did not name">\u25AB</span>');
 }

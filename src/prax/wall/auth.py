@@ -74,6 +74,7 @@ def _routes(*pairs: tuple[str, str]) -> tuple[tuple[str, re.Pattern[str]], ...]:
 READER_ROUTES = _routes(
     ("GET", r"/search"),
     ("GET", r"/get/\d+"),
+    ("GET", r"/resolve"),
     ("GET", r"/chunk/\d+"),
     ("GET", r"/traverse"),
     ("GET", r"/edge/\d+/why"),

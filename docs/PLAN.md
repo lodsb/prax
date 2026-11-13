@@ -638,12 +638,19 @@ they block, then by cost. Sizes are the review's.
          1's note), a whole text synced before the split retired into the
          head or as split. A dry run sent without texts still plans a
          journal as one file.
-      3. **`prax:<slug>`, a pointer that outlives a sync.** A slug names a
+      3. (done 2026-11-13) **`prax:<slug>`, a pointer that outlives a sync.** A slug names a
          page or a work (a journal entry, a note across its versions), never
          a document id, which a refresh retires; no host in it. The door, the
          MCP tools and the web page's search resolve it. It also ends the
          churn of nlbank's claims-index page, rewritten after every sync
          because its links named retired ids.
+         Done: `prax:<page>`, `prax:<project>/<path>`,
+         `prax:<project>/<path>#<entry>` (project and entry as slugs);
+         `store.resolve_pointer`, `GET /resolve`, `pointer` on `/get`,
+         the MCP `get` by pointer, a page's `[title](prax:…)` link, and
+         the web page's search box and links. A paper's work (AS) has no
+         pointer yet: its name is a title, not a slug. The nlbank page
+         changes when its agent writes pointers instead of ids.
       4. **The register and "what about X".** The sync reads the project's
          register of open questions as written: a `###` question, then
          `- key: value` lines (`status` with its first word the state, open,

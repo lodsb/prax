@@ -92,6 +92,12 @@ async function drawRoute(r) {
     location.replace(`#doc/${page.doc_id}`);
     return;
   }
+  if (r.name === "prax" && r.arg) {
+    // a pointer (#prax/prax%3Anotes%2Flog.md%232026-11-10): what it names now
+    const got = await api("/resolve", { ref: decodeURIComponent(r.arg) });
+    location.replace(`#doc/${got.doc_id}`);
+    return;
+  }
   if (r.name === "doc") return await viewDoc(r.arg, r.params);
   if (r.name === "graph") return await viewGraph(r.arg, r.params);
   if (r.name === "person" && r.arg) return await viewPerson(r.arg);
