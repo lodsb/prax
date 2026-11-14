@@ -914,11 +914,12 @@ _TITLED = DOCUMENT_KINDS | {"person", "author"}
 
 def mended_name(name: str, etype: str) -> str:
     """A name with what the text layer and the model left in it taken out:
+    UTF-8 read as a one-byte encoding decoded back (``glyphs.mojibake``),
     accents put back on their letters (``glyphs.accents``), and, for the
     things that are not titles or people, a type written into the name and
     a drop cap given twice. The name as it was when there is nothing to
     mend."""
-    out = glyphs.accents(name)
+    out = glyphs.accents(glyphs.mojibake(name))
     if etype not in _TITLED:
         head, tail = _type_marks(ontology.current().version)
         out = tail.sub("", head.sub("", out))
@@ -932,8 +933,21 @@ _CARRIER = "SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ? AND t
 # the entity that holds a name, and what it was folded into
 _HOLDER = "SELECT id, canonical_id FROM entities WHERE name = ? AND type = ?"
 _DAMAGE_HINT = re.compile(
-    "[" + "".join(glyphs.ACCENTS) + "]|[=:]|^[a-z] ", re.IGNORECASE
+    "[" + "".join(glyphs.ACCENTS) + "Â-ô]|[=:]|^[a-z] ", re.IGNORECASE
 )
+
+
+def _restored(con: sqlite3.Connection, name: str, etype: str) -> str | None:
+    """The name a lost byte of mojibake took a letter from ("Anne
+    BrÃggemann-Klein"), when exactly one of its possible letters gives a
+    name an entity of its type already carries: the library's own spelling
+    confirms the guess. None otherwise."""
+    held = {
+        c
+        for c in glyphs.lost_letters(name)
+        if con.execute(_CARRIER, (c, etype)).fetchone() is not None
+    }
+    return held.pop() if len(held) == 1 else None
 
 
 def _damaged_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -948,6 +962,8 @@ def _damaged_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
         if not _DAMAGE_HINT.search(name):
             continue
         mended = mended_name(name, str(row["type"]))
+        if mended == name:
+            mended = _restored(con, name, str(row["type"])) or name
         if mended != name:
             found.append({**dict(row), "cleaned": mended})
     counts = _live_edge_counts(con, [r["id"] for r in found])

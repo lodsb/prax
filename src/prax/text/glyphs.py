@@ -226,3 +226,77 @@ def damaged(text: str) -> bool:
     if DAMAGED.search(text) is None and _ACCENT.search(text) is None:
         return False
     return clean(text) != text
+
+
+# UTF-8 read as a one-byte encoding (mojibake): "Dani\xc3\xa9lou" for
+# "Daniélou". A lead byte (U+00C2-U+00F4 when read as Latin-1) and the
+# continuation bytes after it, each read as Latin-1 (U+0080-U+00BF), as
+# Windows-1252 (its own glyphs for 0x80-0x9F) or percent-escaped as a file
+# name escapes it ("R\xc4%81g" for "Rāg").
+_CP1252_HIGH = {
+    bytes([b]).decode("cp1252"): b
+    for b in range(0x80, 0xA0)
+    if b not in (0x81, 0x8D, 0x8F, 0x90, 0x9D)
+}
+_CONT = "(?:[\u0080-¿" + "".join(_CP1252_HIGH) + "]|%[89ABab][0-9A-Fa-f])"
+_MOJIBAKE = re.compile(
+    f"[Â-ß]{_CONT}(?!{_CONT})|[à-ï]{_CONT}{{2}}(?!{_CONT})|[ð-ô]{_CONT}{{3}}(?!{_CONT})"
+)
+# a lead byte whose continuation is gone, where a capital cannot be a
+# letter: among small letters ("BrÃggemann") or, for the two leads no
+# word starts with, before them ("l’Ãcole"); never among capitals
+# ("JOÃO") or at the head of a word ("Österreich")
+_LOST = re.compile("(?<=[a-z])[Â-Å](?=[a-z])|(?<![\\w])[ÂÃ](?=[a-z]{2})")
+
+
+# what a decoded run may be: the letters of Latin, Greek and Cyrillic
+# alphabets and the punctuation, currency and letterlike signs. A pair that
+# decodes to anything else was real text, as a type specimen's "ÆŒ" is
+# (it would be U+018C) and a Mac Roman misreading's "ÕŽ" (U+054E)
+_PLAUSIBLE = ((0x00A0, 0x017F), (0x0370, 0x04FF), (0x2000, 0x214F))
+
+
+def _plausible(text: str) -> bool:
+    return all(any(lo <= ord(c) <= hi for lo, hi in _PLAUSIBLE) for c in text)
+
+
+def _byte(unit: str) -> int:
+    if unit.startswith("%"):
+        return int(unit[1:], 16)
+    return _CP1252_HIGH.get(unit, ord(unit))
+
+
+def mojibake(text: str) -> str:
+    """The text with every run of UTF-8 read as a one-byte encoding decoded
+    back; a run that does not decode, or decodes to a sign no misreading
+    makes, stays as it is, and so does a text without one ("JO\xc3O
+    ALDEIA" is Portuguese)."""
+
+    def back(m: re.Match[str]) -> str:
+        units = re.findall(r"%[0-9A-Fa-f]{2}|.", m.group(0), re.DOTALL)
+        try:
+            raw = bytes([ord(units[0]), *(_byte(u) for u in units[1:])])
+            decoded = raw.decode("utf-8")
+        except (UnicodeDecodeError, ValueError):
+            return m.group(0)
+        return decoded if _plausible(decoded) else m.group(0)
+
+    return _MOJIBAKE.sub(back, text)
+
+
+def lost_letters(text: str) -> list[str]:
+    """What a text with one lead byte whose continuation was lost could
+    have said: the text with that letter in each possible form, or none
+    when it has no such byte or more than one. A guess, so a caller keeps
+    one only when something else confirms it (a name the library already
+    holds)."""
+    found = list(_LOST.finditer(text))
+    if len(found) != 1:
+        return []
+    i, lead = found[0].start(), ord(found[0].group(0))
+    out = []
+    for b in range(0x80, 0xC0):
+        letter = bytes([lead, b]).decode("utf-8", errors="ignore")
+        if letter.isalpha() and letter != chr(lead):
+            out.append(text[:i] + letter + text[i + 1 :])
+    return out

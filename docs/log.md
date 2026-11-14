@@ -11846,3 +11846,39 @@ not looked at yet.
 
 Checks: ruff, format, mypy (Windows and Linux), pytest 1,886 passed and
 4 skipped.
+
+**The garbled names (item 3 of the morning's list).** 7 entity names and
+9 labels hold `Ã` or `Â`. Read-only, half of them are no damage at all:
+`Moyen-Âge`, `Enis Âli` (Turkish) and `JOÃO ALDEIA` (Portuguese João in
+capitals). The rest are UTF-8 read as a one-byte encoding:
+`Dani\xc3\xa9lou … R\xc4%81g\xc4%83s` decodes back (a file name that
+escaped its bytes too). In `Br\xc3ggemann` and `l’\xc3cole` the second
+byte is gone. A Zotero title ends in a lone lead byte (`Users\xc3`, doc
+445). The text of doc 8670 holds both lost bytes, so its extraction
+copied them faithfully.
+
+`glyphs.mojibake` decodes such runs back. The run's length follows from
+its lead byte, a continuation may be Latin-1, Windows-1252 or `%XX`, and
+the decoded character must be a Latin, Greek or Cyrillic letter or a
+punctuation, currency or letterlike sign. Without that last rule a type
+specimen's `ÆŒ` became `ƌ` and a Mac Roman misreading's `ÕŽ` became
+Armenian (both found on the live store, entities 113772 and 5778).
+`glyphs.lost_letters` lists what a lost byte could have been, only where
+a capital cannot be a letter (among small letters, or `Ã`/`Â` before
+them). The heal keeps a guess only when exactly one of them is a name an
+entity of its type already carries (`repair.graph._restored`).
+`mended_name` runs `mojibake` first, so `damaged-names` and an
+extraction's names get it. It stays out of `glyphs.clean`, which every
+text goes through.
+
+Read-only on the live store, `damaged-names` finds 4 more than before
+and changes none of its other 146: `Daniélou … Rāgăs`, `Zoran Cvetković`
+(not among the 16), `time—frequency` (an em dash) and `Anne
+Brüggemann-Klein`, which folds into author 4295. The two `l’École`
+entities have no name to confirm a guess and stay for a person; no door
+route renames an event or a venue. Doc 445 is retitled by hand.
+Tests: `test_glyphs.py::test_utf8_read_as_one_byte_is_decoded_back`,
+`test_heal.py::test_mojibake_names_are_decoded_and_a_lost_letter_restored_when_held`.
+
+Checks: ruff, format, mypy (Windows and Linux), pytest 1,888 passed and
+4 skipped.

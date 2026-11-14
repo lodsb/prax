@@ -196,7 +196,9 @@ AILMENTS: tuple[Ailment, ...] = (
     Ailment(
         name="damaged-names",
         what=(
-            "entity names with an accent beside its letter ('TU Mu¨nchen'), the"
+            "entity names with an accent beside its letter ('TU Mu¨nchen'),"
+            " UTF-8 read as a one-byte encoding ('DaniÃ©lou', and"
+            " 'BrÃggemann' where the library already holds the name), the"
             " type the model wrote into them ('concept=social networks',"
             " 'rhythm complexity concept=EXTRACTED') or a drop cap given twice"
             " ('f face recognition')"

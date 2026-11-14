@@ -829,3 +829,29 @@ def test_formula_readings_a_replacing_read_dropped_come_back(
         == 1
     )
     assert "a first-order low-pass." in store.get_document(con, doc_id)["text"]
+
+
+def test_mojibake_names_are_decoded_and_a_lost_letter_restored_when_held(
+    con: sqlite3.Connection,
+) -> None:
+    """``damaged-names`` reads mojibake too (2026-11-14): a name that
+    decodes is renamed; one whose byte was lost folds into the one name
+    of its type the library holds that it could have been, and stays when
+    there is none to confirm the guess."""
+    _link(con, "Alain Dani\xc3\xa9lou", "a")
+    _link(con, "Anne Brüggemann-Klein", "b")
+    _link(con, "Anne Br\xc3ggemann-Klein", "c")
+    _link(con, "l’\xc3cole polytechnique", "d")
+    _link(con, "JO\xc3O ALDEIA", "e")
+    found = store.health(con, only=["damaged-names"])["ailments"][0]
+    assert {r["name"]: r["cleaned"] for r in found["examples"]} == {
+        "Alain Dani\xc3\xa9lou": "Alain Daniélou",
+        "Anne Br\xc3ggemann-Klein": "Anne Brüggemann-Klein",
+    }
+    assert store.heal(con, only=["damaged-names"])["damaged-names"]["repaired"] == 2
+    lost = con.execute(
+        "SELECT canonical_id FROM entities WHERE name = ?",
+        ("Anne Br\xc3ggemann-Klein",),
+    ).fetchone()[0]
+    assert lost == store._entity_id(con, "Anne Brüggemann-Klein", "concept")
+    assert store._entity_id(con, "Alain Daniélou", "concept")

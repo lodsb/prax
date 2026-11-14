@@ -103,3 +103,28 @@ def test_the_heal_pass_puts_accents_back_in_old_texts(con: sqlite3.Connection) -
     assert doc_id in [h["doc_id"] for h in hits] and code not in [
         h["doc_id"] for h in hits
     ]
+
+
+def test_utf8_read_as_one_byte_is_decoded_back() -> None:
+    """Mojibake (the 16 names of 2026-11-14): a run decodes back, a
+    file name's percent-escaped byte with it, and a name that only looks
+    like one stays."""
+    m = glyphs.mojibake
+    assert m("Alain Dani\xc3\xa9lou") == "Alain Daniélou"
+    assert m("The Main R\xc4%81g\xc4%83s.pdf") == "The Main Rāgăs.pdf"
+    assert m("it\xe2€™s") == "it’s"  # three bytes, one read as cp1252
+    for real in ("JO\xc3O ALDEIA", "Moyen-\xc2ge", "Enis \xc2li", "Österreich"):
+        assert m(real) == real
+    # a byte lost: one guess per letter it could have been, and none
+    # where a capital is a letter
+    guesses = glyphs.lost_letters("Anne Br\xc3ggemann-Klein")
+    assert "Anne Brüggemann-Klein" in guesses and len(guesses) > 30
+    assert "l’École" in glyphs.lost_letters("l’\xc3cole")
+    assert glyphs.lost_letters("JO\xc3O") == []
+    assert glyphs.lost_letters("Österreich") == []
+    assert glyphs.lost_letters("Daniélou") == []
+    # a pair that would decode to a sign no misreading makes is real text
+    specimen = "specimen \xc6\u0152 \xc8\xc9"
+    assert glyphs.mojibake(specimen) == specimen
+    assert glyphs.mojibake("L\xd5\u017dchange") == "L\xd5\u017dchange"  # Mac Roman
+    assert glyphs.mojibake("time\xe2\x80\x94frequency") == "time—frequency"
