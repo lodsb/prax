@@ -4,6 +4,7 @@ when the door is not there."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 import sys
@@ -537,3 +538,95 @@ def test_the_hook_keeps_a_graph_file_a_project_keeps(
     assert run("sync", str(root), "--if-auto") == 0
     assert graph.read_bytes() == first  # the same graph: the file untouched
     capsys.readouterr()
+
+
+def test_the_door_runs_on_a_loop_that_keeps_listening(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On Windows uvicorn's default Proactor loop closes the listener
+    after one failed accept, and the door lives on deaf (2026-11-14,
+    two restarts in a row). `prax serve` names a selector loop on every
+    platform, and uvicorn resolves the name to one."""
+    import asyncio
+    import types
+
+    import uvicorn
+    from prax_cli import running
+
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: seen.update(kw))
+    a = types.SimpleNamespace(
+        host="127.0.0.1", port=0, reload=False, ssl_certfile=None, ssl_keyfile=None
+    )
+    assert running.serve(a) == 0
+    factory = uvicorn.Config("prax.api:app", loop=seen["loop"]).get_loop_factory()
+    assert factory is not None
+    loop = factory()
+    try:
+        assert isinstance(loop, asyncio.SelectorEventLoop)
+    finally:
+        loop.close()
+
+
+def test_the_door_keeps_listening_after_clients_give_up() -> None:
+    """The failure itself: while a request blocks the loop, clients
+    connect and reset; the Proactor loop then closed the listener
+    (``WinError 64``, reproduced 2026-11-14), and the door's loop answers
+    the next request."""
+    import socket
+    import struct
+    import threading
+    import time
+    import urllib.request
+
+    import uvicorn
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                await send({"type": message["type"] + ".complete"})
+                if message["type"].endswith("shutdown"):
+                    return
+        if scope["path"] == "/block":
+            time.sleep(1.5)  # noqa: ASYNC251 - the blocked loop is the case
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=port,
+            loop="prax_cli.running:door_loop",
+            log_level="critical",
+        )
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    blocker = threading.Thread(
+        target=lambda: urllib.request.urlopen(f"{url}/block", timeout=10).read(),
+        daemon=True,
+    )
+    blocker.start()
+    time.sleep(0.3)
+    for _ in range(5):
+        s = socket.socket()
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        with contextlib.suppress(OSError):
+            s.connect(("127.0.0.1", port))
+        s.close()
+    blocker.join(10)
+    try:
+        assert urllib.request.urlopen(f"{url}/", timeout=5).read() == b"ok"
+    finally:
+        server.should_exit = True
+        thread.join(10)

@@ -19,10 +19,10 @@ and its item 5 is items 1 and 2 below.
 - **The library** (2026-11-13). 33,244 documents, 14,498 of them
   referenced (`documents.held` 0: photos and recordings that stay on the
   NAS, 16,292 `places` rows). 340,774 live facts over 271,053 entities,
-  and 8,916 faces. The database is at migration 69.
-- **The code.** The full suite of 2026-11-11 passed: 1,830 tests, 4
-  skipped, and the 89 UI tests. CI is green on 21af4ef (Windows 15
-  minutes, Ubuntu 4).
+  and 8,916 faces. The database is at migration 70 (2026-11-14).
+- **The code.** The full suite of 2026-11-14 passed: 1,886 tests and 4
+  skipped. The 90 UI tests passed on 2026-11-13. CI on 36501cf took 8
+  min 49 s on Windows, and 3 and 5 minutes on the two Ubuntu jobs.
 - **What runs.** The door and the worker run on the desktop under `prax
   up`. The card is back since 2026-11-02 (the bigger power supply):
   `llama-server`, `marker` and `ocr-server` are in `run:` again, and the

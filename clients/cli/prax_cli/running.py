@@ -326,6 +326,23 @@ def work(a: Any) -> int:
 # ------------------------------------------------------------------- serve
 
 
+def door_loop() -> Any:
+    """The event loop the door runs on: a selector loop everywhere.
+    uvicorn calls a loop named by its import path to make the loop.
+
+    uvicorn's default on Windows is the Proactor loop, which closes the
+    listening socket after one failed accept (``WinError 64``: a client
+    gave up while the door was still loading). The process then lives
+    on with nothing listening, and ``prax up`` sees no crash; it
+    happened on two restarts in a row on 2026-11-14. A selector loop
+    logs a failed accept and keeps listening. The door starts no
+    subprocess through asyncio, which is the one thing a selector loop
+    cannot do on Windows."""
+    import asyncio
+
+    return asyncio.SelectorEventLoop()
+
+
 def serve(a: Any) -> int:
     """Run the door on this machine."""
     try:
@@ -349,6 +366,7 @@ def serve(a: Any) -> int:
         host=a.host,
         port=a.port,
         reload=a.reload,
+        loop="prax_cli.running:door_loop",
         log_level="warning",
         ssl_certfile=a.ssl_certfile,
         ssl_keyfile=a.ssl_keyfile,

@@ -11807,3 +11807,42 @@ half marks its own spelling.
 
 Checks: ruff, format, mypy (Windows and Linux), 90 UI tests, pytest 1,884
 passed and 4 skipped.
+
+## 2026-11-14 (night): the push, migration 70 on the live store, and a door that went deaf
+
+**The push and the restart.** 85b25d4..72e0cc1 pushed. After the
+restart the live store is at migration 70. Read-only: no document still
+holds `meta.retired.ended`, and the clean-up runs have 1,034 rows in
+`edge_endings`. tt01's plugin was updated from 0.1.0 to 0.1.1 through
+`claude plugin update prax`; it takes effect when that session reloads.
+
+**The door went deaf twice.** The first two door restarts left a
+process with about 2.2 GB in memory and nothing listening on port 8000.
+door.log ended in `OSError: [WinError 64] The specified network name is
+no longer available`, then `Accept failed on a socket`. uvicorn 0.52
+runs the Proactor loop on Windows (`uvicorn.loops.asyncio`), and that
+loop closes the listening socket after one failed accept
+(`proactor_events.py`, its accept loop). The process lives on, so `prax
+up` saw no crash. The third restart came up because I stopped polling
+it.
+
+Reproduced in a scratch script with a request that blocks the loop for
+3 s and five clients that connect and reset meanwhile. The Proactor loop
+logged the same two lines and then refused every connection. The
+selector loop answered.
+
+The fix: `prax serve` names its loop, `prax_cli.running:door_loop`, a
+`SelectorEventLoop` on every platform. uvicorn calls a loop named by
+import path to make the loop, not to pick a factory. The door starts no
+asyncio subprocess, the one thing a selector loop cannot do on Windows.
+Tests: `test_cli.py::test_the_door_runs_on_a_loop_that_keeps_listening`
+(serve names it and uvicorn resolves it to a selector loop) and
+`::test_the_door_keeps_listening_after_clients_give_up` (the reproduction;
+it fails with `loop="asyncio"` on Windows).
+
+Still open: the door blocks its loop for seconds at a time, or the
+resets could not land on a pending accept. Which route does that is
+not looked at yet.
+
+Checks: ruff, format, mypy (Windows and Linux), pytest 1,886 passed and
+4 skipped.
