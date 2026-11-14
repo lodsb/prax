@@ -11907,3 +11907,15 @@ rename route and refuses a type that is not a person. Its old name is
 a `was` label, so a general entity rename can put it back.
 Checks: ruff, format, mypy (both platforms) clean; 1,889 passed, 4
 skipped.
+
+**Any entity renamed by hand.** `store.correct_name` and `POST
+/graph/entity/{id}/rename` (admin only) rename any entity the way
+`rename_person` renames a person: the new name preferred, the old one
+a `was` label, one run that `POST /graph/unmerge` takes back. It
+differs from the internal `store.rename_entity`, which repairs and
+retitles use, in two ways: a name another entity carries is refused
+rather than merged into, and a document's node is refused (retitle
+the document). A name past `ENTITY_NAME_CHARS` (500) is refused, not
+cut. `rename_person` is now a type check on the same body.
+Checks: ruff, format, mypy (both platforms) clean; 1,890 passed, 4
+skipped.

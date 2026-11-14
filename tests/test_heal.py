@@ -726,6 +726,42 @@ def test_a_drop_cap_is_taken_only_from_a_common_name() -> None:
     assert store.mended_name("x xenon lamp", "device") == "x xenon lamp"
 
 
+def test_a_person_corrects_the_name_of_any_entity(
+    con: sqlite3.Connection, client: TestClient
+) -> None:
+    """``store.correct_name``: what a repair got wrong a person puts right,
+    the wrong name kept as what it was, the run taken back whole. A name
+    another entity carries is refused, not merged; a document's node is
+    renamed by retitling its document."""
+    _link(con, "equals limit of one plus delta", "a")
+    _link(con, "social networks", "b")
+    eid = store._entity_id(con, "equals limit of one plus delta", "concept")
+    got = store.correct_name(con, eid, " e equals  limit of one plus delta ")
+    assert got["name"] == "e equals limit of one plus delta"
+    assert got["was"] == "equals limit of one plus delta"
+    assert got["was"] in {lab["label"] for lab in store.entity_labels(con, eid)}
+    with pytest.raises(ValueError, match="social networks"):
+        store.correct_name(con, eid, "social networks")
+    with pytest.raises(ValueError, match="at most"):
+        store.correct_name(con, eid, "x" * 501)
+    store.unmerge_run(con, got["run"])
+    name = con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
+    assert name[0] == "equals limit of one plus delta"
+    node = store._entity_id(con, "social networks", "concept")
+    doc = store.ingest_text(con, "words " * 40, title="t")["doc_id"]
+    con.execute("UPDATE entities SET doc_id = ? WHERE id = ?", (doc, node))
+    con.commit()
+    with pytest.raises(ValueError, match="retitle"):
+        store.correct_name(con, node, "networks")
+    # the route
+    r = client.post(f"/graph/entity/{eid}/rename", json={"name": "e equals it"})
+    assert r.status_code == 200 and r.json()["name"] == "e equals it"
+    bad = client.post(f"/graph/entity/{eid}/rename", json={"name": " "})
+    assert bad.status_code == 400
+    gone = client.post("/graph/entity/999999/rename", json={"name": "x"})
+    assert gone.status_code == 404
+
+
 def test_a_models_names_are_mended_as_its_answer_is_read() -> None:
     from prax.graph import extraction
 

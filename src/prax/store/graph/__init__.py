@@ -257,6 +257,7 @@ from .lookups import (  # noqa: F401
 from .naming import (  # noqa: F401
     FACE_VERDICTS,
     LIVE_ANSWER,
+    correct_name,
     face_answers,
     judge_faces,
     merge_people,

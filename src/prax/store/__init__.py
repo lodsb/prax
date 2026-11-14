@@ -443,6 +443,7 @@ from .graph import (  # noqa: F401
     connect_entities,
     corpus_rulings,
     correct_edge,
+    correct_name,
     corrections_of,
     count_review,
     decide_candidates,

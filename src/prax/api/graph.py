@@ -702,6 +702,21 @@ def graph_unmerge_entity(req: UnmergeEntityReq, request: Request) -> dict[str, A
     return store.unmerge_entity(_con(request), req.entity)
 
 
+class EntityRenameReq(BaseModel):
+    name: str
+
+
+@router.post("/graph/entity/{entity_id}/rename")
+def graph_entity_rename(
+    entity_id: int, req: EntityRenameReq, request: Request
+) -> dict[str, Any]:
+    """Any entity called something else by a person, the old name kept as
+    what it was called (``store.correct_name``); ``POST /graph/unmerge``
+    with the run takes it back. A document's node is renamed by retitling
+    its document. Not a named token's route."""
+    return store.correct_name(_con(request), entity_id, req.name)
+
+
 @router.get("/graph/events")
 def graph_events(
     request: Request,

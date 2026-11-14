@@ -412,18 +412,61 @@ def face_answers(con: sqlite3.Connection, face_ids: list[int]) -> dict[int, Any]
 # and the reads show its canonical one.
 
 
-def _canonical_person(con: sqlite3.Connection, entity_id: int) -> sqlite3.Row:
+# a name a person types for any entity: a claim is a sentence, so longer
+# than a person's name, and one past this is refused rather than cut
+ENTITY_NAME_CHARS = 500
+
+
+def _canonical(con: sqlite3.Connection, entity_id: int) -> sqlite3.Row:
     row = con.execute(
-        "SELECT c.id, c.name, c.type FROM entities e"
+        "SELECT c.id, c.name, c.type, c.doc_id FROM entities e"
         " JOIN entities c ON c.id = COALESCE(e.canonical_id, e.id)"
         " WHERE e.id = ?",
         (entity_id,),
     ).fetchone()
     if row is None:
         raise NotFound(f"no such entity: {entity_id}")
+    return row  # type: ignore[no-any-return]
+
+
+def _canonical_person(con: sqlite3.Connection, entity_id: int) -> sqlite3.Row:
+    row = _canonical(con, entity_id)
     if row["type"] not in person_types():
         raise ValueError(f"entity {entity_id} is a {row['type']}, not a person")
-    return row  # type: ignore[no-any-return]
+    return row
+
+
+def _rename(
+    con: sqlite3.Connection, row: sqlite3.Row, title: str, by: str, same_as: str
+) -> dict[str, Any]:
+    eid, old = int(row["id"]), str(row["name"])
+    if title == old:
+        return {"entity_id": eid, "name": old, "was": old, "run": None}
+    other = con.execute(
+        "SELECT COALESCE(canonical_id, id) FROM entities"
+        " WHERE name = ? AND type = ? AND COALESCE(canonical_id, id) != ?",
+        (title, row["type"], eid),
+    ).fetchone()
+    if other is not None:
+        raise ValueError(
+            f"another {row['type']} (#{other[0]}) is called {title!r}: {same_as}"
+        )
+    run = _run("rename")
+    # a name only an entity folded into this one shows: it is theirs, so
+    # the folded one's cached name steps aside (its label stays, and a link
+    # of that name lands on the survivor, which answers to it)
+    for alias in con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = ? AND canonical_id = ?",
+        (title, row["type"], eid),
+    ).fetchall():
+        aid = int(alias[0])
+        add_label(con, aid, title, producer=by)
+        con.execute(
+            "UPDATE entities SET name = ? WHERE id = ?", (f"{title} (#{aid})", aid)
+        )
+    _relabel(con, eid, old, title, producer=by, run=run)
+    shown = con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
+    return {"entity_id": eid, "name": str(shown[0]), "was": old, "run": run}
 
 
 @_serialized
@@ -439,39 +482,44 @@ def rename_person(
     ``entity_id`` (the canonical one), ``name``, ``was`` and ``run`` (None
     when the name was the same)."""
     row = _canonical_person(con, entity_id)
-    eid, old = int(row["id"]), str(row["name"])
     title = " ".join((name or "").split())[:FACE_NAME_CHARS]
     if not title:
         raise ValueError("a person needs a name")
-    if title == old:
-        return {"entity_id": eid, "name": old, "was": old, "run": None}
-    other = con.execute(
-        "SELECT COALESCE(canonical_id, id) FROM entities"
-        " WHERE name = ? AND type = ? AND COALESCE(canonical_id, id) != ?",
-        (title, row["type"], eid),
-    ).fetchone()
-    if other is not None:
-        raise ValueError(
-            f"another {row['type']} (#{other[0]}) is called {title!r}: if they"
-            " are one person, say so with 'same person as'"
-        )
-    run = _run("rename")
-    # a name only an entity folded into this person shows: it is theirs,
-    # so the folded one's cached name steps aside (its label stays, and a
-    # link of that name lands on the person, who answers to it)
-    for alias in con.execute(
-        "SELECT id FROM entities WHERE name = ? AND type = ? AND canonical_id = ?",
-        (title, row["type"], eid),
-    ).fetchall():
-        aid = int(alias[0])
-        add_label(con, aid, title, producer=by)
-        con.execute(
-            "UPDATE entities SET name = ? WHERE id = ?", (f"{title} (#{aid})", aid)
-        )
-    _relabel(con, eid, old, title, producer=by, run=run)
-    shown = con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()
+    out = _rename(
+        con, row, title, by, "if they are one person, say so with 'same person as'"
+    )
     con.commit()
-    return {"entity_id": eid, "name": str(shown[0]), "was": old, "run": run}
+    return out
+
+
+@_serialized
+def correct_name(
+    con: sqlite3.Connection, entity_id: int, name: str, *, by: str = PERSON
+) -> dict[str, Any]:
+    """Any entity called something else by a person, as ``rename_person``
+    does it: the new name preferred, the old one a ``was`` label, one run
+    that ``unmerge_run`` takes back. Unlike ``rename_entity`` (what a repair
+    or a retitle does), a name another entity carries is refused, not
+    merged into: a person folds two things on purpose. The way to put
+    right a name a repair got wrong (a claim's opening symbol, mojibake no
+    rule could decode). A document's node is refused: its name is its
+    document's title, which ``retitle`` changes. A name past
+    ``ENTITY_NAME_CHARS`` is refused, not cut. Returns what
+    ``rename_person`` returns."""
+    row = _canonical(con, entity_id)
+    if row["doc_id"] is not None:
+        raise ValueError(
+            f"entity {entity_id} is the node of document {row['doc_id']}:"
+            " its name is the document's title, so retitle the document"
+        )
+    title = " ".join((name or "").split())
+    if not title:
+        raise ValueError("an entity needs a name")
+    if len(title) > ENTITY_NAME_CHARS:
+        raise ValueError(f"a name of at most {ENTITY_NAME_CHARS} characters")
+    out = _rename(con, row, title, by, "if they are one thing, fold one into the other")
+    con.commit()
+    return out
 
 
 @_serialized
