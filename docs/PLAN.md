@@ -626,7 +626,7 @@ they block, then by cost. Sizes are the review's.
 
 ## Stages
 
-- [ ] **AU. A project's journal, its open questions, and a link that
+- [x] (2026-11-13) **AU. A project's journal, its open questions, and a link that
       lasts.** The user, 2026-11-11: "yeah", after a proposal from the
       MotorPlatterExperiments project (its `design/prax-workflow-proposal.md`,
       99d33ed) settled with that project's session. On 2026-11-10 a sensor
