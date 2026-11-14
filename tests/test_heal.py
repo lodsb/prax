@@ -717,6 +717,15 @@ def test_damaged_names_are_mended_or_folded_and_can_be_taken_back(
     assert {"concept=social networks", "f face recognition"} <= names
 
 
+def test_a_drop_cap_is_taken_only_from_a_common_name() -> None:
+    """A proper name keeps the single letter it opens with: in a claim it
+    is a symbol, Euler's e, lost to the rule on 2026-11-14."""
+    claim = "e equals limit of one plus delta to power one over delta"
+    assert store.mended_name(claim, "claim") == claim
+    assert store.mended_name("f face recognition", "concept") == "face recognition"
+    assert store.mended_name("x xenon lamp", "device") == "x xenon lamp"
+
+
 def test_a_models_names_are_mended_as_its_answer_is_read() -> None:
     from prax.graph import extraction
 

@@ -917,13 +917,18 @@ def mended_name(name: str, etype: str) -> str:
     UTF-8 read as a one-byte encoding decoded back (``glyphs.mojibake``),
     accents put back on their letters (``glyphs.accents``), and, for the
     things that are not titles or people, a type written into the name and
-    a drop cap given twice. The name as it was when there is nothing to
-    mend."""
+    a drop cap given twice. The drop cap only on a type whose names are
+    common (a kind of thing, lowercased from running text): a proper name
+    keeps a single letter it opens with, because there it is a symbol
+    ("e equals limit of …", Euler's e, lost to the rule on 2026-11-14).
+    The name as it was when there is nothing to mend."""
     out = glyphs.accents(glyphs.mojibake(name))
     if etype not in _TITLED:
-        head, tail = _type_marks(ontology.current().version)
+        onto = ontology.current()
+        head, tail = _type_marks(onto.version)
         out = tail.sub("", head.sub("", out))
-        out = _DROP_CAP.sub("", out)
+        if etype in onto.common_types:
+            out = _DROP_CAP.sub("", out)
     out = re.sub(r"\s+", " ", out).strip()
     return out if len(out) >= 2 else name
 

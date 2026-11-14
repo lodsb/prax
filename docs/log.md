@@ -11894,3 +11894,16 @@ one plus delta to power one over delta" lost its `e`, which is Euler's
 number. That rule takes a lowercase letter before a word starting with
 the same letter as a doubled drop cap. The claim keeps its old name as
 a `was` label.
+
+**The drop-cap rule, narrowed.** `mended_name` now takes a doubled
+drop cap only from a name whose type is `naming: common`
+(`ontology.common_types`). A common name is lowercased running text,
+where "f face recognition" is a drop cap given twice. A proper name
+(a claim, a device, a title) keeps its opening letter, because there
+it is a symbol. In the run above the claim was the only name the rule
+changed (one of 118 renames), so nothing else is affected. The claim
+itself still shows "equals limit …": `store.rename_person` is the only
+rename route and refuses a type that is not a person. Its old name is
+a `was` label, so a general entity rename can put it back.
+Checks: ruff, format, mypy (both platforms) clean; 1,889 passed, 4
+skipped.
