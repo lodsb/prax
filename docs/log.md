@@ -11882,3 +11882,15 @@ Tests: `test_glyphs.py::test_utf8_read_as_one_byte_is_decoded_back`,
 
 Checks: ruff, format, mypy (Windows and Linux), pytest 1,888 passed and
 4 skipped.
+
+**Applied.** Door restarted on ac9e96e (selector loop; it came up
+listening). `prax heal --check damaged-names --apply` repaired 146 of
+146 under `heal:damaged-names:20261114T035937Z`, the four mojibake names
+among them (Anne Br\xc3ggemann-Klein folded into author 4295), and the
+check is clear. Doc 445 retitled by hand. Its node merged into the
+entity of the clean title (`retitle-20261114T035954Z-783f4d`). One
+repair of the old drop-cap rule is wrong: the claim "e equals limit of
+one plus delta to power one over delta" lost its `e`, which is Euler's
+number. That rule takes a lowercase letter before a word starting with
+the same letter as a doubled drop cap. The claim keeps its old name as
+a `was` label.
