@@ -11919,3 +11919,10 @@ the document). A name past `ENTITY_NAME_CHARS` (500) is refused, not
 cut. `rename_person` is now a type check on the same body.
 Checks: ruff, format, mypy (both platforms) clean; 1,890 passed, 4
 skipped.
+Applied through the restarted door (29ac8f1): claim 268955 is "e
+equals limit of one plus delta to power one over delta" again
+(`rename-20261114T182655Z-28e961`), and event 173864 is "Les
+Doctoriales 2011 de la DGA, l’École Polytechnique et ParisTech"
+(`rename-20261114T182655Z-1d6dbd`). The door's log shows `GET
+/work/photos` taking 21.1 s with nothing else in flight: probably the
+route that blocks the loop for seconds, not yet looked into.
