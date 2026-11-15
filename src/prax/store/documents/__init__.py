@@ -180,6 +180,7 @@ from .places import (  # noqa: F401
     place_roots_of,
     places_in_brief,
     places_of,
+    reachable_roots,
     record_places,
     referenced_kind,
     referenced_originals,

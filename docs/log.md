@@ -11926,3 +11926,26 @@ Doctoriales 2011 de la DGA, l’École Polytechnique et ParisTech"
 (`rename-20261114T182655Z-1d6dbd`). The door's log shows `GET
 /work/photos` taking 21.1 s with nothing else in flight: probably the
 route that blocks the loop for seconds, not yet looked into.
+
+## 2026-11-15: the 21-second hand-out
+
+The door's log held some 500 lines of `slow: GET /work/photos took
+21.1 s` since the restart of the evening, about one for every call the
+worker made. The query of `store.photos_due` takes 0.07 s on the live
+store. A stack dump of the door (py-spy) mid-request showed where the
+time goes: `photos_due` asked `Path.is_dir()` of every root in
+`places.roots`, and this host's one root is a share
+(`\<server>\<share>`) whose server is down. Windows gives up on that
+connection after some 21 s and remembers the failure only briefly, so
+nearly every hand-out paid the full wait. The same request repeated
+right after one of them took 0.2 s.
+
+`store.reachable_roots` now answers which roots are here. Each root
+is asked at most once every `ROOT_CHECK_SECONDS` (300). The question
+runs in a thread of its own, and the door waits `ROOT_CHECK_WAIT`
+(2 s) for it. Past that the root counts as absent, and the late
+answer is kept for the next call. `photos_due`, `original_file`,
+`places_in_brief` and the list of unreachable referenced documents all
+use it. The cost: a share that comes back is seen up to five minutes
+later. Tests: a share that does not answer costs the hand-out 0.1 s
+and one question, not one a call.

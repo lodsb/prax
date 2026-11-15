@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +119,60 @@ def place_roots() -> dict[str, Path]:
     return out
 
 
+# How long a root's answer to "are you there?" is kept, and how long the
+# door waits for one. A share whose server is down does not answer a stat
+# at once: Windows gives up on its connection after some 21 s, and a door
+# that asked on every hand-out of the photos step spent 21 s on each
+# (2026-11-15). The question runs in a thread of its own; past the wait the
+# root counts as absent, and the thread's late answer is kept for the next.
+ROOT_CHECK_SECONDS = 300.0
+ROOT_CHECK_WAIT = 2.0
+_ROOT_SEEN: dict[str, tuple[float, bool]] = {}
+_ROOT_ASKING: dict[str, threading.Thread] = {}
+_ROOT_LOCK = threading.Lock()
+
+
+def _ask_root(where: str) -> None:
+    try:
+        there = Path(where).is_dir()
+    except OSError:
+        there = False
+    with _ROOT_LOCK:
+        _ROOT_SEEN[where] = (time.monotonic(), there)
+        _ROOT_ASKING.pop(where, None)
+
+
+def _root_there(where: Path) -> bool:
+    """Whether a root's directory is here, asked at most once every
+    ``ROOT_CHECK_SECONDS`` and waited for at most ``ROOT_CHECK_WAIT``."""
+    key = str(where)
+    with _ROOT_LOCK:
+        seen = _ROOT_SEEN.get(key)
+        if seen is not None and time.monotonic() - seen[0] < ROOT_CHECK_SECONDS:
+            return seen[1]
+        asking = _ROOT_ASKING.get(key)
+        if asking is None:
+            asking = threading.Thread(
+                target=_ask_root, args=(key,), name="prax-root-check", daemon=True
+            )
+            _ROOT_ASKING[key] = asking
+            asking.start()
+    asking.join(ROOT_CHECK_WAIT)
+    with _ROOT_LOCK:
+        seen = _ROOT_SEEN.get(key)
+    if asking.is_alive():
+        # no answer yet: absent for now, and the last answer is not trusted
+        return False
+    return bool(seen and seen[1])
+
+
+def reachable_roots() -> dict[str, Path]:
+    """This host's roots whose directory is here now (``place_roots``,
+    each answered by ``_root_there``): what a read of a referenced file
+    may look in without waiting on a server that is down."""
+    return {n: p for n, p in place_roots().items() if _root_there(p)}
+
+
 def _parts(path: str) -> list[str] | None:
     """A place's path as its parts; None when it is not a relative path with
     ``/`` separators that stays inside its root. A ``:`` anywhere is
@@ -139,7 +195,7 @@ def original_file(con: sqlite3.Connection, digest: str) -> Path:
     held = archive_path(digest)
     if held.exists():
         return held
-    return _place_file(con, digest, place_roots()) or held
+    return _place_file(con, digest, reachable_roots()) or held
 
 
 def _place_file(
@@ -196,7 +252,7 @@ def places_in_brief(
         return None
     out: dict[str, Any] = {
         "copies": len(rows),
-        "reachable": _place_file(con, digest, place_roots()) is not None,
+        "reachable": _place_file(con, digest, reachable_roots()) is not None,
         "places": [{"root": r[0], "path": r[1]} for r in rows[: max(0, limit)]],
     }
     return out
@@ -223,8 +279,7 @@ def unreachable_originals(
     directory is not there (the share not mounted), answers for all of its
     files at once; a mounted one is looked at file by file, at most
     ``REACH_CHECKS`` files a call."""
-    roots = place_roots()
-    present = {n: p for n, p in roots.items() if p.is_dir()}
+    present = reachable_roots()
     out: list[dict[str, Any]] = []
     checks = 0
     for r in con.execute(

@@ -32,7 +32,7 @@ from ..base import (
     now,
 )
 from .meta import _due, _put_meta, _refresh_document_field, get_meta
-from .places import _place_file, place_roots
+from .places import _place_file, reachable_roots
 
 # the copies a photo has, by the key ``meta.photo`` keeps each one's hash
 PHOTO_COPIES = ("thumb", "preview")
@@ -61,7 +61,7 @@ def photos_due(
     crawl) is looked at once and then passed over for ``UNREACHED_REST``
     seconds, so a run of them never hides the pictures after them (the
     review of 2026-10-28)."""
-    roots = {n: p for n, p in place_roots().items() if p.is_dir()}
+    roots = reachable_roots()
     out: list[int] = []
     clock = time.monotonic()
     rows = con.execute(

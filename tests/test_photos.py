@@ -9,6 +9,8 @@ import hashlib
 import io
 import json
 import sqlite3
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ from prax import config, store, worker
 from prax.parsers import photos
 from prax.steps import base
 from prax.steps import photos as step_photos
+from prax.store.documents import places
 
 needs_heif = pytest.mark.skipif(
     not photos.available(), reason="pillow-heif not installed"
@@ -153,7 +156,11 @@ def test_the_step_reads_a_referenced_photo_and_its_page_shows_it_offline(
 
 
 def test_a_picture_out_of_reach_is_not_handed_out_until_it_is_back(
-    con: sqlite3.Connection, data_dir: Path, tmp_path: Path, client: TestClient
+    con: sqlite3.Connection,
+    data_dir: Path,
+    tmp_path: Path,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     share = tmp_path / "share"
     _share(data_dir, share)
@@ -162,7 +169,44 @@ def test_a_picture_out_of_reach_is_not_handed_out_until_it_is_back(
     share.rename(tmp_path / "away")
     assert client.get("/work/photos").json()["items"] == []
     (tmp_path / "away").rename(share)
+    # the door remembers a root's answer for a while, so a share back at
+    # once is seen back when the answer lapses
+    assert client.get("/work/photos").json()["items"] == []
+    monkeypatch.setattr(places, "ROOT_CHECK_SECONDS", 0.0)
     assert len(client.get("/work/photos").json()["items"]) == 1
+
+
+def test_a_share_that_does_not_answer_costs_a_hand_out_little(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A share whose server is down hangs a stat for some 21 s on Windows
+    (2026-11-15: every hand-out of the photos step took 21 s). The door
+    waits ``ROOT_CHECK_WAIT`` for the answer, counts the root absent
+    meanwhile, and asks no second time while the first question runs."""
+    share = tmp_path / "slow"
+    share.mkdir()
+    _share(data_dir, share)
+    release = threading.Event()
+    asked: list[str] = []
+    real = Path.is_dir
+
+    def hanging(self: Path) -> bool:
+        if str(self) == str(share):
+            asked.append(str(self))
+            release.wait(10)
+        return real(self)
+
+    monkeypatch.setattr(Path, "is_dir", hanging)
+    monkeypatch.setattr(places, "ROOT_CHECK_WAIT", 0.1)
+    start = time.monotonic()
+    assert store.reachable_roots() == {}
+    assert store.reachable_roots() == {}
+    assert time.monotonic() - start < 2 and len(asked) == 1
+    release.set()
+    deadline = time.monotonic() + 5
+    while "nas" not in store.reachable_roots() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert store.reachable_roots() == {"nas": share}
 
 
 def test_an_unreadable_picture_is_marked_and_not_asked_again(

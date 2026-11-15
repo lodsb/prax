@@ -281,6 +281,7 @@ from .documents import (  # noqa: F401
     published_of,
     quality_page,
     quality_record,
+    reachable_roots,
     read_chunks,
     reading_requests,
     readings_done_since,
