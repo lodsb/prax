@@ -11949,3 +11949,25 @@ answer is kept for the next call. `photos_due`, `original_file`,
 use it. The cost: a share that comes back is seen up to five minutes
 later. Tests: a share that does not answer costs the hand-out 0.1 s
 and one question, not one a call.
+
+## 2026-11-16: the card plan measured (AI), and AK settled
+
+`scripts/eval_swaps.py` now splits the waits by who asked
+(`_by_request`). The machine is the clock, the door and the OCR
+window. A person's request is small when at most `SMALL` (10)
+readings were asked in one minute, and bulk when more were. The p90 of
+a short list is now its upper value (`math.ceil`), not its lower one.
+
+Over 45 days on the live store (`docs/eval/card-plan-2026-11-16.md`),
+a person's small marker request waited a median of 0.57 h and at most
+3 h (n 17). Before the plan, two such requests waited 39.4 h. The plan
+made 15 swaps in six weeks, at most 4 a day. The waits past 100 h are
+the power-supply outage of 2026-10-17 to 11-02, not the plan. Two
+training runs of another project held the card at 99% during the
+measurement. The fit check sees their memory but not their compute.
+AI is ticked.
+
+AK, the user's word: the abliterated 27B (`server-27b-u`) for
+everything. The host has served every step with it since 2026-10-03.
+The swap measurement between two models is dropped, because there is
+no second model.

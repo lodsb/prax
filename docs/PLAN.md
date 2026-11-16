@@ -83,9 +83,11 @@ and its item 5 is items 1 and 2 below.
 2. **The card's other work, in this order.** The latex2html re-import
    (done 2026-11-06: 2,641 pages at revision 2, 305 formula readings
    asked; 55 short pages kept at revision 1, the user's word)
-   and its formulas. AJ's trial on marker and its routing rules. AI's
-   measurement from `run/swaps.jsonl`, once the card has been busy for
-   some days. AK, the dense 27B. AQ stage 4, a transcription step.
+   and its formulas. AJ's trial on marker and its routing rules (waits
+   for real scans in the set). AI's measurement (done 2026-11-16,
+   `docs/eval/card-plan-2026-11-16.md`). AK, the dense 27B (settled
+   2026-11-16: the abliterated 27B for everything). AQ stage 4, a
+   transcription step.
 3. (done 2026-11-03) **The review** of e5e183f..4579be8, both halves.
 4. **Without the card, in any order.** CI's runner (done 2026-11-04:
    `ubuntu-24.04` pinned; a move to 26 is that line and a green run). A page
@@ -743,7 +745,7 @@ they block, then by cost. Sizes are the review's.
          of 2026-10-17 are the first two). A check never ends or
          replaces anything; a finding with no fix only flags.
 
-- [ ] **AI. A plan for the card: what waits, what a swap costs, and
+- [x] (2026-11-16) **AI. A plan for the card: what waits, what a swap costs, and
       "do it now".** The user, 2026-10-01: "shouldn't the whole resource
       management be more aware of all the functionality and plan/batch?"
       and "if the user just wants it done there is no point in waiting
@@ -829,7 +831,10 @@ they block, then by cost. Sizes are the review's.
             others, so the card does not flip back. *For the user:*
             marker on the desktop is still `swap: ask`; `swap: auto` on
             its `run:` line is what lets it start without a hand.
-      - [ ] Measured: how long readings wait before and after, and how
+      - [x] (2026-11-16, `docs/eval/card-plan-2026-11-16.md`: a person's
+            small marker request waits a median of 34 minutes, at most 3 h,
+            against 39 h before; 15 swaps in six weeks, at most 4 a day)
+            Measured: how long readings wait before and after, and how
             many swaps a day the plan makes. Fewer swaps for the same
             waits is the point. First a record to measure from (the
             quality review's finding 20): a swap is only a line of prose
@@ -1115,7 +1120,7 @@ they block, then by cost. Sizes are the review's.
             commit (2026-10-06). Each role's commit measured at its load,
             kept beside its load times, and the check holding a reserve.
 
-- [ ] (2026-10-03: measured, `docs/log.md`: the 3.8 27B wins the maths with the tool and valid triples at a third of the speed; the abliterated build loses nothing; nobody declined a personal document; next: the split and its swap cost, the user's questions by hand) **AK. Another model: a dense Qwen 27B, and an uncensored build of
+- [x] (2026-11-16: the 27B abliterated, `server-27b-u`, for everything) (2026-10-03: measured, `docs/log.md`: the 3.8 27B wins the maths with the tool and valid triples at a third of the speed; the abliterated build loses nothing; nobody declined a personal document; next: the split and its swap cost, the user's questions by hand) **AK. Another model: a dense Qwen 27B, and an uncensored build of
       it, against the 35B.** The user, 2026-10-03: "qwen 27b is deemed
       to be better at agentic workflows than 35b (probably used less
       memory) and I'd like to evaluate an uncensored version, too.
@@ -1161,7 +1166,10 @@ they block, then by cost. Sizes are the review's.
             an ask is a person's "do it now" for its role (`ask_role` in
             the demand), and the ask hold keeps the card with that role
             without stopping the swap to it (howto 4b).
-      - [ ] (2026-10-06, the user: "right now I think we can stay with
+      - [x] (2026-11-16, the user: settled on the 27B, the abliterated
+            build, for everything; the host has served every step with
+            `server-27b-u` since 2026-10-03. Not measured, because there is
+            no second model to swap with) (2026-10-06, the user: "right now I think we can stay with
             27b for most tasks"; the split stays configuration, unused, and the
             35B's file is deleted: a split would download it again first)
             **Its swap cost, measured on the card** (the user's word

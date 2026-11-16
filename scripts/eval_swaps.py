@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sqlite3
 import statistics
 import sys
@@ -34,6 +35,46 @@ from prax.host import process
 
 def _when(text: str) -> datetime:
     return datetime.fromisoformat(text)
+
+
+# who asks for readings without a person behind the request: the door's
+# clock, the door itself (a re-parse asking its follow-ups), the OCR window
+MACHINE = frozenset({"clock", "door", "ocr-window"})
+# a person's request of at most this many readings asked in one minute is
+# one they wait for; more is a backlog they handed over (2,956 figure
+# readings asked on 2026-10-03 waited a day, as a backlog should)
+SMALL = 10
+
+
+def _quantiles(hours: list[float]) -> str:
+    w = sorted(hours)
+    p90 = w[max(0, math.ceil(len(w) * 0.9) - 1)]
+    return f"{len(w):6}   {statistics.median(w):7.2f}   {p90:7.2f}   {w[-1]:7.1f}"
+
+
+def _by_request(con: sqlite3.Connection, since: datetime) -> None:
+    """The waits of a person's small requests, a person's bulk requests
+    and the machine's, by reader: what the plan promises is the first."""
+    rows = con.execute(
+        "SELECT asked_by, extractor, substr(at, 1, 16), at, finished_at"
+        " FROM readings WHERE finished_at IS NOT NULL AND at >= ?",
+        (since.strftime("%Y-%m-%dT%H:%M:%SZ"),),
+    ).fetchall()
+    asked: dict[tuple[str, str], int] = defaultdict(int)
+    for who, _, minute, _, _ in rows:
+        asked[(who, minute)] += 1
+    groups: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for who, reader, minute, at, done in rows:
+        if who in MACHINE:
+            kind = "machine"
+        else:
+            kind = "person, small" if asked[(who, minute)] <= SMALL else "person, bulk"
+        hours = (_when(done) - _when(at)).total_seconds() / 3600
+        groups[(kind, reader)].append(hours)
+    print()
+    print("asked by        reader               n   p50 h     p90 h     max h")
+    for (kind, reader), spent in sorted(groups.items()):
+        print(f"{kind:15} {reader:16} {_quantiles(spent)}")
 
 
 def main() -> None:
@@ -81,6 +122,7 @@ def main() -> None:
             f"{day}  {s.get('swap:plan', 0):5} / {s.get('swap:asked', 0):5} / {back:4}"
             f"          {len(w):10}   {p50}   {p90}"
         )
+    _by_request(con, since)
     if not path.exists():
         print(f"(no {path.name} yet: prax up writes it from its next swap)")
 
