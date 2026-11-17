@@ -644,11 +644,14 @@ they block, then by cost. Sizes are the review's.
       `ontology_version` (`0` to `5`), about 355 with evidence shaped
       like a contents line, 29,311 with no evidence (rules, typing,
       schema.org: expected, and `why` should say so).
-      - [ ] **An hour each.** `store.link` refuses an edge from an
-            entity to itself, and a heal rule ends the 11. `traverse`
-            says `resolved_from` when the name it walked is not the one
-            asked (today "physical modelling" walks `physical modeling`
-            silently).
+      - [x] (2026-11-17) **An hour each.** `store.link` refuses an edge
+            from an entity to itself (`store.SelfLoop`), under one name
+            or two a merge made one; the batch writers drop it, and the
+            walk hides one a later merge made. Heal's `self-edges` (46
+            live, merges counted) and `duplicate-facts` (1,055) were
+            already there and wait for `prax heal --apply`, the owner's
+            call. `traverse` says `resolved_from` when the name it walked
+            is not the one asked.
       - [ ] **Evidence that supports its edge**, checked when an edge is
             written and by a heal pass over the live graph: the quote is
             in its chunk (read loosely, as quotes are matched elsewhere),
@@ -1638,7 +1641,12 @@ not done.
             and its numbers (how much is speech, singing and music, how
             many lines are doubtful, the time a recording), with the user
             judging the text; the lines (`SUNG_LINE`, `DOUBTFUL`, …)
-            measured again on it.
+            measured again on it. Parked until the NAS is back (the
+            user, 2026-11-17), and with it **the full audio and music
+            analysis**, the user's word the same day: what a recording
+            is beyond its words (a song idea's key, tempo, instruments,
+            its sections), a design of its own, perhaps on BWS's `music`
+            and `sound` modules (AV).
 
 - [ ] (2026-10-20: a design study in `docs/biography.md`, five stages, two questions) **AR. A life in the library.** The user, 2026-10-20: a family
       tree, and with it personal photos, friends, their own projects,

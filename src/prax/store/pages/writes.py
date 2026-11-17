@@ -274,7 +274,10 @@ def _rename_page(
 def _page_link(
     con: sqlite3.Connection, edge: Edge, doc_id: int, slug: str, revision: int
 ) -> None:
-    """One of a page's own edges, written once."""
+    """One of a page's own edges, written once; none to the page itself
+    (a page that links to its own address)."""
+    if (edge.src, edge.src_type) == (edge.dst, edge.dst_type):
+        return
     if not find_edges(con, edge):
         _link(
             con,

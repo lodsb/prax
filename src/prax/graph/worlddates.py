@@ -491,19 +491,23 @@ def apply(
         if any(e["world_from"] or e["world_to_precision"] for e in mine):
             report.existing += 1
             continue
-        new = store.link(
-            con,
-            edge,
-            confidence=t.confidence,
-            source_doc=doc_id,
-            ontology_version=onto.version,
-            evidence=t.evidence,
-            producer=producer,
-            run=run,
-            world_from=t.world_from or None,
-            world_to=t.world_to or None,
-            place=place,
-        )
+        try:
+            new = store.link(
+                con,
+                edge,
+                confidence=t.confidence,
+                source_doc=doc_id,
+                ontology_version=onto.version,
+                evidence=t.evidence,
+                producer=producer,
+                run=run,
+                world_from=t.world_from or None,
+                world_to=t.world_to or None,
+                place=place,
+            )
+        except store.SelfLoop:
+            report.refused += 1
+            continue
         report.edges.append(new)
         if not mine:
             report.linked += 1

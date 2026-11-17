@@ -193,6 +193,17 @@ def _named(
     return int(known[0]["id"]) if len(known) == 1 else None
 
 
+class SelfLoop(ValueError):
+    """An edge whose two ends are one thing: refused by ``link``."""
+
+
+def _canonical_of(con: sqlite3.Connection, entity_id: int) -> int:
+    row = con.execute(
+        "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    return int(row[0]) if row else entity_id
+
+
 @dataclass
 class Edge:
     src: str
@@ -279,8 +290,18 @@ def _link(
         if str(world_to or "").strip().lower() == "unknown"
         else _world_date(world_to, "world_to")
     )
+    # "digital waveguide extends digital waveguide", a paper citing itself,
+    # a page linking to itself: a fact of a thing about itself says nothing,
+    # under one name or two a merge made one (AV, 2026-11-17). One name is
+    # refused before an entity is made for it; two names that resolve to
+    # one thing are both known already, so nothing was made either
+    loop = SelfLoop(f"{edge.src!r} {edge.rel} {edge.dst!r}: an edge to itself")
+    if (edge.src, edge.src_type) == (edge.dst, edge.dst_type):
+        raise loop
     src = _entity_id(con, edge.src, edge.src_type)
     dst = _entity_id(con, edge.dst, edge.dst_type)
+    if _canonical_of(con, src) == _canonical_of(con, dst):
+        raise loop
     # which document a node of a document type is, kept the first time an
     # edge reaches it (migration 69, ``node_document``)
     _claim_node(con, src, edge.src_type, edge.src, source_doc, onto)

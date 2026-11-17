@@ -427,6 +427,7 @@ from .graph import (  # noqa: F401
     Edge,
     Fact,
     Landing,
+    SelfLoop,
     Stated,
     Synced,
     _entity_id,

@@ -1000,19 +1000,23 @@ def apply(
         if store.find_edges(con, edge):
             report.existing += 1
         else:
-            store.link(
-                con,
-                edge,
-                confidence=t.confidence,
-                source_doc=doc_id,
-                ontology_version=onto.version,
-                evidence=t.evidence or None,
-                producer=extractor,
-                run=run,
-                world_from=checked_date(t.world_from, t.evidence),
-                world_to=checked_date(t.world_to, t.evidence, end=True),
-                place=_place_of(text, text_hash, t.evidence),
-            )
+            try:
+                store.link(
+                    con,
+                    edge,
+                    confidence=t.confidence,
+                    source_doc=doc_id,
+                    ontology_version=onto.version,
+                    evidence=t.evidence or None,
+                    producer=extractor,
+                    run=run,
+                    world_from=checked_date(t.world_from, t.evidence),
+                    world_to=checked_date(t.world_to, t.evidence, end=True),
+                    place=_place_of(text, text_hash, t.evidence),
+                )
+            except store.SelfLoop:
+                report.drop("an edge to itself", f"{t.src} {t.rel} {t.dst}")
+                continue
             report.linked += 1
         # the word the document printed, kept whether or not the edge was
         # new: the label is about the thing, not about this fact

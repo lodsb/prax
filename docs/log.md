@@ -12017,3 +12017,26 @@ synthetic music, took 7 s with the models loading.
 Not measured on the 621 recordings: the share was down. The time marks
 moved from `prax.text.chunking` into `prax.text.markup`, where every
 mark prax writes lives.
+
+## 2026-11-17 (later): AV's hour items, self-loops and `resolved_from`
+
+`store.link` refuses an edge whose ends are one thing (`store.SelfLoop`,
+a `ValueError`, so the door answers 400). One name on both ends is
+refused before an entity is made for it. Two names that a merge made one
+are refused after both resolve. The batch writers drop such an edge and
+go on: extraction counts it as a drop ("an edge to itself"), and so do
+the review replay, the typing rules, resolution's venue editions, the
+world-dates step and the citations importer. A page that links to itself
+writes no `annotates`.
+
+The live store had 11 edges from an entity to itself, from the local
+models (`cites`, `variant_of`), a typing rule (`self-as-device`) and a
+page. Counting merges there were 46, because a merge does not rewrite
+edges. The walk now leaves out an edge whose canonical ends are one,
+which keeps it for an unmerge. Heal's `self-edges` and `duplicate-facts`
+rules already ended such edges, recorded for `restore_run`, and had not
+been applied: 46 and 1,055 cases wait for `prax heal --apply`.
+
+`traverse` answers `entity` as the name it walked, and `resolved_from`
+as the name asked where the two differ ("physical modelling" walks
+`physical modeling` and says so).

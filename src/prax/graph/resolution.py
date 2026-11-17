@@ -701,14 +701,17 @@ def apply(
         edge = store.Edge(c.drop_name, "venue", "part_of", c.keep_name, "venue")
         if store.find_edges(con, edge):
             continue
-        store.link(
-            con,
-            edge,
-            confidence="INFERRED",
-            evidence="the venue's name: an edition of the series",
-            producer=PRODUCER,
-            run=run,
-        )
+        try:
+            store.link(
+                con,
+                edge,
+                confidence="INFERRED",
+                evidence="the venue's name: an edition of the series",
+                producer=PRODUCER,
+                run=run,
+            )
+        except store.SelfLoop:
+            continue  # the edition and its series were merged into one
         report.editions += 1
     if subtypes:
         for c in p.subtypes:

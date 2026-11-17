@@ -455,6 +455,10 @@ def traverse_map(
     never merged, and never one-sided without saying so. A name that
     reaches one thing carries no ``senses``.
 
+    ``entity`` is the name of the thing walked. Where that is not the name
+    asked (a label of it, a name merged into it, a document's ``doc:N``),
+    ``resolved_from`` is the name asked.
+
     ``community`` names the region of the library the entity walked is in
     and the part of it, with their labels and sizes (``prax.graph.communities``):
     a way from a fact to what region of the library it belongs to, a few
@@ -470,8 +474,10 @@ def traverse_map(
     facts were dated and how many were not, because a walk of mostly
     undated facts says little about that date.
     """
+    asked = entity_name
     entity_name, type = _from_document(con, entity_name, type)
     ids, report = _choose(con, entity_name, type)
+    walked = next((s["name"] for s in report if s["walked"]), entity_name)
     keep = _domain_documents(con, domain)
     if within is not None:
         keep = within if keep is None else keep & within
@@ -485,12 +491,16 @@ def traverse_map(
         world_at=world_at,
     )
     out: dict[str, Any] = {
-        "entity": entity_name,
+        "entity": walked,
         "hops": max(0, min(hops, MAX_HOPS)),
         "edges": [r for r in rows if int(r["hop"]) < 2],
         "neighbours": [r for r in rows if int(r["hop"]) >= 2],
         "left_out": left_out,
     }
+    if walked != asked:
+        # "physical modelling" walked `physical modeling`, a label or a
+        # merge away: the caller is told, not left to notice (AV)
+        out["resolved_from"] = asked
     if len(report) > 1 or (type and not ids):
         out["senses"] = report
     if world_at:
@@ -589,6 +599,10 @@ def _walk(
         JOIN entities d ON d.id = e.dst
         JOIN entities cd ON cd.id = COALESCE(d.canonical_id, d.id)
         WHERE {held}
+          -- a fact of a thing about itself says nothing: one written so
+          -- before ``link`` refused it, or two names a merge made one
+          -- (kept: an unmerge makes it a fact again)
+          AND cs.id != cd.id
         ORDER BY hop, e.id
         """,
         (json.dumps(start_ids), *held_args, hops, *held_args, hops, *held_args),

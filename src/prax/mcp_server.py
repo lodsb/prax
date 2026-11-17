@@ -264,6 +264,9 @@ def traverse(
     company; a paper and the concept it is named after). Then one is
     walked, the most connected, and ``senses`` lists them all with their
     type, documents and domains; pass ``type`` to walk another.
+    ``entity`` in the answer is the name walked; where that is not the
+    name asked (a spelling, a label or a merge away), ``resolved_from``
+    is the name asked.
 
     ``entity`` may be ``doc:N`` to walk from a library document: what it
     links to, supersedes or invalidates, and what does so to it.

@@ -363,14 +363,17 @@ def _apply(
     else:
         rep.linked += 1
         if commit:
-            store.link(
-                con,
-                edge,
-                confidence="INFERRED",
-                source_doc=it["source_doc"],
-                evidence=it["evidence"],
-                producer=producer,
-                run=rep.run,
-            )
+            try:
+                store.link(
+                    con,
+                    edge,
+                    confidence="INFERRED",
+                    source_doc=it["source_doc"],
+                    evidence=it["evidence"],
+                    producer=producer,
+                    run=rep.run,
+                )
+            except store.SelfLoop:
+                rep.linked -= 1  # a thing to itself says nothing: not written
     if commit:
         store.resolve_review(con, it["id"], "linked")

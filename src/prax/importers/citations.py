@@ -358,15 +358,20 @@ def _one(
         if store.find_edges(con, edge):
             rep.existing += 1
             continue
-        store.link(
-            con,
-            edge,
-            confidence="EXTRACTED",
-            source_doc=doc_id,
-            evidence=f"{source.name} {work.id} references {ref.doi or ref.id or name}",
-            producer=source.name,
-            run=stamp["fetched_at"][:10],
-        )
+        try:
+            store.link(
+                con,
+                edge,
+                confidence="EXTRACTED",
+                source_doc=doc_id,
+                evidence=(
+                    f"{source.name} {work.id} references {ref.doi or ref.id or name}"
+                ),
+                producer=source.name,
+                run=stamp["fetched_at"][:10],
+            )
+        except store.SelfLoop:
+            continue  # the paper and its reference are one thing, merged
         linked += 1
     rep.linked += linked
     rep.documents += 1

@@ -66,15 +66,20 @@ def replay(
             if store.find_edges(con, edge):
                 rep.existing += 1
             else:
-                store.link(
-                    con,
-                    edge,
-                    confidence="EXTRACTED",
-                    source_doc=it["source_doc"],
-                    evidence=it["evidence"],
-                    producer="replay",
-                    run=f"ontology-v{onto.version}",
-                )
+                try:
+                    store.link(
+                        con,
+                        edge,
+                        confidence="EXTRACTED",
+                        source_doc=it["source_doc"],
+                        evidence=it["evidence"],
+                        producer="replay",
+                        run=f"ontology-v{onto.version}",
+                    )
+                except store.SelfLoop:
+                    store.resolve_review(con, it["id"], "dropped")
+                    offset -= 1
+                    continue
                 rep.linked += 1
             store.resolve_review(con, it["id"], "linked")
             offset -= 1  # the item left the open set the listing pages over
@@ -861,17 +866,20 @@ def apply_typing_rules(
         for e in edges:
             if store.find_edges(con, e):
                 continue
-            wrote = True
             if commit:
-                store.link(
-                    con,
-                    e,
-                    confidence="INFERRED",
-                    source_doc=it["source_doc"],
-                    evidence=it["evidence"],
-                    producer=rule_producer(rule),
-                    run=rep.run,
-                )
+                try:
+                    store.link(
+                        con,
+                        e,
+                        confidence="INFERRED",
+                        source_doc=it["source_doc"],
+                        evidence=it["evidence"],
+                        producer=rule_producer(rule),
+                        run=rep.run,
+                    )
+                except store.SelfLoop:
+                    continue  # a rule's edge of a thing to itself says nothing
+            wrote = True
         if wrote:
             rep.linked += 1
         else:

@@ -100,6 +100,7 @@ from .decisions import (  # noqa: F401
 from .edges import (  # noqa: F401
     CONFIDENCE_LEVELS,
     Edge,
+    SelfLoop,
     Stated,
     Synced,
     _entity_id,
