@@ -210,6 +210,11 @@ def test_a_server_beyond_loopback_asks_for_its_key(
         argv = up.llama_argv(lan)
     assert "--api-key" not in argv and "without an api key" in caplog.text
     assert "--api-key" not in up.llama_argv(spec)  # loopback: nothing to ask
+    # a key kept only in up.env, as a login entry needs it, reaches the server
+    env_file = config.data_dir() / "up.env"
+    env_file.write_text("PRAX_TEST_LLAMA_KEY=from-file\n", "utf-8")
+    argv = up.llama_argv(lan)
+    assert argv[argv.index("--api-key") + 1] == "from-file"
 
 
 def test_the_serve_block_is_only_for_a_server(data_dir: Path) -> None:

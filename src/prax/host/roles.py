@@ -268,7 +268,11 @@ def llama_argv(spec: models.ModelSpec, *, binary: str | None = None) -> list[str
         # a server on a LAN or tailnet address answers anyone who reaches
         # it: the model's api_key_env is what the worker sends (prax.models),
         # so the server is told to ask for it (security audit, item 10)
-        key = os.environ.get(spec.api_key_env or "", "") if spec.api_key_env else ""
+        # what the children see, ``up.env`` included: a key kept only there
+        # (a login entry carries no user environment) is the worker's, so it
+        # is the server's too (2026-11-16: read from os.environ, it was not)
+        seen = environment(config.data_dir())
+        key = seen.get(spec.api_key_env or "", "") if spec.api_key_env else ""
         if key:
             common += ["--api-key", key]
         else:
