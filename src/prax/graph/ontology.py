@@ -48,6 +48,7 @@ from typing import Any
 import yaml
 
 from prax import config
+from prax.text import evidence
 
 CORE = "core"
 # A domain filter's prefix for a module without the modules built on it
@@ -1252,6 +1253,18 @@ def lexicon() -> Lexicon:
     """The words beside the types; re-parsed only when the file changes."""
     p = path()
     return _load_lexicon(p, _stamp(p))
+
+
+def evidence_cues() -> evidence.Cues:
+    """The lexicon's ``evidence`` section as ``prax.text.evidence`` takes
+    it: what negates, which relations are topical, what a model's note
+    says (AV, 2026-11-17)."""
+    s = lexicon().section("evidence") or {}
+    return evidence.Cues(
+        negations=tuple(str(w) for w in s.get("negations") or ()),
+        topical=frozenset(str(r) for r in s.get("topical") or ()),
+        commentary=tuple(str(w) for w in s.get("commentary") or ()),
+    )
 
 
 @functools.lru_cache(maxsize=4)

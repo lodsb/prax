@@ -29,7 +29,7 @@ from typing import Any, Protocol
 from prax import config, models, store
 from prax.errors import NotFound
 from prax.graph import ontology
-from prax.text import quotes
+from prax.text import evidence, quotes
 
 DEFAULT_MODEL = "claude-opus-5"
 INPUT_CHARS = 12_000  # of document text after the metadata header
@@ -930,6 +930,7 @@ def apply(
     ``meta.extraction`` stamp. The ontology is the document's own subset
     (its domains), and the stamp carries that subset's version."""
     onto = ontology.current().for_domains(store.document_domains(con, doc_id))
+    cues = ontology.evidence_cues()
     report = ApplyReport()
     # the same producer read this document before under another subset
     # or module version: that reading is superseded by this one
@@ -983,6 +984,16 @@ def apply(
         try:
             onto.check_edge(t.src_type, t.rel, t.dst_type)
             onto.check_names(t.src, t.src_type, t.rel, t.dst, t.dst_type)
+            # a quote that cannot carry the fact: the model's own note, a
+            # contents line or a negation behind a relation that asserts
+            # something (AV, measured 2026-11-17); a person decides
+            doubts = [
+                f
+                for f in evidence.flags(t.evidence, t.src, t.rel, t.dst, cues)
+                if f in evidence.REFUSED
+            ]
+            if doubts:
+                raise ValueError(f"{evidence.REASON}: {', '.join(doubts)}")
         except ValueError as exc:
             store.queue_review(
                 con,

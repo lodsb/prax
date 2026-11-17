@@ -57,6 +57,7 @@ from .graph import (
     _container_citations,
     _damaged_names,
     _document_twins,
+    _doubtful_evidence,
     _duplicate_facts,
     _functional_conflicts,
     _mangled_names,
@@ -370,6 +371,22 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_twin_documents,
         repair=_repair_twins,
+    ),
+    Ailment(
+        name="doubtful-evidence",
+        what=(
+            "live edges whose quote cannot carry them: the model's own note"
+            " where the quote belongs, a contents line or a negation behind a"
+            ' relation that asserts something ("unlike X" for extends X),'
+            " or OCR noise (prax.text.evidence; the BWS survey, AV)"
+        ),
+        fix=(
+            "look only: a person decides, by the document's page or the"
+            " graph's why; an extraction sends such a triple to the review"
+            " queue since 2026-11-17. Noise is the weakest flag: code and"
+            " formulas trip it"
+        ),
+        find=_doubtful_evidence,
     ),
     Ailment(
         name="self-edges",

@@ -82,6 +82,7 @@ EDGE_FACT = (
     "evidence_start",
     "evidence_end",
     "evidence_text_hash",
+    "evidence_looked",  # the matcher that last looked, for a quote not placed
 )
 # the columns that are not the fact: its id, and when prax held it
 EDGE_TIMES = ("id", "valid_from", "valid_to", "ingested_at")

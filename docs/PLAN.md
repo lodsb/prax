@@ -652,13 +652,21 @@ they block, then by cost. Sizes are the review's.
             already there and wait for `prax heal --apply`, the owner's
             call. `traverse` says `resolved_from` when the name it walked
             is not the one asked.
-      - [ ] **Evidence that supports its edge**, checked when an edge is
+      - [x] (2026-11-17) **Evidence that supports its edge**, checked when an edge is
             written and by a heal pass over the live graph: the quote is
             in its chunk (read loosely, as quotes are matched elsewhere),
             is not a contents or index line, reads as language rather
             than OCR noise, and no negation around an end ("unrelated
             to", "not", "unlike") is written as a positive relation.
-            Measured on a sample before it refuses anything.
+            Done: `prax.text.evidence` (four flags, a fourth found on the
+            way: the model's own note as the quote), the lexicon's
+            `evidence` section, heal's look-only `doubtful-evidence`,
+            extraction's review queue for three of them; the matcher
+            (`quotes.VERSION` 2) and migration 71 for the 196,119 quotes
+            "not found". Left: the `places` pass run on the live store
+            (some 50,000 quotes placed, measured on a sample), the
+            importers' own notes ("crossref doi:… references …") kept out
+            of what is looked for.
       - [ ] **The abbreviation tier** of resolution, from the
             `acronyms` table the library already builds ("low-frequency
             oscillator (LFO)"): `LFO`/`low frequency oscillator`,

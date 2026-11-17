@@ -167,7 +167,11 @@ revisit threshold, under "Decision thresholds" below.
    `traverse`), which is not when it holds. Its quote keeps where it
    stood: its range in the text artifact it was read from and that
    text's hash (migration 48), written once, so a re-read says whether
-   it still stands there (`store.evidence_place`, in `why`).
+   it still stands there (`store.evidence_place`, in `why`). A quote
+   looked for and not found may be placed once in that same text by a
+   later matcher (`quotes.VERSION`, `evidence_looked`, migration 71). A
+   quote that cannot carry its fact (a model's note, a contents line, a
+   negation; `prax.text.evidence`) goes to the review queue, not the graph.
    Enrichment invalidates edges by setting `valid_to`; it never deletes
    them, and the database refuses a delete or a change to an edge's
    fact (migration 35's triggers).

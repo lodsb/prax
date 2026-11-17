@@ -26,6 +26,7 @@ from typing import Any
 
 from prax import store
 from prax.graph import ontology
+from prax.text import evidence
 
 
 @dataclass
@@ -841,6 +842,9 @@ def apply_typing_rules(
     docs = _doc_titles(con, {it["source_doc"] for it in items if it["source_doc"]})
     for it in items:
         rep.checked += 1
+        if str(it.get("reason") or "").startswith(evidence.REASON):
+            rep.still_open += 1  # the quote, not the type: a person decides
+            continue
         if it["src_type"] and it["dst_type"]:
             action, edges, rule = decide(it, docs.get(it["source_doc"]))
         else:

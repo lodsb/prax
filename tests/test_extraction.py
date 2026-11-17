@@ -647,6 +647,50 @@ def test_the_places_pass_fills_what_was_written_before(
     assert store.maintain(con, only=["places"])["places"]["documents"] == 0
 
 
+def test_a_quote_an_older_matcher_missed_is_looked_for_again_once(
+    con: sqlite3.Connection,
+) -> None:
+    """Migration 71: "not found" by matcher 1 may become a range in the
+    same text when a later matcher finds it; a found place never moves."""
+    from prax.text import quotes
+
+    prose = "The **phase vocoder** is used for time stretching. " * 3
+    doc_id = store.ingest_text(con, prose, title="Vocoder")["doc_id"]
+    edge_id = store.link(
+        con,
+        store.Edge("Vocoder", "paper", "about", "phase vocoder", "concept"),
+        source_doc=doc_id,
+        evidence='"the phase vocoder is used for time stretching"',
+        producer="test",
+    )
+    text_hash = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()[0]
+    # as matcher 1 left it: looked for in this text, not found
+    con.execute(
+        "UPDATE edges SET evidence_start = NULL, evidence_end = NULL,"
+        " evidence_text_hash = ?, evidence_looked = 1 WHERE id = ?",
+        (text_hash, edge_id),
+    )
+    con.commit()
+    out = store.maintain(con, only=["places"])["places"]
+    assert (out["documents"], out["placed"]) == (1, 1)
+    row = con.execute(
+        "SELECT evidence_start, evidence_looked FROM edges WHERE id = ?", (edge_id,)
+    ).fetchone()
+    assert row[0] is not None and row[1] == quotes.VERSION
+    # looked for at this version: not again
+    assert store.maintain(con, only=["places"])["places"]["documents"] == 0
+    # a found place stays; another text's hash is refused
+    for sql in (
+        "UPDATE edges SET evidence_start = 0 WHERE id = ?",
+        "UPDATE edges SET evidence_text_hash = 'other' WHERE id = ?",
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            con.execute(sql, (edge_id,))
+        con.rollback()
+
+
 def test_a_number_the_text_refers_by_is_no_name_at_any_pass() -> None:
     """Structure review 2026-11-07, finding 24: extraction, the review and
     the heal pass each had a pattern of their own, so "Fig. 3" was written

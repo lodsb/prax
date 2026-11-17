@@ -12040,3 +12040,40 @@ been applied: 46 and 1,055 cases wait for `prax heal --apply`.
 `traverse` answers `entity` as the name it walked, and `resolved_from`
 as the name asked where the two differ ("physical modelling" walks
 `physical modeling` and says so).
+
+## 2026-11-17 (evening): evidence that supports its edge (AV)
+
+`prax.text.evidence` reads a quote alone, without a model, for four
+things. A contents or index line ("2.2.6 Tao . . . 21"). A negation
+within four words before an end ("unlike radial basis function schemes"
+for `extends`). The model's own note where the quote belongs ("(Note:
+Title inferred from context)", "the text only says"), which the survey
+did not name. And OCR noise. A contents line and a negation count only
+against a relation that asserts something. For `about`, `covers` or
+`contrasts` they are fair evidence: "unlike X" is how `contrasts` is
+said. The cue words and the topical relations are the lexicon's new
+`evidence` section (`ontology.evidence_cues`).
+
+Measured on the 312,955 live edges with a quote, read-only. The first
+version flagged 3,366 negations and 2,486 noise, most of them wrong:
+"ne" matched inside "Renee", "not only" counted, and Arabic, Markdown and
+broken umlauts read as noise. After the fixes, and with the relation
+split: 69 negated, 97 contents lines, 498 notes, all three mostly right
+in the samples, and 1,159 noise, which code and formulas still trip.
+Heal's `doubtful-evidence` lists them and repairs nothing. An extraction
+sends a triple with one of the first three to the review queue, with the
+reason "the quote is no evidence". The typing rules leave such an item
+open: before that, they retyped the subject as the paper and linked the
+fact anyway.
+
+The bigger finding was the matcher. 196,119 live edges had a quote the
+`places` pass looked for and did not find. In 400 of them from open
+papers, about 40% were the text's own words behind quotation marks,
+Markdown or an ellipsis. `quotes.VERSION` 2 finds those: 341 of 1,000
+unplaced quotes in their current text, so some 50,000 in all. Migration
+48 wrote "not found" for good. Migration 71 lets it become a range in
+the same text once, records the matcher that looked
+(`evidence_looked`), and keeps a found place fixed. The `places` pass
+looks again once per matcher version. Many of the rest are not quotes at
+all: the importers write notes of their own ("crossref doi:… references
+…").

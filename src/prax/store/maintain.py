@@ -185,7 +185,9 @@ _SET_SUMMARY_LANG = (
 _SET_LABEL_LANG = "UPDATE OR IGNORE entity_labels SET lang = ? WHERE id = ?"
 _SET_PLACE = (
     "UPDATE edges SET evidence_start = ?, evidence_end = ?,"
-    " evidence_text_hash = ? WHERE id = ? AND evidence_text_hash IS NULL"
+    " evidence_text_hash = ?, evidence_looked = ?"
+    " WHERE id = ? AND evidence_start IS NULL"
+    " AND (evidence_text_hash IS NULL OR evidence_text_hash = ?)"
 )
 BATCH = 500  # rows a pass applies in one write
 
@@ -961,17 +963,26 @@ def _places(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Where each live edge's quote stands, for the edges written before
     extraction recorded it (migration 48): each document's text read once
     and every quote of its edges placed in it (``quotes.place``). A quote
-    not in the text gets the text's hash and no range, so it is not looked
-    for again each night. A place filled here is where the quote stood
-    when this pass looked, which may be a later text than the one it was
-    read from."""
+    not in the text gets the text's hash and no range, and the matcher's
+    version (``evidence_looked``), so it is not looked for again each
+    night; a later matcher (``quotes.VERSION``) looks for it once more in
+    that same text (migration 71). A place filled here is where the quote
+    stood when this pass looked, which may be a later text than the one it
+    was read from."""
+    # never looked for, or not found by an older matcher in the text the
+    # document has now
+    due = (
+        "e.valid_to IS NULL AND e.evidence IS NOT NULL AND e.evidence_start IS NULL"
+        " AND (e.evidence_text_hash IS NULL OR (e.evidence_text_hash = d.text_hash"
+        "  AND coalesce(e.evidence_looked, 1) < ?))"
+    )
     docs = [
         (int(r[0]), str(r[1]))
         for r in con.execute(
             "SELECT DISTINCT d.id, d.text_hash FROM edges e"
             " JOIN documents d ON d.id = e.source_doc"
-            " WHERE e.valid_to IS NULL AND e.evidence IS NOT NULL"
-            " AND e.evidence_text_hash IS NULL AND d.text_hash IS NOT NULL"
+            f" WHERE {due} AND d.text_hash IS NOT NULL",
+            (quotes.VERSION,),
         )
     ]
     placed = missing = 0
@@ -982,13 +993,21 @@ def _places(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         except OSError:
             continue
         for edge_id, evidence in con.execute(
-            "SELECT id, evidence FROM edges WHERE source_doc = ? AND valid_to IS NULL"
-            " AND evidence IS NOT NULL AND evidence_text_hash IS NULL",
-            (doc_id,),
+            "SELECT e.id, e.evidence FROM edges e"
+            " JOIN documents d ON d.id = e.source_doc"
+            f" WHERE e.source_doc = ? AND {due}",
+            (doc_id, quotes.VERSION),
         ).fetchall():
             at = quotes.place(text, evidence)
             pending.append(
-                (at[0] if at else None, at[1] if at else None, text_hash, edge_id)
+                (
+                    at[0] if at else None,
+                    at[1] if at else None,
+                    text_hash,
+                    quotes.VERSION,
+                    edge_id,
+                    text_hash,
+                )
             )
             placed += at is not None
             missing += at is None

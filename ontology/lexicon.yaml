@@ -459,3 +459,22 @@ world_time:
 # A verb of several words is matched with any space between them
 biography:
   verbs: [received, receives, is, was, has, joined, studied, graduated, works, holds, obtained, completed, earned, got, erhielt, studierte, promovierte, absolvierte, habilitierte, ist, war, arbeitet, leitet, lehrt, a obtenu, a étudié, a rejoint, est, était, obtint, travaille, dirige, enseigne]
+
+# what a quote must not be to carry a fact (AV, the BWS survey of
+# 2026-11-17; `prax.text.evidence`). A negation before an end of the edge
+# ("unrelated to wavetable synthesis") may turn a fact that asserts
+# something round; heal's `doubtful-evidence` names those edges, and an
+# extraction sends such a triple to the review queue. A word of several
+# is matched with any space between its words; "n't" inside a word
+evidence:
+  negations: [not, "no", never, neither, nor, without, unlike, "unrelated to", "rather than", "instead of", "other than", "as opposed to", "n't", nicht, kein, keine, keinen, keinem, keiner, ohne, statt, anstatt, ne, pas, sans]
+  # relations that say what a document is about, who made it, or where it
+  # stands: a contents line names a chapter's topic, which is evidence of
+  # `about` and `covers`, and "unlike X" is how `contrasts` is said. Every
+  # other relation asserts something, and both speak against it
+  topical: [about, mentions, covers, names, cites, describes, defines, annotates, links_to, synthesizes, contrasts, contradicts, opposes, invalidates, supersedes, succeeds, follows, authored_by, advised_by, affiliated_with, funded_by, developed_by, written_at, written_in, published_by, published_in, appeared_in, depicts, recorded_at, taken_in, attended]
+  # the model's own note where the quote belongs (498 live edges on
+  # 2026-11-17, all but 11 of them not in their text): "(Note: Title
+  # inferred from context)", "the text only says". Matched anywhere in the
+  # quote, any case; a phrase of several words with any space between
+  commentary: ["(note:", "[note:", "-> note:", "note: title", "the text says", "the text does not", "the text doesn't", "the text only", "the text mentions", "the text states", "the text refers", "the text implies", "text does not name", "text does not mention", "the prompt", "not explicitly", "explicitly stated", "explicitly mentioned", "explicitly given", "explicitly printed", "common knowledge", "inferred from", "is not in this text", "is not in the text", "rule says", "strict rule", "i cannot", "cannot confirm", "cannot be determined"]
