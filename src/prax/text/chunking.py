@@ -123,28 +123,11 @@ _RELATION = re.compile(
 FORMULA_CHARS = 40  # a relationless expression this long is still a formula
 
 _TABLE_CAPTION = re.compile(r"^\**(Table|TABLE)\s*\d+")
-# a transcript's time marks: "[12:34] the words", "[1:02:34] ...", and a
-# frame's caption "12:34 — the words" (the brackets keep a paragraph that
-# happens to open with a clock time out of it)
-_TIME_PARA = re.compile(r"^\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\]\s")
-_TIME_FIGURE = re.compile(r"^!\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\s*[—–-]\s")
-
-
-def parse_time(mark: str) -> int:
-    """``"12:34"`` → 754, ``"1:02:34"`` → 3754."""
-    parts = [int(p) for p in mark.split(":")]
-    total = 0
-    for p in parts:
-        total = total * 60 + p
-    return total
-
-
-def format_time(seconds: int) -> str:
-    """754 → ``"12:34"``, 3754 → ``"1:02:34"``: the marks as the text has them."""
-    seconds = max(0, int(seconds))
-    h, rest = divmod(seconds, 3600)
-    m, s = divmod(rest, 60)
-    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+# a transcript's time marks (``prax.text.markup``)
+_TIME_PARA = markup.TIME_PARA
+_TIME_FIGURE = markup.TIME_FIGURE
+parse_time = markup.parse_time
+format_time = markup.format_time
 
 
 def _time_of(kind: str, text: str) -> int | None:

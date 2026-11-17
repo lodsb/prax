@@ -166,6 +166,8 @@ class DocumentMeta(TypedDict, total=False):
     sensitivity: dict[str, Any]  # a decision: state, by, at; a group's adds run, before
     # a picture's own facts: the photos step (store.apply_photo)
     photo: dict[str, Any]  # v, by, at, camera, lens, gps, size, thumb, preview
+    # a recording's reading: the transcribe step (store.apply_transcript)
+    transcript: dict[str, Any]  # v, by, at, duration, speech_s, sung_s, music_s…
     taken: dict[str, Any]  # when it was taken: date, precision, by
     # where it was taken, from its GPS position: the geocode step (store.apply_place)
     place: dict[str, Any]  # v, by, at, name, region, country, cc, km, id; or none

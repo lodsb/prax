@@ -77,7 +77,7 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `base` (common, locks, endings, nodes, wall, indexes,
    schema, tokens), `documents` (meta, places, text, library, domains,
-   genres, readings, photos, reads), `graph` (edges, decisions, labels, languages, lookups,
+   genres, readings, photos, recordings, reads), `graph` (edges, decisions, labels, languages, lookups,
    context, views, communities, traversal, rules, paths, geo, events, people, naming, faces, versions, pictures, imports, citations, schemaorg), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar, faces), `pages` (texts, pointers, tree, reads,
    writes, moves, splits, projects) and `repair` (common, graph, documents, cleanup, ailments). A switch a test turns is an attribute of a package's
@@ -463,6 +463,14 @@ reference `docs/ask.md`.
   the UI shows, `meta.parser` naming the parser. The frames are
   figures, read by the vision pass like any. A re-index keeps the
   chunks whose text did not change, and their vectors.
+- A recording's text is its transcript (the `transcribe` step,
+  `prax.ml.speech`, AQ stage 4): timed lines in the video's shape, so a
+  passage carries its moment. Only speech and singing are read for
+  words; music is one line with its length (`[1:10] (music, 2:14)`), a
+  sung line is marked `(sung)` and a doubtful one `(?)`
+  (`prax.text.markup`). What was heard is `meta.transcript`. A recording
+  is read on the host only, in a child process a batch, and on the card
+  only when it has room: never by a paid model or an API, as a face.
 - A face is a region of its picture, not of a text, so it is a row of
   the `faces` table (migration 53), not a chunk kind: a chunk is
   disposable and derived from the text (invariant 2), and a face's id

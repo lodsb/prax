@@ -46,6 +46,7 @@ _CORE_HOMES = {
     "geocode": "photos",
     "faces": "faces",
     "facevectors": "faces",
+    "transcribe": "recordings",
 }
 CORE_STEPS = tuple(_CORE_HOMES)
 STEPS = CORE_STEPS + tuple(_packs.step_homes())
@@ -87,6 +88,10 @@ WATCHED_STEPS = (
     # what each face looks like (2026-10-27, AT step 2): SFace's vector of
     # it on the worker's CPU, into the face index the door holds
     "facevectors",
+    # what a recording says (2026-11-17, AQ stage 4; the user, 2026-11-16:
+    # "all local only"): Whisper and an AudioSet tagger on the card, when
+    # it has room, the original read through the door
+    "transcribe",
 ) + _packs.watched()
 
 # the rest: named on the command line, and the paid ones want --spend

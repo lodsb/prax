@@ -453,6 +453,7 @@ class Stamp:
 # version changes (``select_for_extraction``).
 STAMPS: dict[str, Stamp] = {
     "photos": Stamp("photo", version="v"),
+    "transcribe": Stamp("transcript", version="v"),
     "faces": Stamp("faces", version="v"),
     "geocode": Stamp("place", version="v"),
     "worlddates": Stamp("world_dates", on_text=True),

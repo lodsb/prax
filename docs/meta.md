@@ -37,7 +37,7 @@ published, summary, titles). The step's own result and a new text
 (`index_text`) clear the mark.
 
 Which documents a step reads again is said once, in `store.STAMPS`: a
-step's record (`photo`, `faces`, `place`, `world_dates`, `sections`,
+step's record (`photo`, `transcript`, `faces`, `place`, `world_dates`, `sections`,
 `quality`, `markup`, `private`, or its `_tried` mark) and whether it
 carries the hash of the text it read (a new text is read again), the
 version of its reading (an older one is read again), or both. Three more
@@ -107,6 +107,7 @@ writer, and add its row here.
 | `private` | `dict[str, Any]` | the rules' cues for "personal?" (stage V) |
 | `sensitivity` | `dict[str, Any]` | a person's or a rule's decision: state, by, at; a group's decision adds run and before, the column and meta its undo puts back (`store.set_sensitivity`) |
 | `photo` | `dict[str, Any]` | v, by, at, camera, lens, gps, size, thumb, preview |
+| `transcript` | `dict[str, Any]` | v, by, at, duration, speech_s, sung_s, music_s, segments, doubtful, error: a recording's reading (the transcribe step) |
 | `taken` | `dict[str, Any]` | when it was taken: date, precision, by |
 | `place` | `dict[str, Any]` | v, by, at, name, region, country, cc, km, id; or none |
 | `faces` | `dict[str, Any]` | v, by, at, n, from, width, height |

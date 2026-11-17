@@ -307,6 +307,7 @@ KEYS: dict[str, frozenset[str]] = {
             "match.neighbours",
             "model",
         ),
+        "transcribe": ("device",),
         "events": (
             "burst_hours",
             "folder_share",

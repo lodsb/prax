@@ -141,6 +141,21 @@ class Door:
     def get_bytes(self, path: str) -> bytes:
         return self._check(self.client.get(path, headers=self.headers)).content
 
+    def download(self, path: str, dest: Path) -> int:
+        """A GET whose answer is a file, written to ``dest`` as it arrives
+        rather than held: a recording's original is gigabytes. Returns the
+        bytes written."""
+        written = 0
+        with self.client.stream("GET", path, headers=self.headers) as res:
+            if res.status_code >= 400:
+                res.read()
+                self._check(res)
+            with dest.open("wb") as out:
+                for chunk in res.iter_bytes(1 << 20):
+                    out.write(chunk)
+                    written += len(chunk)
+        return written
+
     def post_form(
         self,
         path: str,

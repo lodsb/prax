@@ -11971,3 +11971,49 @@ AK, the user's word: the abliterated 27B (`server-27b-u`) for
 everything. The host has served every step with it since 2026-10-03.
 The swap measurement between two models is dropped, because there is
 no second model.
+
+## 2026-11-17: AV planned, the server's key, and a recording's text (AQ stage 4)
+
+**AV.** The BWS Knowledge Graph project surveyed the music and audio
+part of the library over MCP and sent eleven findings. They were checked
+on the live store, read-only, before they went into the plan as AV. One
+edge does claim "uses wavetable synthesis" from "this technique is
+unrelated to wavetable synthesis", and it is stored twice. 11 live edges
+run from an entity to itself. 1,055 facts have more than one live edge.
+Some 54,000 live edges carry a single-number `ontology_version`.
+
+**The server's key.** A llama-server bound to a LAN address took its
+`--api-key` from `prax up`'s own environment (`os.environ`), never from
+`up.env`. A key kept only in `up.env` reached the worker and not the
+server, which came up open. `llama_argv` now reads what the children see
+(`roles.environment`). Found on 2026-11-16 while the 27B was lent to
+another machine through a temporary proxy outside prax.
+
+**AQ stage 4.** The `transcribe` step, watched, as the user chose on
+2026-11-16: every recording, read on this host only. The user warned
+that some recordings are singing and song ideas, which Whisper fills
+with invented words. So an AudioSet tagger (AST) first labels every 5 s
+as speech, singing, music, other or silence. Whisper large-v3-turbo
+reads only the spans of speech and singing, each on its own. A span of
+music is one line with its length. A sung line is marked `(sung)`, and
+a line whose mean log-probability is under −1 is marked `(?)`.
+
+Two things were found on the way. Whisper read whole stretched a
+sentence back over 20 s of music before it, which is why the spans are
+read apart. Whisper's scores belong to a 30 s window, so each segment is
+scored again with its words forced. The first version of that scored a
+clean sentence at −1.0: the words were tokenized without the space
+Whisper writes before the first one, and "This" alone cost −10.6 against
+−0.01 for " This". Scored with the space and the language token, the
+public test's six sentences are all sure.
+
+The worker would have kept torch and a CUDA context resident. Each
+batch now runs in a child process (`python -m prax.ml.speech`) that
+exits, and the card is asked through `nvidia-smi`. A pass runs only
+with 3,000 MB free: 1.8 GB peak was measured, and about 10 MB is held
+after the child exits. The public test, 55 s of speech, silence and
+synthetic music, took 7 s with the models loading.
+
+Not measured on the 621 recordings: the share was down. The time marks
+moved from `prax.text.chunking` into `prax.text.markup`, where every
+mark prax writes lives.

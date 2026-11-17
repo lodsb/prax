@@ -1897,11 +1897,19 @@ store read-only and print counts only.
       place_share: 0.6   # the share of a group's places that names it
       burst_hours: 3     # where the Review page offers a cut
       folder_share: 0.5  # a folder names a group holding more than this of it
+    transcribe:
+      device: cuda       # cuda (waits for 3 GB free), auto (else the CPU), cpu
 
 `faces.model` names one of `prax.ml.faces.RECOGNIZERS`; an unknown name
 is an error. Each model writes its own face index
 (`vectors-face-<model>.usearch`), so changing it means every face is read
 again into a new file and the line is measured again.
+
+`transcribe.device` says where the transcribe step reads a recording.
+With `cuda`, the default, a pass runs only when the card has
+`prax.ml.speech.NEED_MB` (3,000 MB) free, as `nvidia-smi` reports it,
+and otherwise waits for the next pass. `auto` reads on the CPU then, which
+is many times slower. `cpu` always reads there.
 
 Each setting can still be given as an environment variable for one
 run, and the variable wins: `PRAX_EMBED=hash pytest`, `PRAX_VEC_DTYPE=i8

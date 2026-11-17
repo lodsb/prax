@@ -16,6 +16,7 @@ import json
 import math
 import sqlite3
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -61,13 +62,37 @@ def photos_due(
     crawl) is looked at once and then passed over for ``UNREACHED_REST``
     seconds, so a run of them never hides the pictures after them (the
     review of 2026-10-28)."""
+    return reachable_due(
+        con,
+        "photos",
+        version,
+        kinds="mime LIKE 'image/%'",
+        keep=mimes.is_picture,
+        limit=limit,
+        skip=skip,
+    )
+
+
+def reachable_due(
+    con: sqlite3.Connection,
+    step: str,
+    version: int,
+    *,
+    kinds: str,
+    keep: Callable[[str], bool],
+    limit: int,
+    skip: frozenset[int],
+) -> list[int]:
+    """The documents of ``kinds`` (an SQL test of the row) that ``step``
+    reads at ``version`` and whose original this door reaches now, oldest
+    first (``photos_due`` says how); ``keep`` tests each one's mime."""
     roots = reachable_roots()
     out: list[int] = []
     clock = time.monotonic()
     rows = con.execute(
         "SELECT id, hash, mime, held FROM documents d"
-        f" WHERE mime LIKE 'image/%' AND {LIVE}"
-        f" AND {_due('photos')}"
+        f" WHERE ({kinds}) AND {LIVE}"
+        f" AND {_due(step)}"
         " AND (held = 1 OR EXISTS (SELECT 1 FROM places p WHERE p.sha256 = d.hash"
         "  AND p.gone IS NULL AND p.root IN (SELECT value FROM json_each(?))))"
         " ORDER BY id",
@@ -77,7 +102,7 @@ def photos_due(
         if len(out) >= limit:
             break
         doc = int(r["id"])
-        if doc in skip or not mimes.is_picture(r["mime"]):
+        if doc in skip or not keep(r["mime"] or ""):
             continue
         if not r["held"]:
             if _UNREACHED.get(doc, 0.0) > clock:

@@ -1628,7 +1628,17 @@ not done.
             Not as opinionated as a photo program: it is the wall's tool
             for media first. `GET /documents/suspected?referenced=true`
             is its list today.
-      - [ ] **Stage 4**, once the card runs: a transcription step.
+      - [ ] **Stage 4**: a transcription step. Built 2026-11-17
+            (`docs/media-by-reference.md`, "What stage 4 built"): the
+            watched `transcribe` step, an AudioSet tagger for speech,
+            singing and music, Whisper large-v3-turbo on each span of
+            words, music written as music, sung and doubtful lines
+            marked, a child process a batch, the card only when 3 GB are
+            free. Left: the first run on the share (down on 2026-11-17)
+            and its numbers (how much is speech, singing and music, how
+            many lines are doubtful, the time a recording), with the user
+            judging the text; the lines (`SUNG_LINE`, `DOUBTFUL`, …)
+            measured again on it.
 
 - [ ] (2026-10-20: a design study in `docs/biography.md`, five stages, two questions) **AR. A life in the library.** The user, 2026-10-20: a family
       tree, and with it personal photos, friends, their own projects,

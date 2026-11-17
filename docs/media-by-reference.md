@@ -224,10 +224,10 @@ PDFs held (the question at the end).
    the backup's `referenced` count; heal's `unreachable-originals`; the
    places on a document's page and in `get`. What was built differs from
    the sections above in four places, below.
-4. **A recording's text.** A transcription step (Whisper-class) reading
-   the original through the door. It needs the card, so it waits for the
-   new PSU. Until then a referenced recording is found by its title, its
-   path's words and its tags.
+4. (built 2026-11-17, below) **A recording's text.** A transcription
+   step (Whisper-class) reading the original through the door. Until it
+   has run, a referenced recording is found by its title and its path's
+   words.
 
 ## What stage 3 built (2026-10-23)
 
@@ -327,6 +327,74 @@ says "offline for now" with its places and a "try again" link, which
 asks the door again and draws the page afresh with its player or its
 picture once the share answers. Neither is drawn while it is offline,
 and a referenced picture's page does not suggest the vision model.
+
+## What stage 4 built (2026-11-17)
+
+**The transcribe step** (`prax.steps.recordings`, watched: the user,
+2026-11-16, "all local only"). The door hands out every recording, a
+document of an `audio/` or `video/` type, with no transcript of
+`speech.VERSION` whose original it reaches now (`store.transcripts_due`,
+built on the photos step's `store.reachable_due`). A recording with a
+text from elsewhere is passed over. At most `BATCH_MOST` (2) go in one
+batch, since one may take minutes.
+
+The worker downloads each original into a temporary file
+(`Door.download`, streamed: a phone's video is gigabytes). One child
+process then reads the batch's files and exits (`speech.read_files`,
+`python -m prax.ml.speech`). The resident worker therefore holds neither
+torch nor a CUDA context between batches. The child does three things
+(`prax.ml.speech`):
+
+1. ffmpeg decodes the sound to 16 kHz mono. The video is never decoded.
+2. An AudioSet tagger (AST, `speech.TAGGER`, pinned by revision) reads
+   it in windows of `WINDOW_S` (5 s). A window quieter than
+   `SILENT_DBFS` (−50 dBFS) is silence, with no model asked. Each other
+   window is one kind (`kind_of`): `sung` at a singing probability of
+   `SUNG_LINE` (0.3), else `speech` at `SPEECH_LINE` (0.4), else
+   `music` at `MUSIC_LINE` (0.4), else `other`. Singing is tested first,
+   because a song's words are also heard as speech. Neighbouring windows
+   of one kind make a span (`spans`). A run shorter than `MIN_SPAN_S`
+   between two runs of one kind joins them, except words between two
+   stretches of music.
+3. Whisper large-v3-turbo (`speech.WHISPER`, pinned) reads each span of
+   speech or singing on its own, in the language it hears the span open
+   in. Read whole, Whisper stretched a sentence back over the music
+   before it. Its own checks against invented text are on: a segment
+   with a log-probability under −1 or a gzip ratio over 1.35 is read
+   again at a higher temperature, and one with no speech is dropped.
+   Each kept segment is then scored again with its words forced, in its
+   own stretch of sound (`Local._score`), because Whisper's scores are a
+   30-second window's and not a segment's.
+
+The text is a `## Transcript` of timed lines (`prax.text.markup`). A
+line of words is `[0:42] words`. A sung one is `[1:10] (sung) words`. A
+segment whose mean log-probability is under `DOUBTFUL` (−1.0) ends with
+`(?)`. A span of music is one line with its length, `[2:05] (music,
+1:34)`, and no words. The door indexes the text as the document's text
+(`store.apply_transcript`, `text_source` `transcribe/<stamp>`), so the
+chunker gives each passage its moment. `meta.transcript` keeps `v`,
+`by`, `at`, the `duration`, the seconds of `speech_s`, `sung_s` and
+`music_s`, the number of `segments` and how many are `doubtful`. A
+recording in which nothing was heard gets the record and no text. A file
+ffmpeg cannot read is `meta.transcript.error` at that version
+(`store.transcript_failed`). A fetch that failed, or a child process that
+failed, is released and handed out again.
+
+**The card.** Both models take 1.8 GB at their peak (measured
+2026-11-17). A pass runs only when `nvidia-smi` reports `NEED_MB`
+(3,000 MB) free (`speech.device`). Otherwise it waits for the next pass.
+`transcribe.device` in `prax.yaml` changes that: `auto` reads on the CPU
+when the card is full, and `cpu` always does. The step is not a role of
+`prax up` and is not in the card plan: it takes what is free and never
+makes llama-server or marker give the card up.
+
+**Measured** on public test sound only: Windows text-to-speech, five
+seconds of silence and 20 s of synthetic music, 55 s in all, read in
+7 s with the models loading. Every word was right, the music was one
+line, and no segment was doubtful. The user's recordings were not read
+on 2026-11-17, because the share was down. Their transcripts are never
+read into a session with a paid model: the measurement on them is the
+numbers in `meta.transcript`, and the user judges the text.
 
 ## Questions for the user
 

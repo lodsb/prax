@@ -27,6 +27,56 @@ from __future__ import annotations
 
 import re
 
+# ----------------------------------------------------------------- time
+
+# a transcript's time marks: "[12:34] the words", "[1:02:34] ...", and a
+# frame's caption "12:34 — the words" (the brackets keep a paragraph that
+# happens to open with a clock time out of it). A video capture's
+# transcript writes them (`prax.parsers.video`), so does a recording's
+# (`prax.ml.speech`), and the chunker reads them into a chunk's locator
+TIME_PARA = re.compile(r"^\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\]\s")
+TIME_FIGURE = re.compile(r"^!\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\s*[—–-]\s")
+# what a recording's transcript says of a line beside its words
+SUNG = "(sung)"  # before the words: a song's, less sure than speech
+DOUBTFUL = "(?)"  # after them: the model was not sure of them
+MUSIC = re.compile(r"^\[[\d:]+\]\s\(music, (?P<len>(?:\d{1,2}:)?\d{1,2}:\d{2})\)$")
+
+
+def parse_time(mark: str) -> int:
+    """``"12:34"`` → 754, ``"1:02:34"`` → 3754."""
+    parts = [int(p) for p in mark.split(":")]
+    total = 0
+    for p in parts:
+        total = total * 60 + p
+    return total
+
+
+def format_time(seconds: float) -> str:
+    """754 → ``"12:34"``, 3754 → ``"1:02:34"``: the marks as the text has them."""
+    seconds = max(0, int(seconds))
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def spoken_line(
+    at: float, words: str, *, sung: bool = False, doubtful: bool = False
+) -> str:
+    """A timed line of a recording's words: ``[0:42] words``, marked
+    ``(sung)`` before them or ``(?)`` after them."""
+    text = " ".join(words.split())
+    if sung:
+        text = f"{SUNG} {text}"
+    if doubtful:
+        text = f"{text} {DOUBTFUL}"
+    return f"[{format_time(at)}] {text}"
+
+
+def music_line(at: float, seconds: float) -> str:
+    """A stretch of music, its words not written: ``[1:10] (music, 2:14)``."""
+    return f"[{format_time(at)}] (music, {format_time(round(seconds))})"
+
+
 # ----------------------------------------------------------------- pages
 
 # the line a parser puts after each page, 1-based, so the chunker can give
