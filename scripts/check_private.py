@@ -14,6 +14,12 @@ theirs to publish (the user, 2026-10-01). Nothing private lives in this
 file; it holds only patterns. Without a data directory it says so and
 lets the commit through: there is nothing to compare against.
 
+It also refuses a file the ignore rules name, whatever it holds: the
+owner's working notes (``docs/PLAN.md``, ``docs/log.md``) and the
+measurements on their library (``docs/eval/``, the library's eval sets
+in ``tests/eval/``) live on the host and in a private repository, and
+``git add -f`` would otherwise bring one back (the user, 2026-11-17).
+
     python scripts/check_private.py            # check what is staged
     python scripts/check_private.py --all      # check every tracked file
     python scripts/check_private.py --install  # write the pre-commit hook
@@ -142,6 +148,28 @@ def _tracked_lines() -> list[tuple[str, int, str]]:
     return out
 
 
+def ignored_files(*, staged: bool) -> list[str]:
+    """The files git holds although ``.gitignore`` names them: every such
+    tracked file, or only those the staged change adds or modifies."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "--cached", "--ignored", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    if not staged:
+        return tracked
+    changed = set(
+        subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    )
+    return [name for name in tracked if name in changed]
+
+
 def findings(
     lines: list[tuple[str, int, str]], values: dict[str, set[str]]
 ) -> list[tuple[str, int, str]]:
@@ -198,6 +226,12 @@ def main() -> int:
         hook.chmod(0o755)
         print(f"wrote {hook}")
         return 0
+    kept_out = ignored_files(staged=not a.all)
+    for name in kept_out:
+        print(f"{name}: named by .gitignore; it stays on the host")
+    if kept_out:
+        print(f"check_private: {len(kept_out)} ignored file(s) staged; commit refused.")
+        return 1
     data = Path(os.environ.get("PRAX_DATA_DIR") or "C:/prax-data")
     if not (data / "prax.yaml").exists():
         print(f"check_private: no prax.yaml in {data}; nothing to compare against")

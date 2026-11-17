@@ -357,7 +357,7 @@ keeps every chunk whose text did not change, with its vector; only the
 changed chunks are re-embedded. Vector drawings in a PDF are not images
 and are not found this way. `vision-pages` over the page covers those.
 
-Measured on an orchestral score (Cowell, doc 8605, 2026-09-14). Where
+Measured on an orchestral score (an orchestral score, 2026-09-14). Where
 OCR produced table-shaped garbage, the local model gave "a page of
 orchestral sheet music showing staves for Percussion, Trumpet, Horns
 I–II and III–IV, Trombones, and Tuba … *mf*, *cresc.*, *senza sord.*".
@@ -1785,8 +1785,8 @@ action:
 
 - `search` again with better words;
 - `read` on where a passage stopped (`read: [3]`), or a document a
-  result named (`read: doc 4080`). With words after either, it reads
-  the part of that document which holds them (`read: doc 4080
+  result named (`read: doc 123`). With words after either, it reads
+  the part of that document which holds them (`read: doc 123
   delay-free loops`). That is the only way into a long paper the graph
   pointed at, whose start is a title page;
 - `facts` of a passage's document;

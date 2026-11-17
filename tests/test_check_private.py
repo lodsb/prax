@@ -58,3 +58,23 @@ def test_it_finds_a_value_of_a_personal_document_and_names_no_value(
         ("e.md", 3, "email"),
     ]
     assert all("DE02" not in str(f) for f in found)  # the report holds no value
+
+
+def test_it_refuses_a_file_the_ignore_rules_name(
+    guard, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:  # type: ignore[no-untyped-def]
+    import subprocess
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    (tmp_path / ".gitignore").write_text("notes.md\n", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("the owner's plan\n", encoding="utf-8")
+    (tmp_path / "readme.md").write_text("public\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    git("add", ".gitignore", "readme.md")
+    assert guard.ignored_files(staged=True) == []
+    git("add", "-f", "notes.md")  # what the ignore rule alone lets through
+    assert guard.ignored_files(staged=True) == ["notes.md"]
+    assert guard.ignored_files(staged=False) == ["notes.md"]

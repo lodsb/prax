@@ -729,7 +729,13 @@ else. The two faces are vendored under `src/prax/ui/vendor/fonts/`
 ## Roadmap
 
 See `docs/PLAN.md` for what is next; `docs/log.md` is the record of what
-was done, with the reasoning and the measurements under each night. Work
+was done, with the reasoning and the measurements under each night.
+Both, `docs/eval/` and the library's eval sets in `tests/eval/` (all but
+the fixture's `queries.yaml`), are the owner's working notes: on the host
+and in a private repository whose working tree is this one (the local
+alias `git pn`), never in this public one (`.gitignore`, and
+`scripts/check_private.py` refuses one added with `-f`). Commit them with
+`git pn` beside the code's commit. Work
 one stage per session. Write tests before wiring the MCP layer.
 Reviewing code is two reviews: safety and correctness (the invariants,
 the wall, bugs) first, then quality with the project's skill
