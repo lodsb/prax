@@ -104,6 +104,11 @@ and its item 5 is items 1 and 2 below.
    of it planned under its section below. Its findings 1 and 2 come
    before AU step 2; the rest in any order, the hidden errors and the
    test suite's speed first.
+7. (the user, 2026-11-17) **AV, the BWS survey's items**, its hour items
+   and the evidence check first, after AQ stage 4. With them a bug
+   found 2026-11-16: a llama-server bound to a LAN address takes its
+   `--api-key` from `prax up`'s own environment, never from `up.env`, so
+   a key kept only there leaves the server open (`host.roles`).
 
 **Waiting on the user:**
 
@@ -627,6 +632,63 @@ they block, then by cost. Sizes are the review's.
       answers the objection.
 
 ## Stages
+
+- [ ] **AV. A second client's survey: the music and audio graph.** The
+      BWS Knowledge Graph project surveyed prax read-only over MCP on
+      2026-11-17 (about 140 searches, 46 entities walked, a sample of
+      1,481 edges); the user, the same day: "add this to the plan". Its
+      claims were checked on the live store that day: the "unrelated to
+      wavetable synthesis" edge is real (and stored twice), 11 live
+      self-loops, 1,055 facts with more than one live edge (about 3,450
+      extra), some 54,000 live edges with a single-number
+      `ontology_version` (`0` to `5`), about 355 with evidence shaped
+      like a contents line, 29,311 with no evidence (rules, typing,
+      schema.org: expected, and `why` should say so).
+      - [ ] **An hour each.** `store.link` refuses an edge from an
+            entity to itself, and a heal rule ends the 11. `traverse`
+            says `resolved_from` when the name it walked is not the one
+            asked (today "physical modelling" walks `physical modeling`
+            silently).
+      - [ ] **Evidence that supports its edge**, checked when an edge is
+            written and by a heal pass over the live graph: the quote is
+            in its chunk (read loosely, as quotes are matched elsewhere),
+            is not a contents or index line, reads as language rather
+            than OCR noise, and no negation around an end ("unrelated
+            to", "not", "unlike") is written as a positive relation.
+            Measured on a sample before it refuses anything.
+      - [ ] **The abbreviation tier** of resolution, from the
+            `acronyms` table the library already builds ("low-frequency
+            oscillator (LFO)"): `LFO`/`low frequency oscillator`,
+            `FDN`/`feedback delay network`. British and American
+            spelling (`equalisation`) and spacing in a product name
+            (`Carbon 2`/`Carbon2`) beside it. The kind-and-product trap
+            BWS met (its judge folded "chorus" the effect into Chorus the
+            device): kind-and-product pairs are not candidates.
+      - [ ] **Provenance a downstream reader needs**: a `licence` in
+            `meta` with where it was read (Crossref's `license`, arXiv's
+            OAI `<license>` following its 301 to `oaipmh.arxiv.org`, the
+            licence line the document prints), filterable in `search` and
+            `traverse`; a prompt version in an edge's `producer`; the
+            single-number `ontology_version`s explained or mapped.
+      - [ ] **Design, to decide first**: one edge per fact, a later run
+            adding a producer rather than an edge (touches invariant 8);
+            support counted by work across languages and copies (on AS's
+            `example_of`); splitting nodes that hold unrelated things
+            (`chorus` and the Chorus OS, `delay` and z⁻ᵏ) by region, then
+            a judge: the open polysemy question of
+            `docs/normalization.md`; a document's title minted as a tool
+            (`C4 Plug-In Manual`, a copyright line as a name).
+      - [ ] **The user's**: BWS's `music` and `sound` modules as a pack
+            (`has_parameter`, `affects`, `remedied_by`, …); the doubtful
+            copies (doc 10380, the BookZZ Roads, the course-server
+            Bilbao); the library's gaps in studio practice (loudness
+            standards, descriptor datasets, chord corpora).
+      - [ ] **Data fixes through the door**: doc 163's title (Massberg's
+            MSc report), Bitwig's documents linked to `Bitwig Studio`
+            (9941, 9942, 9946), the garbled docs 4650, 4626 and 14521;
+            the worlddates step over the studio documents; the label of
+            the part "Tuning Systems and Musical Intonation", which is the
+            music-theory shelf.
 
 - [x] (2026-11-13) **AU. A project's journal, its open questions, and a link that
       lasts.** The user, 2026-11-11: "yeah", after a proposal from the
