@@ -49,6 +49,7 @@ import yaml
 
 from prax import config
 from prax.text import evidence
+from prax.text.names import Spellings
 
 CORE = "core"
 # A domain filter's prefix for a module without the modules built on it
@@ -1264,6 +1265,19 @@ def evidence_cues() -> evidence.Cues:
         negations=tuple(str(w) for w in s.get("negations") or ()),
         topical=frozenset(str(r) for r in s.get("topical") or ()),
         commentary=tuple(str(w) for w in s.get("commentary") or ()),
+    )
+
+
+def spellings() -> Spellings:
+    """The lexicon's ``spelling`` section as ``prax.text.names`` takes it:
+    British forms keyed as American ones, for resolution's variant tier
+    (AV, 2026-11-17)."""
+    s = lexicon().section("spelling") or {}
+    endings = [(str(a), str(b)) for a, b in s.get("endings") or ()]
+    endings.sort(key=lambda pair: -len(pair[0]))
+    return Spellings(
+        words={str(k): str(v) for k, v in (s.get("words") or {}).items()},
+        endings=tuple(endings),
     )
 
 

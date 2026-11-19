@@ -7,7 +7,16 @@ nothing deleted; ``traverse`` follows the pointers):
   (case, punctuation, diacritics, whitespace, a trailing plural ``s``,
   name suffixes such as ``Jr``/``III``), or, for authors, where one name
   is an initials form of the other (``J. O. Smith`` and ``Julius O. Smith``).
-  These merge automatically.
+  These merge automatically. So do two spellings of one name
+  (``variant``: "equalisation" and "equalization" for a common name, the
+  lexicon's ``spelling``; "Carbon 2" and "Carbon2" for any).
+* **abbreviations**: an acronym and the phrase the library defines it as
+  ("LFO" and "low frequency oscillator", the ``acronyms`` table), in one
+  type, when that is what the acronym means in the library: its only
+  meaning, or one ``ABBREVIATION_DOMINANCE`` times better attested than the
+  next. The phrase survives and the acronym stays a label. An acronym
+  with a rival meaning is left alone ("GIS" is a geographic information
+  system and a generalized interval system).
 * **likely**: same type, close by embedding similarity of the names
   (``bge-small`` on short strings) but not equal after normalization. These
   go to an adjudicator, which by default merges nothing; ``ClaudeAdjudicator``
@@ -26,6 +35,7 @@ then the longer name (usually the fuller one).
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections import defaultdict
 from collections.abc import Iterable
@@ -56,6 +66,13 @@ LIKELY_TYPES = frozenset({"concept", "method", "tool", "dataset", "venue"})
 # adjudicator like a likely pair, never merged on the string alone.
 NEAR_TYPES = frozenset({"paper", "organization"})
 RESOLVE_TYPES = LIKELY_TYPES | NEAR_TYPES
+# how much better attested an acronym's meaning must be than its next one
+# to be the meaning (on 2026-11-18, 130 of the 236 acronym entities with a
+# rival meaning in the library were this sure; "PCM" 34 to 4, "GIS" 5 to 4)
+ABBREVIATION_DOMINANCE = 3
+# a name shaped like an acronym: one word, mostly capitals ("LFO", "FDN",
+# "fMRI"), 2 to 10 characters
+_ACRONYM = re.compile(r"^[A-Za-z][A-Za-z0-9&+-]{1,9}$")
 
 
 def initials_form(name: str) -> tuple[str, ...] | None:
@@ -74,7 +91,8 @@ class Candidate:
     keep_name: str
     drop_name: str
     type: str
-    tier: str  # sure | subtype | twins | likely | venue | edition
+    # sure | variant | abbreviation | subtype | twins | likely | venue | edition
+    tier: str
     score: float  # 1.0 for sure, cosine similarity for likely
 
 
@@ -89,6 +107,8 @@ class Plan:
     # linked ``part_of`` rather than merged
     venues: list[Candidate] = field(default_factory=list)
     editions: list[Candidate] = field(default_factory=list)
+    # an acronym and the phrase it stands for (keep: the phrase)
+    abbreviations: list[Candidate] = field(default_factory=list)
 
 
 SELF_KINDS = ontology.SELF_KINDS  # the store's own kinds: no subtype fold
@@ -170,6 +190,106 @@ def _equal_names(ents: list[Entity], taken: set[int]) -> list[Candidate]:
         for drop in members[1:]:
             out.append(_sure(members[0], drop, t))
             taken.add(drop["id"])
+    return out
+
+
+def _variants(
+    ents: list[Entity], taken: set[int], spellings: names.Spellings
+) -> list[Candidate]:
+    """Tier 1a': one name in two spellings within a type
+    (``names.variant``): a number written apart or together for any type,
+    and a British spelling for a common one. The best ranked survives. A
+    venue is left to its own tier, which reads a number as an edition."""
+    common = ontology.current().common_types
+    groups: dict[tuple[str, str], list[Entity]] = defaultdict(list)
+    for e in ents:
+        if e["id"] in taken or e["type"] in SELF_KINDS or e["type"] == "venue":
+            continue
+        key = normalize(e["name"], plural=e["type"] != "author")
+        respell = spellings if e["type"] in common else None
+        groups[(e["type"], names.variant(key, respell))].append(e)
+    out: list[Candidate] = []
+    for (t, _), members in groups.items():
+        if len(members) < 2:
+            continue
+        members.sort(key=_rank, reverse=True)
+        for drop in members[1:]:
+            out.append(_sure(members[0], drop, t, "variant"))
+            taken.add(drop["id"])
+    return out
+
+
+def is_acronym(name: str) -> bool:
+    """One word of mostly capitals, two at least: "LFO", "FDN", "fMRI"."""
+    if not _ACRONYM.match(name):
+        return False
+    letters = [c for c in name if c.isalpha()]
+    upper = sum(c.isupper() for c in letters)
+    return upper >= 2 and upper / len(letters) >= 0.6
+
+
+def meaning(senses: list[tuple[str, int]]) -> str | None:
+    """What an acronym means in the library, as a ``normalize`` key: the
+    phrase its definitions give (one phrase written several ways counted
+    together), when it has one meaning or one is
+    ``ABBREVIATION_DOMINANCE`` times the next; None when it is
+    ambiguous."""
+    counts: dict[str, int] = defaultdict(int)
+    for phrase, docs in senses:
+        counts[normalize(phrase)] += docs
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    if not ranked or not ranked[0][0]:
+        return None
+    if len(ranked) > 1 and ranked[0][1] < ABBREVIATION_DOMINANCE * ranked[1][1]:
+        return None
+    return ranked[0][0]
+
+
+def _abbreviates(etype: str) -> bool:
+    """A type whose names an acronym may stand for: not a person's, a
+    document's (a title), a venue's (its own tier) or the store's own."""
+    onto = ontology.current()
+    return not (
+        etype in SELF_KINDS
+        or etype == "venue"
+        or etype not in onto.types
+        or onto.is_a(etype, "person")
+        or onto.is_a(etype, "document")
+    )
+
+
+def _abbreviations(
+    ents: list[Entity], taken: set[int], acronyms: dict[str, list[tuple[str, int]]]
+) -> list[Candidate]:
+    """The abbreviation tier: an acronym entity and the entity of the same
+    type named by what it means in the library (``meaning``). The phrase
+    survives, as the full name does in the initials tier; the merge keeps
+    the acronym as a label, so a search for it still lands. One type
+    only: "chorus" the effect and Chorus the device are a kind and a
+    product, never one thing (the trap the BWS survey met)."""
+    by_key: dict[tuple[str, str], list[Entity]] = defaultdict(list)
+    for e in ents:
+        if e["id"] not in taken and _abbreviates(e["type"]):
+            by_key[(e["type"], normalize(e["name"]))].append(e)
+    out: list[Candidate] = []
+    for e in ents:
+        if e["id"] in taken or not is_acronym(e["name"]):
+            continue
+        if not _abbreviates(e["type"]):
+            continue
+        key = meaning(acronyms.get(e["name"].lower(), []))
+        if key is None:
+            continue
+        phrases = [
+            m
+            for m in by_key.get((e["type"], key), [])
+            if m["id"] not in taken and m["id"] != e["id"]
+        ]
+        if not phrases:
+            continue
+        phrases.sort(key=_rank, reverse=True)
+        out.append(_sure(phrases[0], e, e["type"], "abbreviation"))
+        taken.add(e["id"])
     return out
 
 
@@ -336,6 +456,7 @@ def plan(
     taken: set[int] = set()
     out = Plan()
     out.sure = _equal_names(ents, taken)
+    out.sure += _variants(ents, taken, ontology.spellings())
     onto = ontology.current()
     specific = [t.name for t in onto.types.values() if t.parent]
     specific = [t for t in specific if t in onto.common_types]
@@ -345,6 +466,7 @@ def plan(
         out.venues, out.editions = _venues(con, ents, taken)
     if etype is None or etype in TWIN_TYPES:
         out.twins = _twins(ents, taken)
+    out.abbreviations = _abbreviations(ents, taken, store.acronym_senses(con))
     if likely:
         out.likely = _likely(con, ents, etype, taken)
     return out
@@ -669,6 +791,7 @@ class Report:
     merged_twins: int = 0
     merged_subtypes: int = 0
     merged_venues: int = 0
+    merged_abbreviations: int = 0
     editions: int = 0  # an edition linked part_of its series
     declined: int = 0
     held: int = 0  # a yes whose merge waits for a person (``store.merge_risk``)
@@ -681,11 +804,12 @@ def apply(
     adjudicator: Adjudicator | None = None,
     twins: bool = False,
     subtypes: bool = False,
+    abbreviations: bool = False,
     run: str | None = None,
 ) -> Report:
-    """Merge every sure candidate, the concept/method twins and the
-    subtype folds when asked, and ask the adjudicator about the likely
-    ones. Idempotent: a re-run finds nothing left to merge."""
+    """Merge every sure candidate, the concept/method twins, the subtype
+    folds and the abbreviations when asked, and ask the adjudicator about
+    the likely ones. Idempotent: a re-run finds nothing left to merge."""
     report = Report()
     run = run or store.run_name("resolve")
     for c in p.sure:
@@ -725,6 +849,13 @@ def apply(
                 con, c.drop, c.keep, across_types=True, producer=PRODUCER, run=run
             )
             report.merged_twins += 1
+    if abbreviations:
+        for c in p.abbreviations:
+            try:
+                store.merge_entities(con, c.drop, c.keep, producer=PRODUCER, run=run)
+            except ValueError:
+                continue  # one side was merged by an earlier tier of the round
+            report.merged_abbreviations += 1
     if p.likely:
         _adjudicate(con, p.likely, adjudicator, run, report)
     return report

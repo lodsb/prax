@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass, field
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
 _PUNCT = re.compile(r"[^\w\s]")
@@ -36,6 +37,42 @@ def normalize(name: str, *, plural: bool = True) -> str:
 def words(name: str, *, plural: bool = True) -> list[str]:
     """``normalize``'s key as its words."""
     return [w for w in _SPACES.split(normalize(name, plural=plural)) if w]
+
+
+# ------------------------------------------------ one name in two spellings
+# "equalisation" and "equalization", "Carbon 2" and "Carbon2": normalizing
+# leaves them two keys, and nothing about them says two things (AV, the
+# BWS survey of 2026-11-17). The spellings are the lexicon's (``spelling``)
+# and are passed in; only a common name is respelled, since a proper
+# name's spelling is its owner's.
+
+_GLUED = re.compile(r"(?<=[a-z]) (?=\d)")
+
+
+@dataclass(frozen=True)
+class Spellings:
+    """British forms and the American ones they are keyed as: whole words
+    first, then a word's ending, the longest ending that fits."""
+
+    words: dict[str, str] = field(default_factory=dict)
+    endings: tuple[tuple[str, str], ...] = ()
+
+    def word(self, w: str) -> str:
+        if w in self.words:
+            return self.words[w]
+        for old, new in self.endings:
+            if w.endswith(old) and len(w) > len(old) + 1:
+                return w[: -len(old)] + new
+        return w
+
+
+def variant(key: str, spellings: Spellings | None = None) -> str:
+    """A ``normalize`` key with a letter and the number after it written
+    together ("carbon 2" -> "carbon2") and, given ``spellings``, each word
+    in its American form."""
+    if spellings is not None:
+        key = " ".join(spellings.word(w) for w in key.split(" "))
+    return _GLUED.sub("", key)
 
 
 # -------------------------------------------------- names written nearly alike

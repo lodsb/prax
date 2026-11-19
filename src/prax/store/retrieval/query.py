@@ -127,6 +127,22 @@ def acronym_expansions(
     ]
 
 
+def acronym_senses(
+    con: sqlite3.Connection, *, min_docs: int = ACRONYM_MIN_DOCS
+) -> dict[str, list[tuple[str, int]]]:
+    """Every acronym the library defines, with each phrase it is defined
+    as and in how many documents, best attested first: what entity
+    resolution's abbreviation tier weighs a meaning by."""
+    out: dict[str, list[tuple[str, int]]] = {}
+    for a, e, n in con.execute(
+        "SELECT acronym, expansion, docs FROM acronyms WHERE docs >= ?"
+        " ORDER BY acronym, docs DESC, expansion",
+        (min_docs,),
+    ):
+        out.setdefault(str(a), []).append((str(e), int(n)))
+    return out
+
+
 NAMED_AS = 2  # names an entity answers to, per query term
 
 

@@ -721,6 +721,7 @@ from .retrieval import (  # noqa: F401
     VEC_EXPAND,
     VEC_SEARCH_CAP,
     acronym_expansions,
+    acronym_senses,
     adopt_vectors,
     apply_face_vectors,
     cite_link,

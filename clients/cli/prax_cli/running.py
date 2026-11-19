@@ -1038,6 +1038,7 @@ def resolve(door: Door, a: Any) -> int:
         "type": a.type,
         "twins": a.twins,
         "subtypes": getattr(a, "subtypes", False),
+        "abbreviations": getattr(a, "abbreviations", False),
         "likely": not a.no_likely,
         "show": a.show,
     }
@@ -1053,10 +1054,11 @@ def resolve(door: Door, a: Any) -> int:
                 f"   {plan['sure']['count']} sure,"
                 f" {plan.get('subtypes', {}).get('count', 0)} subtypes,"
                 f" {plan['twins']['count']} twins,"
+                f" {plan.get('abbreviations', {}).get('count', 0)} abbreviations,"
                 f" {plan['likely']['count']} likely"
             )
         )
-        for tier in ("sure", "subtypes", "twins", "likely"):
+        for tier in ("sure", "subtypes", "twins", "abbreviations", "likely"):
             if tier not in plan:
                 continue
             for c in plan[tier]["examples"]:
@@ -1082,6 +1084,11 @@ def resolve(door: Door, a: Any) -> int:
                 "  --apply merges the sure ones"
                 + (" and the subtypes" if getattr(a, "subtypes", False) else "")
                 + (" and the twins" if a.twins else "")
+                + (
+                    " and the abbreviations"
+                    if getattr(a, "abbreviations", False)
+                    else ""
+                )
             )
         return 0
     return follow_job(door, r["job"], quiet=a.json, what="the resolution")

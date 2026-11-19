@@ -660,7 +660,22 @@ both.
     prax resolve                        # the plan: sure, twins, likely — nothing merged
     prax resolve --apply                # the sure merges, a job on the door
     prax resolve --apply --twins        # concept+method twins as well
+    prax resolve --apply --abbreviations  # an acronym into its phrase
     prax resolve --type author          # one entity type
+
+The sure tier also takes one name in two spellings within a type:
+"Carbon 2" and "Carbon2" for any type, and "equalisation" and
+"equalization" for a common name. The British forms are the
+lexicon's `spelling` section (`ontology/lexicon.yaml`); a proper name
+keeps its owner's spelling. The abbreviation tier folds an acronym
+into the entity of the same type named by the phrase the library
+defines it as ("LFO" into "low frequency oscillator", from the
+`acronyms` table). It does so only when that is the acronym's one
+meaning in your library, or three times better attested than the
+next (`resolution.ABBREVIATION_DOMINANCE`). The phrase survives and
+the acronym stays a label, so a search for it still lands. The
+nightly round (`schedule: resolve`) applies it with the twins and
+the subtypes.
 
 The likely tier is listed for you. Only an adjudicator merges it: the
 `adjudicate` step of the worker, whose model is `steps.adjudicate` in

@@ -61,10 +61,16 @@ def start_maintain(con: Any, only: list[str] | None) -> dict[str, Any]:
 
 
 def start_resolve(
-    con: Any, plan: Any = None, *, twins: bool = True, subtypes: bool = True
+    con: Any,
+    plan: Any = None,
+    *,
+    twins: bool = True,
+    subtypes: bool = True,
+    abbreviations: bool = True,
 ) -> int:
-    """A round of the safe tiers as a job: the sure merges, and the twins
-    and subtype folds when asked; the likely pairs stay a person's.
+    """A round of the safe tiers as a job: the sure merges, and the twins,
+    subtype folds and abbreviations when asked; the likely pairs stay a
+    person's.
 
     On the door's clock (``schedule: resolve``) as well as on request.
     Run by hand, the round was run too seldom: 205 sure merges, 59
@@ -83,15 +89,19 @@ def start_resolve(
         + len(plan.venues)
         + len(plan.editions)
         + (len(plan.subtypes) if subtypes else 0)
-        + (len(plan.twins) if twins else 0),
+        + (len(plan.twins) if twins else 0)
+        + (len(plan.abbreviations) if abbreviations else 0),
         note=f"{len(plan.sure)} sure" + (f", {len(plan.twins)} twins" if twins else ""),
     )
 
     def work(own: sqlite3.Connection, mine: store.Job) -> None:
-        rep = resolution.apply(own, plan, twins=twins, subtypes=subtypes)
+        rep = resolution.apply(
+            own, plan, twins=twins, subtypes=subtypes, abbreviations=abbreviations
+        )
         mine.note(
             f"done: merged {rep.merged_sure} sure,"
             f" {rep.merged_subtypes} subtypes, {rep.merged_twins} twins,"
+            f" {rep.merged_abbreviations} abbreviations,"
             f" {rep.merged_venues} venues; {rep.editions} editions linked;"
             f" {len(plan.likely)} likely left for a person"
         )
@@ -330,13 +340,23 @@ JOBS = (
     DoorJob(
         "resolve",
         "the safe merges: equal names in a type, a type and its subtype,"
-        " the concept/method twins; the likely pairs stay a person's",
+        " the concept/method twins, an acronym and its phrase;"
+        " the likely pairs stay a person's",
         clock=lambda con, o: start_resolve(
-            con, twins=o.get("twins", True), subtypes=o.get("subtypes", True)
+            con,
+            twins=o.get("twins", True),
+            subtypes=o.get("subtypes", True),
+            abbreviations=o.get("abbreviations", True),
         ),
         start={
             "path": "/graph/resolve",
-            "body": {"apply": True, "twins": True, "subtypes": True, "likely": False},
+            "body": {
+                "apply": True,
+                "twins": True,
+                "subtypes": True,
+                "abbreviations": True,
+                "likely": False,
+            },
         },
     ),
     DoorJob(

@@ -795,8 +795,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="merge entities that name the same thing",
         description=(
             "Entity resolution: sure candidates (the same name after"
-            " normalization, an initials form of one author) and concept/method"
-            " twins are merged with --apply; likely ones (close by name"
+            " normalization or in another spelling, an initials form of one"
+            " author), concept/method twins and an acronym with the phrase it"
+            " stands for are merged with --apply; likely ones (close by name"
             " embedding) are listed for you. Merges are pointers, nothing is"
             " deleted, and traverse follows them."
         ),
@@ -821,6 +822,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--twins",
         action="store_true",
         help="a concept into the method of the same name",
+    )
+    s.add_argument(
+        "--abbreviations",
+        action="store_true",
+        help="an acronym into the phrase the library defines it as (LFO, low"
+        " frequency oscillator), in one type, when that is its only or clearly"
+        " its best attested meaning",
     )
     s.add_argument(
         "--no-likely",

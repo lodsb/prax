@@ -478,3 +478,11 @@ evidence:
   # inferred from context)", "the text only says". Matched anywhere in the
   # quote, any case; a phrase of several words with any space between
   commentary: ["(note:", "[note:", "-> note:", "note: title", "the text says", "the text does not", "the text doesn't", "the text only", "the text mentions", "the text states", "the text refers", "the text implies", "text does not name", "text does not mention", "the prompt", "not explicitly", "explicitly stated", "explicitly mentioned", "explicitly given", "explicitly printed", "common knowledge", "inferred from", "is not in this text", "is not in the text", "rule says", "strict rule", "i cannot", "cannot confirm", "cannot be determined"]
+# one word in two spellings (AV, the BWS survey of 2026-11-17): the
+# British form and the American one it is keyed as, so "equalisation" and
+# "equalization" are one name to entity resolution (`names.variant`). Only
+# a common name is respelled; a proper name keeps its owner's spelling.
+# A whole word first, then the longest ending that fits
+spelling:
+  words: {colour: color, colours: colors, flavour: flavor, flavours: flavors, behaviour: behavior, behaviours: behaviors, harbour: harbor, labour: labor, neighbour: neighbor, honour: honor, humour: humor, favour: favor, vapour: vapor, rumour: rumor, odour: odor, armour: armor, licence: license, licences: licenses, defence: defense, offence: offense, grey: gray, aluminium: aluminum, programme: program, programmes: programs, mould: mold, plough: plow, tyre: tire, tyres: tires, sulphur: sulfur, artefact: artifact, artefacts: artifacts, catalogue: catalog, dialogue: dialog, analogue: analog, centre: center, centres: centers, metre: meter, metres: meters, litre: liter, fibre: fiber, fibres: fibers, theatre: theater, spectre: specter}
+  endings: [[isation, ization], [isations, izations], [ise, ize], [ised, ized], [ises, izes], [ising, izing], [iser, izer], [isers, izers], [yse, yze], [ysed, yzed], [yses, yzes], [ysing, yzing], [yser, yzer], [elling, eling], [elled, eled], [eller, eler], [ellers, elers]]

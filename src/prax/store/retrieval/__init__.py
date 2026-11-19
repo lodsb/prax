@@ -157,6 +157,7 @@ from .query import (  # noqa: F401
     _rare_terms,
     _sense_terms,
     acronym_expansions,
+    acronym_senses,
     expand_query,
     expand_query_senses,
     expanded_text,

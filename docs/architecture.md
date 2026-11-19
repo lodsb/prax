@@ -200,8 +200,9 @@ flowchart TD
    functional relation that cannot both hold in `edge_conflicts`.
 6. **Resolve**. `prax.graph.resolution` merges entities that name the same
    thing through `canonical_id`. Sure merges are by case, accents,
-   punctuation and author initials. Concept/method twins merge into
-   the method. Likely merges are by name embedding, and a Claude
+   punctuation, author initials and two spellings of one name. Concept/method twins merge into
+   the method, and an acronym into the phrase the library defines it
+   as. Likely merges are by name embedding, and a Claude
    adjudicator confirms them. Traversal, hubs and context walk
    canonical ids; edges keep the alias they were written with.
 7. **Pages**. A note on a document, a project thread or a topic
@@ -371,7 +372,7 @@ carries it on the page.
 | `prax.answering.surf` | ask as a loop: the tools (search, read, facts, walk, similar, drop) over the store's reads, the per-step grammar, the budgets, the event trail, the answer from what was kept | via store |
 | `prax.capture.routes` | the routes from a document for its page's "process…" dialog: the document's state (text stamp and length, a scan's signs, figures and equations with their readings, extraction, promote, the waiting reading) and the reading requests, the extraction request and the promote flag it can take, grouped, each with the model its step resolves to on this host and whether it is paid, whether it is available and whether it is requested already. Reads only; the buttons call the door | via store (reads) |
 | `prax.graph.review` | replay of the review queue against a newer ontology; the typing rules that recover what a model meant from its systematic misfits | via store |
-| `prax.graph.resolution` | entity merge candidates (normalized names, initials, the ontology's subtype folds, concept/method twins, name embeddings), adjudicators, apply through `merge_entities`; the design and what each tier is for: `docs/normalization.md` | via store |
+| `prax.graph.resolution` | entity merge candidates (normalized names and their spelling variants, initials, the ontology's subtype folds, concept/method twins, an acronym and its phrase, name embeddings), adjudicators, apply through `merge_entities`; the design and what each tier is for: `docs/normalization.md` | via store |
 | `prax.graph.vocabulary` | one name per thing, whatever language the document was in: which types may be folded across languages at all (the ontology's `naming:`), which names are not English (asked of the library — a name no English document uses — rather than of a rule per language), and the local model's answer, recorded as a label with its language, producer and run. The `vocabulary` step is its front; `store.name_in_english` merges, renames or hands a type clash to the review queue | via store |
 | `prax.graph.calibration` | whether a model's probability means what it says: P(yes) from the first token's alternatives, Platt's fit on a person's decisions | no |
 | `prax.graph.communities` | the regions of the library: a partition of the topical entities at two levels, named and described by the local model (`docs/communities.md`) | via store |

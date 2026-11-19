@@ -134,6 +134,7 @@ class ResolveReq(BaseModel):
     type: str | None = None  # one entity type
     twins: bool = False  # merge a concept into the method of the same name
     subtypes: bool = False  # merge a name's general type into its specific one
+    abbreviations: bool = False  # merge an acronym into the phrase it means
     likely: bool = True  # the likely tier: the pairs a worker left
     show: int = 40  # candidates per tier in the plan
 
@@ -146,11 +147,13 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     The tiers: sure (equal after normalization, an initials form of one
     author name), subtypes (one name under a type and its subtype — an
     author who is also a person, a paper that is also a document),
-    concept/method twins, venues (one series and edition under two names,
+    concept/method twins, abbreviations (an acronym and the phrase the
+    library defines it as, in one type, when that is its meaning here),
+    venues (one series and edition under two names,
     merged; an edition linked ``part_of`` its series), and likely ones
     (close by name embedding, computed by a worker through the resolve
     step and kept until decided). ``apply`` merges the sure ones and the
-    venues, links the editions, and the subtypes and twins
+    venues, links the editions, and the subtypes, twins and abbreviations
     when asked; the likely ones are a person's decision, or an
     adjudicator's, and stay in the plan. Merges are pointers
     (``entities.canonical_id``): nothing is deleted.
@@ -176,6 +179,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
             ("sure", plan.sure),
             ("subtypes", plan.subtypes),
             ("twins", plan.twins),
+            ("abbreviations", plan.abbreviations),
             ("venues", plan.venues),
             ("editions", plan.editions),
             ("likely", plan.likely),
@@ -184,5 +188,11 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     tiers["likely"]["computed"] = store.candidate_runs(con)
     if not req.apply:
         return {"plan": tiers, "applied": False}
-    job = passes.start_resolve(con, plan, twins=req.twins, subtypes=req.subtypes)
+    job = passes.start_resolve(
+        con,
+        plan,
+        twins=req.twins,
+        subtypes=req.subtypes,
+        abbreviations=req.abbreviations,
+    )
     return {"plan": tiers, "applied": True, "job": job}
