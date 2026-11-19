@@ -148,6 +148,7 @@ writer, and add its row here.
 | `published_tried` | `dict[str, Any]` | the dates step found no date |
 | `licence` | `dict[str, Any]` | under what licence it is offered: id (SPDX), by (`store.LICENCE_BY`), url, words, at, run |
 | `licence_read` | `dict[str, Any]` | the `licences` pass read this text for a licence line: text_hash, v |
+| `arxiv_record` | `dict[str, Any]` | arXiv's OAI record was read for its licence (`prax import citations --source arxiv`): at, found, licence |
 | `extraction` | `dict[str, Any]` | the last reading of the graph, its stamp |
 | `extraction_history` | `list[dict[str, Any]]` | earlier readings' stamps |
 | `extraction_stale` | `dict[str, Any]` | the text read is replaced, or asked again |

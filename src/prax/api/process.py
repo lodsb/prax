@@ -188,6 +188,39 @@ def put_genres(doc_id: int, req: GenresReq, request: Request) -> dict[str, Any]:
     )
 
 
+# --------------------------------------------------------------- licence
+
+
+class LicenceReq(BaseModel):
+    licence: str  # an SPDX id (CC-BY-4.0, MIT) or prax's LicenseRef-…
+    url: str | None = None  # the deed when none is given and one is known
+    words: str | None = None  # where the person read it, in a line
+
+
+@router.put("/doc/{doc_id}/licence")
+def put_licence(doc_id: int, req: LicenceReq, request: Request) -> dict[str, Any]:
+    """A person's licence for a document (``store.set_licence``): over
+    any a source gave, which it keeps to put back when it is taken back."""
+    from prax.text import licences
+
+    con = _con(request)
+    store.get_meta(con, doc_id)  # NotFound for a missing document
+    got = licences.given(req.licence)
+    licence = store.set_licence(
+        con, doc_id, got.id, by="human", url=req.url or got.url, words=req.words
+    )
+    return {"licence": licence}
+
+
+@router.delete("/doc/{doc_id}/licence")
+def delete_licence(doc_id: int, request: Request) -> dict[str, Any]:
+    """A person's licence taken back (``store.clear_licence``): the
+    source's it replaced, or none, and the text read for one again."""
+    con = _con(request)
+    store.get_meta(con, doc_id)
+    return {"licence": store.clear_licence(con, doc_id)}
+
+
 # --------------------------------------------------------------- promote
 
 

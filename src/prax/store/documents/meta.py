@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from prax.graph import ontology
-from prax.text import dates, language, licences, mimes
+from prax.text import arxiv, dates, language, licences, mimes
 
 from ..base import (
     ASIDE_KINDS,
@@ -367,10 +367,60 @@ def set_licence(
     for key, value in (("url", url), ("words", words), ("run", run)):
         if value:
             entry[key] = str(value)
+    # a person's word keeps the source's it overrides, so taking it back
+    # (``clear_licence``) puts that back rather than nothing
+    source = held.get("replaced") if held.get("by") == "human" else held
+    if by == "human" and source:
+        entry["replaced"] = dict(source)
     meta["licence"] = entry
     _put_meta(con, doc_id, meta)
     con.commit()
     return entry
+
+
+@_serialized
+def clear_licence(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
+    """A person's licence taken back: the source's it replaced held again,
+    or none, and the text read again by the next ``licences`` pass
+    (``meta.licence_read`` dropped). A source's licence is not a person's
+    to clear; it stays. Returns what is held after."""
+    meta = get_meta(con, doc_id)
+    held = meta.get("licence") or {}
+    if held.get("by") != "human":
+        return dict(held) or None
+    if replaced := held.get("replaced"):
+        meta["licence"] = dict(replaced)
+    else:
+        meta.pop("licence", None)
+    meta.pop("licence_read", None)
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return meta.get("licence")
+
+
+@_reading
+def arxiv_documents(
+    con: sqlite3.Connection, *, refresh: bool = False, limit: int | None = None
+) -> list[tuple[int, str]]:
+    """The live documents with an arXiv id (``meta.arxiv``) whose record at
+    arXiv was not read yet (``meta.arxiv_record``), or every one with
+    ``refresh``: (document, canonical id), oldest first. A document whose
+    licence a person or its own printed line gave is left out: arXiv's
+    record could not replace it."""
+    sql = (
+        "SELECT id, json_extract(meta, '$.arxiv') FROM documents"
+        f" WHERE {LIVE} AND json_extract(meta, '$.arxiv') IS NOT NULL"
+        " AND coalesce(json_extract(meta, '$.licence.by'), '')"
+        " NOT IN ('human', 'printed')"
+    )
+    if not refresh:
+        sql += " AND json_extract(meta, '$.arxiv_record') IS NULL"
+    out = [
+        (int(r[0]), got)
+        for r in con.execute(sql + " ORDER BY id")
+        if (got := arxiv.canonical(r[1]))
+    ]
+    return out[:limit] if limit else out
 
 
 @_reading

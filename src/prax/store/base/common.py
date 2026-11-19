@@ -203,6 +203,7 @@ class DocumentMeta(TypedDict, total=False):
     published_tried: dict[str, Any]  # the dates step found no date
     licence: dict[str, Any]  # id, by, url, words: under what licence
     licence_read: dict[str, Any]  # the licences pass read this text: text_hash, v
+    arxiv_record: dict[str, Any]  # arXiv's record read: at, found, licence
     extraction: dict[str, Any]  # the last reading of the graph, its stamp
     extraction_history: list[dict[str, Any]]  # earlier readings' stamps
     extraction_stale: dict[str, Any]  # the text read is replaced, or asked again

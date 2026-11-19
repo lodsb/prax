@@ -268,8 +268,9 @@ A hit also carries its document's licence when the document says one
 (`CC-BY`) or an id (`prax.text.licences.matches`). The same filter narrows
 `traverse` to the facts read from such documents (`store.scope_documents`).
 The licence is `meta.licence`, from the most trusted source that names one
-(`store.LICENCE_BY`: a person, the line the text prints about itself, the
-records; the `licences` pass, the citation import).
+(`store.LICENCE_BY`: a person, the line the text prints about itself,
+arXiv's record, the records; the `licences` pass, the citation import and
+its `arxiv` source, `PUT /doc/{id}/licence`).
 
 `traverse` walks the edges in force, or with `as_of` the edges prax held
 at that moment: written at or before it and not ended before it

@@ -1002,6 +1002,7 @@ function propertiesHtml(doc, levels) {
     ${cues ? `<p class="muted">what the rules found: ${cues}</p>` : ""}
     <p class="props-acts">${buttons} <span class="props-out muted"></span></p>
   </section>
+  ${licenceSection(m)}
   ${m.retired ? `<p class="error">retired on ${when(m.retired.at)}: ${esc(m.retired.reason || "")}</p>` : ""}
   <div class="dialog-actions"><button type="button" class="secondary props-close">Close</button></div>`;
 }
@@ -1074,6 +1075,31 @@ function publishedLabel(meta) {
     return `<span title="${esc(said + unsure)}">${esc(p.date)}${unsure ? "?" : ""}</span>`;
   }
   return meta && meta.date ? esc(String(meta.date)) : "";
+}
+
+// Under what licence a document is offered (meta.licence: id, url, by,
+// words), linked to its deed, with what said so on hover.
+const LICENCE_BY = { human: "set by hand", printed: "the line the document prints", arxiv: "arXiv's record", record: "its record (Zotero)", github: "its repository on GitHub", crossref: "Crossref", openalex: "OpenAlex" };
+function licenceLabel(meta) {
+  const l = (meta || {}).licence;
+  if (!l || !l.id) return "";
+  const said = `licence, as ${LICENCE_BY[l.by] || l.by || "?"} says` + (l.words ? `: “${l.words}”` : "");
+  const name = esc(l.id.replace(/^LicenseRef-/, ""));
+  return l.url && /^https?:\/\//.test(l.url)
+    ? `<a href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(said)}">${name}</a>`
+    : `<span title="${esc(said)}">${name}</span>`;
+}
+// The properties dialog's licence section: what is held, and a person's
+// own word over it (PUT /doc/{id}/licence), taken back with DELETE.
+function licenceSection(meta) {
+  const l = (meta || {}).licence || {};
+  const held = l.id ? `${licenceLabel(meta)} <span class="muted">(${l.by === "human" ? "set by you" : esc(LICENCE_BY[l.by] || l.by || "?")})</span>` : "none known";
+  const back = l.by === "human" ? ` <button type="button" class="secondary" data-licence="clear">take back</button>` : "";
+  return `<section class="route-group"><h3>May it be reused</h3>
+    <p>${held}${l.by === "human" && l.replaced ? ` <span class="muted">over ${esc(l.replaced.id)} (${esc(LICENCE_BY[l.replaced.by] || l.replaced.by || "?")})</span>` : ""}</p>
+    <p class="props-acts"><input type="text" class="licence-in" placeholder="CC BY 4.0, MIT, or the terms' URL" aria-label="licence">
+      <button type="button" data-licence="set">set</button>${back} <span class="licence-out muted"></span></p>
+  </section>`;
 }
 
 // A document that is no longer current (a search hit's `stale`: state,
@@ -1344,5 +1370,5 @@ function pointerLinks(text) {
 const isPointer = (q) => /^prax:\S+$/.test(String(q || "").trim());
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { pointerRoute, pointerLinks, isPointer, moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureOrWord, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, forwardTo, publishedLabel, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, mediaKinds, mediaGroupRow, mediaCrumbs, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { pointerRoute, pointerLinks, isPointer, moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, pageWindow, pagerHtml, pictureSrc, pictureLine, galleryHtml, viewerStep, viewerHtml, pictureOrWord, pictureSetOf, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, forwardTo, publishedLabel, licenceLabel, licenceSection, staleNote, versionsLine, foldedVersions, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, versionRow, eventRow, eventDays, burstLabel, timelineRows, facesWords, faceBox, pictureFaceRow, faceCounts, faceTile, faceGroupRow, faceMatchRow, personValue, personChoices, personChoice, personEditHtml, peopleTable, personOther, personRelation, personHtml, nameDiff, pairRow, foreignRow, mediaKinds, mediaGroupRow, mediaCrumbs, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

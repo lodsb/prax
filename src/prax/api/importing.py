@@ -56,7 +56,7 @@ async def import_zotero_item(
 
 
 class CitationsReq(BaseModel):
-    source: str = "openalex"  # or crossref
+    source: str = "openalex"  # or crossref, or arxiv (its licence only)
     ids: list[int] | None = None
     limit: int | None = None
     resolve_titles: bool = False  # documents without a DOI too, by exact title
@@ -70,11 +70,15 @@ def import_citations(req: CitationsReq, request: Request) -> dict[str, Any]:
     .citations``): ``cites`` edges and citation counts for the documents
     not looked up yet, those with a DOI first. The door fetches — it has
     the DOIs and, with ``citations.mailto`` in prax.yaml, the polite pool.
-    A job; ``dry_run`` only counts."""
+    A job; ``dry_run`` only counts. ``arxiv`` reads arXiv's record of each
+    paper it holds for its licence (``prax.importers.arxiv``), at arXiv's
+    pace of one request every three seconds."""
     from prax.importers import citations
 
+    if req.source == "arxiv":
+        return _arxiv_licences(req, request)
     if req.source not in ("openalex", "crossref"):
-        raise HTTPException(400, "source must be openalex or crossref")
+        raise HTTPException(400, "source must be openalex, crossref or arxiv")
     con = _con(request)
     ids = req.ids or citations.candidates(
         con, limit=req.limit, refresh=req.refresh, doi_only=not req.resolve_titles
@@ -110,6 +114,43 @@ def import_citations(req: CitationsReq, request: Request) -> dict[str, Any]:
 
     passes.run_as_job(job, work)
     return {"selected": len(ids), "source": req.source, "dry_run": False, "job": job.id}
+
+
+def _arxiv_licences(req: CitationsReq, request: Request) -> dict[str, Any]:
+    """arXiv's licence of each paper held with an arXiv id
+    (``store.arxiv_documents``), as a job."""
+    from prax.importers import arxiv
+
+    con = _con(request)
+    docs = store.arxiv_documents(con, refresh=req.refresh, limit=req.limit)
+    if req.ids:
+        wanted = set(req.ids)
+        docs = [d for d in store.arxiv_documents(con, refresh=True) if d[0] in wanted]
+    if req.dry_run:
+        return {"selected": len(docs), "source": "arxiv", "dry_run": True}
+    job = store.Job(con, "citations", total=len(docs), note="arxiv")
+
+    def work(own: Any, mine: store.Job) -> None:
+        fetch = arxiv.HttpFetcher()
+        rep = arxiv.Report()
+        step = 10
+        for start in range(0, len(docs), step):
+            arxiv.import_licences(
+                own, docs[start : start + step], fetch=fetch, report=rep
+            )
+            mine.update(
+                done=min(start + step, len(docs)),
+                note=f"{rep.licensed} licensed of {rep.read} read,"
+                f" {len(rep.errors)} errors",
+            )
+        mine.note(
+            f"done: {rep.read} read at arXiv, {rep.licensed} with a licence,"
+            f" {rep.unknown} not found there, {len(rep.errors)} errors"
+            + (f"; first: {rep.errors[0]}" if rep.errors else "")
+        )
+
+    passes.run_as_job(job, work)
+    return {"selected": len(docs), "source": "arxiv", "dry_run": False, "job": job.id}
 
 
 class GitHubReq(BaseModel):

@@ -194,6 +194,21 @@ def from_name(words: str | None) -> Licence | None:
     return None
 
 
+def given(words: str) -> Licence:
+    """The licence a person wrote: a Creative Commons name or short form
+    ("CC BY 4.0"), its URL, or any other URL (a publisher's terms) read as
+    its id; anything else kept as written (an SPDX id: ``MIT``,
+    ``CC-BY-4.0``, ``LicenseRef-…``)."""
+    words = words.strip()
+    if re.fullmatch(r"[A-Za-z0-9.+-]+", words):
+        return Licence(words, deed(words))
+    if got := from_name(words):
+        return got
+    if words.lower().startswith(("http://", "https://")) and (got := from_url(words)):
+        return got
+    return Licence(words, deed(words))
+
+
 # a sentence that speaks of the document it stands in
 _ABOUT_ITSELF = re.compile(
     r"\b(?:this|the\s+present)\s+(?:work|article|paper|document|chapter|book"

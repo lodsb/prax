@@ -300,8 +300,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--token-github", metavar="TOKEN", help=argparse.SUPPRESS)
     s.add_argument(
         "--source",
-        choices=("openalex", "crossref"),
-        help="citations: where to look (default openalex)",
+        choices=("openalex", "crossref", "arxiv"),
+        help="citations: where to look (default openalex; arxiv: its licence only)",
     )
     s.add_argument("--ids", nargs="+", type=int, metavar="ID", help="citations: these")
     s.add_argument(

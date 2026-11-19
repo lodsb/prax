@@ -138,3 +138,84 @@ def test_the_citation_import_is_a_job(
         == 1
     )
     assert store.get_meta(con, plain).get("citations") is None
+
+
+ARXIV_RECORD = """<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/"><GetRecord><record>
+<metadata><arXiv xmlns="http://arxiv.org/OAI/arXiv/"><id>{id}</id>
+<title>A paper</title>{licence}</arXiv></metadata></record></GetRecord></OAI-PMH>"""
+ARXIV_MISSING = """<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/">
+<error code="idDoesNotExist">no such id</error></OAI-PMH>"""
+
+
+def test_arxiv_names_the_licence_of_its_copy(
+    door: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from prax.importers import arxiv
+
+    lic = "<license>http://creativecommons.org/licenses/by/4.0/</license>"
+    found, got = arxiv.licence_of(
+        ARXIV_RECORD.format(id="2501.00001", licence=lic).encode()
+    )
+    assert found and got is not None and got.id == "CC-BY-4.0"
+    assert arxiv.licence_of(ARXIV_RECORD.format(id="x", licence="").encode()) == (
+        True,
+        None,
+    )
+    assert arxiv.licence_of(ARXIV_MISSING.encode()) == (False, None)
+    assert "identifier=oai:arXiv.org:hep-th/9901001" in arxiv.record_url(
+        "hep-th/9901001"
+    )
+
+    con = door.app.state.con
+
+    def paper(name: str, ident: str) -> int:
+        doc = store.ingest_text(con, f"{name} words " * 30, title=name)["doc_id"]
+        store.set_meta(con, doc, {**store.get_meta(con, doc), "arxiv": ident})
+        return int(doc)
+
+    open_ = paper("Open", "2501.00001v2")
+    plain = paper("Plain", "2501.00002")
+    gone = paper("Gone", "2501.00003")
+    printed = paper("Printed", "2501.00004")
+    store.set_licence(con, printed, "CC-BY-SA-4.0", by="printed")
+    store.set_licence(con, plain, "CC-BY-NC-4.0", by="crossref")
+    dry = door.post("/import/citations", json={"source": "arxiv", "dry_run": True})
+    assert dry.json() == {"selected": 3, "source": "arxiv", "dry_run": True}
+
+    asked: list[str] = []
+    records = {
+        "2501.00001": ARXIV_RECORD.format(id="2501.00001", licence=lic),
+        "2501.00002": ARXIV_RECORD.format(
+            id="2501.00002",
+            licence="<license>http://arxiv.org/licenses/nonexclusive-distrib/1.0/</license>",
+        ),
+        "2501.00003": ARXIV_MISSING,
+    }
+
+    class Fake:
+        calls = 0
+
+        def __init__(self, **_: Any) -> None:
+            pass
+
+        def __call__(self, url: str) -> bytes:
+            ident = url.rsplit("oai:arXiv.org:", 1)[1].split("&", 1)[0]
+            asked.append(ident)
+            return records[ident].encode()
+
+    monkeypatch.setattr(arxiv, "HttpFetcher", Fake)
+    started = door.post("/import/citations", json={"source": "arxiv"}).json()
+    row = wait_job(door, started["job"])
+    assert row["status"] == "done" and "2 with a licence" in row["note"], row
+    assert sorted(asked) == ["2501.00001", "2501.00002", "2501.00003"]
+    assert store.get_meta(con, open_)["licence"]["by"] == "arxiv"
+    # arXiv's record speaks of its copy: over Crossref's, never over the text's
+    assert store.get_meta(con, plain)["licence"]["id"] == arxiv.licences.ARXIV
+    assert store.get_meta(con, printed)["licence"]["by"] == "printed"
+    assert store.get_meta(con, gone)["arxiv_record"]["found"] is False
+    assert "licence" not in store.get_meta(con, gone)
+    # read once: none is due again, unless refreshed
+    again = door.post("/import/citations", json={"source": "arxiv", "dry_run": True})
+    assert again.json()["selected"] == 0

@@ -212,6 +212,8 @@ function metaLine(meta, doc) {
   if (when) bits.push(when);
   const versions = versionsLine(doc.versions, doc.id);
   if (versions) bits.push(versions);
+  const licence = licenceLabel(meta);
+  if (licence) bits.push(licence);
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
@@ -1131,6 +1133,23 @@ async function openProperties(id) {
 }
 PROPS.addEventListener("click", async (e) => {
   if (e.target.closest(".props-close")) { PROPS.close(); return; }
+  const lic = e.target.closest("button[data-licence]");
+  if (lic && propsDoc) {
+    const out = PROPS.querySelector(".licence-out");
+    const given = (PROPS.querySelector(".licence-in") || {}).value || "";
+    if (lic.dataset.licence === "set" && !given.trim()) { if (out) out.textContent = "write a licence first"; return; }
+    lic.disabled = true;
+    try {
+      if (lic.dataset.licence === "set") await send("PUT", `/doc/${propsDoc.id}/licence`, { licence: given.trim() });
+      else await send("DELETE", `/doc/${propsDoc.id}/licence`);
+      propsTouched = true;
+      openProperties(propsDoc.id);
+    } catch (err) {
+      lic.disabled = false;
+      if (out) out.textContent = err.message;
+    }
+    return;
+  }
   const btn = e.target.closest("button[data-props]");
   if (!btn || !propsDoc) return;
   btn.disabled = true;

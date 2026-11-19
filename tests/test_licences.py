@@ -165,3 +165,46 @@ def test_the_bibliographic_records_name_their_licence() -> None:
     assert citations.crossref_licence([{"URL": "x", "content-version": "tdm"}]) is None
     assert citations.openalex_licence("cc-by-nc-sa").id == "CC-BY-NC-SA"  # type: ignore[union-attr]
     assert citations.openalex_licence("publisher-specific-oa") is None
+
+
+def test_a_person_sets_a_licence_and_takes_it_back(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from fastapi.testclient import TestClient
+
+    doc = store.ingest_text(con, "x " * 40, title="A paper")["doc_id"]
+    store.set_licence(con, doc, "CC-BY-NC-4.0", by="crossref")
+    # what a person writes is read as its id: a name, a short form, a URL
+    assert L.given("CC BY 4.0").id == "CC-BY-4.0"
+    assert L.given("MIT") == L.Licence("MIT", None)
+    assert L.given("https://www.elsevier.com/tdm/userlicense/1.0/").id == L.PUBLISHER
+    mine = store.set_licence(con, doc, "CC-BY-SA-4.0")
+    assert mine["replaced"]["id"] == "CC-BY-NC-4.0"
+    # a second word of the person's keeps the source's, not the first word
+    mine = store.set_licence(con, doc, "MIT")
+    assert mine["replaced"]["by"] == "crossref"
+    held = store.clear_licence(con, doc)
+    assert held is not None and held["id"] == "CC-BY-NC-4.0"
+    assert store.clear_licence(con, doc) == held  # a source's is not a person's
+    store.set_licence(con, doc, "MIT")
+    assert store.clear_licence(con, doc)["by"] == "crossref"
+
+    monkeypatch.setenv("PRAX_EMBED", "hash")
+    from prax.api import app
+
+    with TestClient(app) as client:
+        con2 = client.app.state.con
+        other = store.ingest_text(con2, "y " * 40, title="Another")["doc_id"]
+        r = client.put(f"/doc/{other}/licence", json={"licence": "CC BY-SA 4.0"})
+        assert r.status_code == 200 and r.json()["licence"]["id"] == "CC-BY-SA-4.0"
+        assert store.get_meta(con2, other)["licence"]["by"] == "human"
+        assert (
+            client.put(f"/doc/{other}/licence", json={"licence": " "}).status_code
+            == 400
+        )
+        assert (
+            client.put("/doc/999999/licence", json={"licence": "MIT"}).status_code
+            == 404
+        )
+        assert client.delete(f"/doc/{other}/licence").json() == {"licence": None}
+        assert "licence" not in store.get_meta(con2, other)

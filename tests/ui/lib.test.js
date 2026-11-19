@@ -890,3 +890,15 @@ test("a pointer link in a page opens what the pointer names now (AU step 3)", ()
   assert.ok(!lib.isPointer("prax: notes"));
   assert.ok(!lib.isPointer("what is prax:x"));
 });
+
+test("licenceLabel: the licence linked to its deed, and what said so", () => {
+  const meta = { licence: { id: "CC-BY-4.0", url: "https://creativecommons.org/licenses/by/4.0/", by: "printed", words: "Licensed under CC BY 4.0" } };
+  assert.equal(lib.licenceLabel(meta), '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener" title="licence, as the line the document prints says: “Licensed under CC BY 4.0”">CC-BY-4.0</a>');
+  assert.equal(lib.licenceLabel({ licence: { id: "LicenseRef-publisher", by: "crossref" } }), '<span title="licence, as Crossref says">publisher</span>');
+  assert.equal(lib.licenceLabel({}), "");
+  assert.match(lib.licenceSection({}), /none known/);
+  const mine = lib.licenceSection({ licence: { id: "MIT", by: "human", replaced: { id: "CC-BY-NC-4.0", by: "crossref" } } });
+  assert.match(mine, /set by you/);
+  assert.match(mine, /data-licence="clear"/);
+  assert.match(mine, /over CC-BY-NC-4\.0 \(Crossref\)/);
+});

@@ -1265,6 +1265,27 @@ The door fetches: it has the DOIs, and `citations.mailto` in prax.yaml
 for Crossref's polite pool. The job's note counts resolved documents,
 edges and requests as it goes.
 
+Both sources also name the work's licence when they know one, and the
+import keeps it as `meta.licence` (by `crossref` or `openalex`). A third
+source reads only that: `--source arxiv` asks arXiv's OAI-PMH record of
+every paper with an arXiv id (`meta.arxiv`) for the `<license>` its
+submitter chose (`prax.importers.arxiv`). It speaks of the copy arXiv
+serves, so it ranks above the bibliographic records and below the line
+the text prints about itself; a document a person or its own line gave
+a licence is not asked. arXiv wants one request every three seconds,
+so 300 papers take 15 minutes. Each document is stamped
+`meta.arxiv_record`, found or not, and asked again only with
+`--refresh`. Only the paper's id goes to arXiv.
+
+    prax import citations --source arxiv --dry-run         # how many would be asked
+    prax import citations --source arxiv                   # a job on the door
+
+A person's word is above every source: the document page's
+"properties…" dialog sets a licence ("CC BY 4.0", "MIT" or the terms'
+URL, read by `prax.text.licences.given`) with `PUT /doc/{id}/licence`.
+It keeps the source's licence it overrides, and "take back" (`DELETE`)
+puts that back.
+
 Four documents in five have no DOI for Crossref to answer, but their
 reference lists are in the parsed text. The `references` pass of `prax
 maintain` (3n) reads them by rules: the entries under a
