@@ -46,6 +46,14 @@ _TAIL_HEADING = re.compile(
 )
 TAIL_MARK = "\n\n[...]\n\n"
 MAX_TRIPLES = 20  # the models rarely need more; halves output tokens (docs/eval)
+# The version of the instructions a model is given (``system_prompt`` and
+# the line format): an extraction edge's producer names it after the model
+# (``store.prompted``: ``…@127.0.0.1:8080/prompt1``), so a reader can tell
+# readings under different instructions apart (AV, 2026-11-19). Bump it with
+# any change to what the prompt says; tests/test_prompt_versions.py holds the
+# fingerprint of each version and fails on a change made without a bump.
+# The ontology's part is its own version (``ontology_version``), not this.
+PROMPT_VERSION = 1
 CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 # What a small model writes for the document itself instead of its title.
 _SELF_NAMES = frozenset(
@@ -924,11 +932,17 @@ def apply(
     *,
     extractor: str,
     run: str | None = None,
+    prompt: int | None = None,
 ) -> ApplyReport:
     """Write an extraction: fitting triples become edges (once), misfits go
     to the review queue, the document gets ``meta.summary`` and the
     ``meta.extraction`` stamp. The ontology is the document's own subset
-    (its domains), and the stamp carries that subset's version."""
+    (its domains), and the stamp carries that subset's version.
+
+    ``prompt`` is the version of the instructions the model was given
+    (``PROMPT_VERSION`` where the worker built them): an edge's producer
+    names it after the model (``store.prompted``), and the stamp keeps it.
+    A re-reading supersedes the model's earlier one under any prompt."""
     onto = ontology.current().for_domains(store.document_domains(con, doc_id))
     cues = ontology.evidence_cues()
     report = ApplyReport()
@@ -1019,7 +1033,7 @@ def apply(
                     source_doc=doc_id,
                     ontology_version=onto.version,
                     evidence=t.evidence or None,
-                    producer=extractor,
+                    producer=store.prompted(extractor, prompt),
                     run=run,
                     world_from=checked_date(t.world_from, t.evidence),
                     world_to=checked_date(t.world_to, t.evidence, end=True),
@@ -1067,6 +1081,7 @@ def apply(
     stamp = {
         "extractor": extractor,
         "ontology_version": onto.version,
+        **({"prompt": prompt} if prompt is not None else {}),
         "run": run,
         "at": store.now(),
         "linked": report.linked,

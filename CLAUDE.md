@@ -151,7 +151,9 @@ revisit threshold, under "Decision thresholds" below.
 8. **Graph edges are evidence, not truth.** *(enforced)* Every edge carries
    `confidence` (EXTRACTED, INFERRED or AMBIGUOUS), `source_doc`,
    `ontology_version`, `producer` and `run` (which model, importer or
-   person wrote it, in which batch or pass), and two times. Record
+   person wrote it, in which batch or pass; a model's producer names the
+   version of its prompt after it, `/prompt1`, `extraction.PROMPT_VERSION`),
+   and two times. Record
    time is `valid_from` and `valid_to` (and `ingested_at`): when prax wrote the edge and
    when a later reading ended it (`store.held_at` says which edges were
    held at a moment; `traverse(as_of=)`; `store.changes` what was
@@ -219,7 +221,9 @@ revisit threshold, under "Decision thresholds" below.
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
    (`core8+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
-   `store.link` validates against and stamps on every edge. A document
+   `store.link` validates against and stamps on every edge. The plain
+   numbers of the single file before the modules ("0" to "5") were restated
+   as the research module's (migration 72). A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that
    subset and stamped with the subset's version (`core1+family1`).
@@ -605,6 +609,15 @@ reference `docs/ask.md`.
   and `ask`'s passages show it, and search and `documents` filter by it;
   an undated document is left out of a filtered search. It says when the
   document appeared, not when a fact in it holds (AL step 5 of the plan).
+- A document says under what licence it is offered: `meta.licence`, an
+  SPDX id (`CC-BY-4.0`) with its URL and where it was read (`by`), chosen
+  from the most trusted source that names one (`store.LICENCE_BY`): a
+  person, the line the text prints about itself in its head or tail
+  (`prax.text.licences.printed`, the `licences` pass of `prax maintain`),
+  arXiv's record, the document's own record, GitHub, Crossref and OpenAlex
+  (the citation import). A search hit carries it, and `licence=` (`open`,
+  `cc`, a family, an id) filters a search and narrows a walk to what a
+  reader may reuse.
 - What a web page says about itself in schema.org JSON-LD is read
   without a model (`prax.text.schemaorg`): its own work, never the site
   around it, and the full recipes it holds. The `markup` pass of `prax

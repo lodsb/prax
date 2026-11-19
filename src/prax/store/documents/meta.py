@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from prax.graph import ontology
-from prax.text import dates, language, mimes
+from prax.text import dates, language, licences, mimes
 
 from ..base import (
     ASIDE_KINDS,
@@ -277,6 +277,135 @@ def set_published(
     return dict(entry)
 
 
+# What says under what licence a document is offered, the most trusted
+# first (``prax.text.licences``; AV, 2026-11-19): a person; the line the
+# document prints about itself, which speaks of the very copy held; arXiv's
+# record of its own copy; the record the document came with (a Zotero
+# item's ``rights``); a repository's licence on GitHub; Crossref's and
+# OpenAlex's record, which speak of the publisher's version.
+LICENCE_BY = (
+    "human",
+    "printed",
+    "arxiv",
+    "record",
+    "github",
+    "crossref",
+    "openalex",
+)
+# the version of the reading of a text (``licences.printed``'s patterns):
+# a text read under an older one is read again (``STAMPS["licences"]``)
+LICENCE_VERSION = 1
+
+
+def _licence_rank(by: str | None) -> int:
+    return LICENCE_BY.index(by) if by in LICENCE_BY else len(LICENCE_BY)
+
+
+def licence_records(meta: dict[str, Any]) -> dict[str, licences.Licence]:
+    """The licences a document's own records name, by source: a Zotero
+    item's ``rights`` (``record``) and a repository's licence on GitHub
+    (``github``, an SPDX id already). What the text prints and what the
+    bibliographic sources say come by their own passes."""
+    out: dict[str, licences.Licence] = {}
+    rights = (meta.get("fields") or {}).get("rights")
+    if isinstance(rights, str) and (
+        got := licences.from_name(rights) or licences.from_url(rights)
+    ):
+        out["record"] = got
+    spdx = (meta.get("github") or {}).get("licence")
+    if isinstance(spdx, str) and spdx.strip():
+        out["github"] = licences.Licence(spdx.strip(), licences.deed(spdx.strip()))
+    return out
+
+
+def licence_entry(
+    meta: dict[str, Any], found: dict[str, licences.Licence]
+) -> dict[str, Any] | None:
+    """The ``meta.licence`` the most trusted of ``found`` makes, or None
+    when the one held stays: a person's always, a source's against a less
+    trusted one."""
+    held = meta.get("licence") or {}
+    best = min(found, key=_licence_rank, default=None)
+    if best is None or (held and _licence_rank(held.get("by")) <= _licence_rank(best)):
+        return None
+    got = found[best]
+    entry: dict[str, Any] = {"id": got.id, "by": best, "at": now()}
+    if got.url:
+        entry["url"] = got.url
+    if got.words:
+        entry["words"] = got.words
+    return entry
+
+
+@_serialized
+def set_licence(
+    con: sqlite3.Connection,
+    doc_id: int,
+    licence_id: str,
+    *,
+    by: str = "human",
+    url: str | None = None,
+    words: str | None = None,
+    run: str | None = None,
+) -> dict[str, Any]:
+    """The licence a person or a source gives a document (``meta.licence``):
+    an SPDX id (``CC-BY-4.0``, ``MIT``) or prax's own for arXiv's and a
+    publisher's terms (``prax.text.licences``), with the URL that names it
+    and the words that state it. A source never replaces a more trusted
+    one (``LICENCE_BY``); a person replaces any. Returns what is held."""
+    licence_id = licence_id.strip()
+    if not licence_id or len(licence_id) > 100:
+        raise ValueError(f"not a licence id: {licence_id!r}")
+    if by not in LICENCE_BY:
+        raise ValueError(f"by must be one of {LICENCE_BY}")
+    meta = get_meta(con, doc_id)
+    held = meta.get("licence") or {}
+    if held and by != "human" and _licence_rank(held.get("by")) < _licence_rank(by):
+        return dict(held)
+    entry: dict[str, Any] = {"id": licence_id, "by": by, "at": now()}
+    url = url or licences.deed(licence_id)
+    for key, value in (("url", url), ("words", words), ("run", run)):
+        if value:
+            entry[key] = str(value)
+    meta["licence"] = entry
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return entry
+
+
+@_reading
+def licensed_documents(con: sqlite3.Connection, wanted: str) -> frozenset[int]:
+    """The documents whose licence is what ``wanted`` asks for
+    (``licences.matches``: ``open``, ``cc``, ``any``, a family such as
+    ``CC-BY`` or an id); a document that says no licence is not one."""
+    return frozenset(
+        int(r[0])
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.licence.id') FROM documents"
+            " WHERE json_extract(meta, '$.licence.id') IS NOT NULL"
+        )
+        if licences.matches(str(r[1]), wanted)
+    )
+
+
+@_reading
+def licences_of(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
+    """The licence id of each of these documents that says one."""
+    ids = list(set(doc_ids))
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    return {
+        int(r[0]): str(r[1])
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.licence.id') FROM documents"
+            f" WHERE id IN ({marks})"
+            " AND json_extract(meta, '$.licence.id') IS NOT NULL",
+            ids,
+        )
+    }
+
+
 @_reading
 def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
     """Documents with a text that say nothing of when they were published,
@@ -462,6 +591,8 @@ STAMPS: dict[str, Stamp] = {
     **{step: Stamp(f"{step}_tried", tried=True) for step in TRIED_STEPS},
     "markup": Stamp("markup", on_original="hash"),
     "private": Stamp("private", exact="rules", read_mark="read"),
+    # the line a text prints about its licence: read once a text and a version
+    "licences": Stamp("licence_read", on_text=True, version="v"),
 }
 
 

@@ -16,7 +16,7 @@ from prax import config
 from prax.graph import ontology
 from prax.ml import embeddings
 from prax.ml import rerank as rerank_mod
-from prax.text import dates, status
+from prax.text import dates, licences, status
 
 from ..base import (
     SearchHit,
@@ -29,7 +29,7 @@ from ..base import (
     live,
     vectors_available,
 )
-from ..documents import DOCTYPES
+from ..documents import DOCTYPES, licences_of
 from .knobs import knobs
 from .legs import (
     CHUNK_KINDS,
@@ -84,6 +84,7 @@ def search(
     published_before: str | None = None,
     include_stale: bool = False,
     cite: bool = False,
+    licence: str | None = None,
 ) -> list[SearchHit]:
     """Search returning compact snippets + ids (agent-shaped), each hit a
     ``SearchHit``. ``timing``,
@@ -124,6 +125,13 @@ def search(
     preference, never a filter, as the domain prior. ``include_stale``
     keeps the order as it was.
 
+    A hit whose document says under what licence it is offered carries
+    ``licence``, its id (``meta.licence``: ``CC-BY-4.0``). ``licence``
+    keeps the documents under one: ``open`` (CC BY, CC BY-SA, CC0, the
+    public domain), ``cc`` (any Creative Commons), ``any``, a family
+    (``CC-BY``) or an id (``prax.text.licences.matches``). A document
+    that says no licence is left out of such a search.
+
     With ``cite``, a passage hit carries ``cite``: its link with words of
     it no other passage of the document holds (``cite_link``), the
     citation an agent pastes; within ``CITE_BUDGET`` a search.
@@ -148,6 +156,10 @@ def search(
     before = _published_bound(published_before, "published_before")
     if since or before:
         fetch *= 4
+    if licence is not None and not licence.strip():
+        raise ValueError("licence names nothing")
+    if licence:
+        fetch *= 4
     # the domain filter is kept inside the ranking, as a sense's domains
     # are: after it, with three times the hits drawn, a search of a small
     # domain came back short in most questions (computing, 1.3% of the
@@ -165,6 +177,13 @@ def search(
             and (not since or d >= since)
             and (not before or d < before)
         ]
+    licensed = licences_of(con, [h["doc_id"] for h in hits])
+    if licence:
+        hits = [
+            h
+            for h in hits
+            if (got := licensed.get(h["doc_id"])) and licences.matches(got, licence)
+        ]
     if reranker is not None and hits:
         with _Took(timing)("rerank"):
             hits = _apply_rerank(con, reranker, query, hits)
@@ -176,6 +195,8 @@ def search(
     hits = hits[:limit]
     for h in hits:
         h["published"] = stamped.get(h["doc_id"])
+        if h["doc_id"] in licensed:
+            h["licence"] = licensed[h["doc_id"]]
         if h["doc_id"] in stale:
             h["stale"] = stale[h["doc_id"]]
         if cite and h.get("chunk_id") is not None:

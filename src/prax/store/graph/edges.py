@@ -759,6 +759,34 @@ def _invalidate_edge(
 invalidate_edge = _serialized(_committing(_invalidate_edge))
 
 
+# A model's producer may name, after it, the version of the instructions it
+# was given (``qwen3@127.0.0.1:8080/prompt2``; AV, 2026-11-19). A model's
+# earlier readings are its own under any prompt: a re-reading supersedes
+# them, and retiring the model retires them all.
+PROMPT_MARK = "/prompt"
+_PROMPTED = re.compile(r"(?P<reader>.+)/prompt(?P<prompt>\d+)")
+# the producer itself, or it with a prompt's mark (":" sorts after "9")
+_SAME_READER = "(producer = ? OR (producer >= ? AND producer < ?))"
+
+
+def _reader_args(producer: str) -> tuple[str, str, str]:
+    reader = reader_of(producer)[0]
+    return (producer, f"{reader}{PROMPT_MARK}0", f"{reader}{PROMPT_MARK}:")
+
+
+def prompted(producer: str, prompt: int | None) -> str:
+    """The producer an edge is written under: the model's name, and the
+    version of its prompt after it when there is one."""
+    return producer if prompt is None else f"{producer}{PROMPT_MARK}{prompt}"
+
+
+def reader_of(producer: str) -> tuple[str, int | None]:
+    """A producer as the model's name and its prompt's version (None for a
+    producer that names none): the reverse of ``prompted``."""
+    m = _PROMPTED.fullmatch(producer)
+    return (m.group("reader"), int(m.group("prompt"))) if m else (producer, None)
+
+
 @_serialized
 def retire_reading(
     con: sqlite3.Connection,
@@ -780,9 +808,9 @@ def retire_reading(
     drop the extraction's misfits with nothing to put them back."""
     cur = con.execute(
         f"UPDATE edges SET valid_to = {_NOW} WHERE valid_to IS NULL"
-        " AND source_doc = ? AND producer = ?"
+        f" AND source_doc = ? AND {_SAME_READER}"
         " AND coalesce(ontology_version, '') != ?",
-        (doc_id, producer, except_version),
+        (doc_id, *_reader_args(producer), except_version),
     )
     # the earlier reading's open review items are superseded as well: the
     # new reading queues its own misfits against the ontology it was read
@@ -1054,8 +1082,8 @@ def retire_run(
     clauses = ["valid_to IS NULL"]
     args: list[Any] = []
     if producer is not None:
-        clauses.append("producer = ?")
-        args.append(producer)
+        clauses.append(_SAME_READER)
+        args.extend(_reader_args(producer))
     if run is not None:
         clauses.append("run = ?")
         args.append(run)

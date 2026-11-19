@@ -262,6 +262,15 @@ is left out of a filtered search. The date is `meta.published`, chosen
 by `store.published_of` from the most trusted source that gives one
 (section 7, the `published` pass and the `dates` step).
 
+A hit also carries its document's licence when the document says one
+(`licence`: an SPDX id, `CC-BY-4.0`), and `licence` filters by it:
+`open` (CC BY, CC BY-SA, CC0, the public domain), `cc`, `any`, a family
+(`CC-BY`) or an id (`prax.text.licences.matches`). The same filter narrows
+`traverse` to the facts read from such documents (`store.scope_documents`).
+The licence is `meta.licence`, from the most trusted source that names one
+(`store.LICENCE_BY`: a person, the line the text prints about itself, the
+records; the `licences` pass, the citation import).
+
 `traverse` walks the edges in force, or with `as_of` the edges prax held
 at that moment: written at or before it and not ended before it
 (`store.held_at`, the one place that builds the condition). That is
@@ -335,7 +344,7 @@ carries it on the page.
 | `store.jobs` | what runs, heartbeats, reaping, the change stamp | yes |
 | `store.summary` | `stats`: what the store holds, counted for `prax status` | reads |
 | `store.repair` | the damage that recurs (placeholder entities, mangled names, self-edges, stale jobs): `health` finds it, `heal` mends it through the store's own functions; a package of parts, in order: `common`, `graph`, `documents`, `cleanup`, `ailments` | yes |
-| `store.maintain` | the maintenance pass, what the store does to itself without a model or a decision: the passes named in `PASSES` (acronyms, fields, domains, dedupe, review, references, proposes, fts, lengths, languages, published, places, markup, quality, private, names, attachment, rules, conflicts, communities, histories) and those run only when named (`ON_REQUEST`: rechunk, rejudge, vectors); `prax maintain` runs it as a job, the clock every night | yes |
+| `store.maintain` | the maintenance pass, what the store does to itself without a model or a decision: the passes named in `PASSES` (acronyms, fields, domains, dedupe, review, references, proposes, fts, lengths, languages, published, licences, places, markup, quality, private, names, attachment, rules, conflicts, communities, histories) and those run only when named (`ON_REQUEST`: rechunk, rejudge, vectors); `prax maintain` runs it as a job, the clock every night | yes |
 | `store.backup` | a copy of the store somewhere else: the database as one snapshot, the index files, the archive files the copy lacks; `POST /backup` runs it as a job | no (reads; writes the copy) |
 | `prax.text.markup` | the marks prax puts in a text, written and matched in one place: the page mark, a figure line and its inlined form, a reading, a heading, a table separator, a display formula and its number, the `## Figures` and `## Comments` sections, a `[title](#doc/N)` link. Each is a writer *and* a matcher, and a test asserts that what one emits the other matches — before it existed the page mark was written in four places and matched by three copies of one pattern. Imports nothing of prax | no (pure) |
 | `prax.text.answers` | what a model wrapped its answer in, taken off: a fence, a preamble, a label the message used, quotes, a chat token. What a *good* answer looks like stays with the caller that asked; this is the packaging, and seven modules kept their own copy of it until 2026-09-24 | no (pure) |
@@ -589,6 +598,7 @@ Nothing here opens the database file.
 | typing step | untyped review items, a batch of 40 to a request | edges (`typing:<model>`), `review_queue` (dropped, or the model's types on a misfit) | only when named; a paid model is refused. The rules that run before it sign their work (`typing-rules/<rule>`), so a rule can be judged on its own edges — `docs/eval/typing-rules-2026-09-24.md` says what each is worth |
 | embed step | chunks without a vector from the current model, then document fields without one | the delta `.usearch` files, `chunk_embeddings`, `document_embeddings`; the door folds the delta in | dimension check; the door is never stopped |
 | `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes, the `cites` edges a reference list makes to the library (`references`), the `proposes` edge between a paper and the method named after it (`proposes`), the INFERRED edges of the ontology's rules (`rules`), the facts that cannot both hold (`conflicts`), where older edges' quotes stand (`places`), a page's schema.org facts (`markup`); `--rechunk` every chunk; the full list is `store.PASSES` | those tables; `meta.retired` on a duplicate; `cites` edges with `meta.references`; `edge_premises`, `edge_conflicts`, the evidence place of an edge | no model, no decision; nightly after the worker's pass |
+| `licences` pass (`prax maintain`) | texts not read for a licence under the current reading (`meta.licence_read`) | `meta.licence` from the line the text prints about itself and its records (`prax.text.licences`) | no model; a source never replaces a more trusted one, a person's licence never |
 | `published` pass (`prax maintain`) | documents without `meta.published`, or with one from a less trusted source | `meta.published` from the record, a page's citation tags, schema.org markup, the arXiv id, generic tags (`prax.text.dates`) | no model; a source never replaces a more trusted one, a person's date never |
 | dates step | undated documents no model has tried, newest first, 60 a batch | `meta.published` with `by: first-page`, the words that state it and a confidence | watched; kept only when the words are on the first page and hold the year (`writing.dates.checked`); an answer of none is recorded, an error is not |
 | worlddates step | documents whose text the step has not read (`meta.world_dates.text_hash` is not `text_hash`), newest first, 30 a batch | edges with `world_from`/`world_to` (producer `world-dates:<model>`), the undated edge ended with `edge_endings.corrected_by`, `meta.world_dates` | watched, and off until prax.yaml names a served model for it (it reads log probabilities, so an API model is refused); a document with no candidate sentence is stamped without a call; a fact is kept only when its quote is in a sentence handed out and holds the year |

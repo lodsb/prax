@@ -14,6 +14,7 @@ from ..base import (
     hidden_documents,
     personal_sql,
 )
+from ..documents import licensed_documents
 from ..retrieval import staleness
 from .pointers import page_links
 from .texts import (
@@ -259,14 +260,21 @@ def page_subtree(con: sqlite3.Connection, doc_id: int) -> list[int]:
 
 @_reading
 def scope_documents(
-    con: sqlite3.Connection, *, page: int | None = None, personal: str | None = None
+    con: sqlite3.Connection,
+    *,
+    page: int | None = None,
+    personal: str | None = None,
+    licence: str | None = None,
 ) -> frozenset[int] | None:
     """The documents a view of the graph is drawn from, or None for all of
     them. ``page``: that page, the pages under it in the tree of pages,
     and the documents they link (``[title](#doc/N)``); a project's page so
     gives its notes and the papers they cite. ``personal``: ``hide`` leaves
     out the documents marked or suspected personal, ``only`` keeps them
-    alone (``documents.sensitivity``). The two narrow each other."""
+    alone (``documents.sensitivity``). ``licence``: the documents offered
+    under one (``store.licensed_documents``: ``open``, ``cc``, ``any``, a
+    family or an id), so a walk keeps the facts a reader may reuse. They
+    narrow each other."""
     out: frozenset[int] | None = None
     if page is not None:
         docs: set[int] = set()
@@ -296,6 +304,9 @@ def scope_documents(
             )
     elif personal not in (None, "", "all"):
         raise ValueError(f"personal: hide, only or all, not {personal!r}")
+    if licence:
+        offered = licensed_documents(con, licence)
+        out = offered if out is None else out & offered
     return out
 
 

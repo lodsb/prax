@@ -123,6 +123,7 @@ def search(
     published_since: str | None = None,
     published_before: str | None = None,
     include_stale: bool = False,
+    licence: str | None = None,
 ) -> list[Any]:
     """The hits (``store.SearchHit``, or ``brief_hit``'s shape); with
     ``regions`` first, when most of the first hits' entities live in one
@@ -134,7 +135,9 @@ def search(
     published; ``published_since``/``published_before`` keep a span. A
     document no longer current carries ``stale`` and ranks lower, unless
     ``include_stale``. ``brief`` (an agent) adds each passage's ``cite``,
-    a link that survives a re-chunk."""
+    a link that survives a re-chunk. A hit says its document's ``licence``
+    when it says one; ``licence`` keeps those under one (``open``, ``cc``,
+    ``any``, a family such as ``CC-BY``, an id)."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
@@ -152,6 +155,7 @@ def search(
         published_before=published_before,
         include_stale=include_stale,
         cite=brief,  # the agent's shape carries the passage's link
+        licence=licence or None,
     )
     first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
     out: list[Any]

@@ -93,6 +93,7 @@ def traverse(
     world_at: str | None = None,
     page: int | None = None,
     personal: str | None = None,
+    licence: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: the edges, and what was left out.
 
@@ -103,11 +104,14 @@ def traverse(
     keeps what that module's documents say. ``as_of`` (a date or a UTC
     moment) walks the edges prax held then; ``world_at`` (a year, month
     or day) the facts that hold in the world then, and the undated ones.
-    ``page`` (a page's document id) and ``personal`` (hide, only) narrow
-    the walk to the documents ``store.scope_documents`` names.
+    ``page`` (a page's document id), ``personal`` (hide, only) and
+    ``licence`` (open, cc, any, a family such as CC-BY, an id) narrow the
+    walk to the documents ``store.scope_documents`` names.
     """
     con = _con(request)
-    within = store.scope_documents(con, page=page, personal=personal or None)
+    within = store.scope_documents(
+        con, page=page, personal=personal or None, licence=licence or None
+    )
     return store.traverse_map(
         _con(request),
         entity,

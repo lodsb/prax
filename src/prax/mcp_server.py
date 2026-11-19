@@ -90,6 +90,7 @@ def search(
     published_since: str | None = None,
     published_before: str | None = None,
     include_stale: bool | None = None,
+    licence: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search the knowledge base. Returns compact snippets + ids.
 
@@ -119,7 +120,10 @@ def search(
     ``include_stale=True`` to keep the plain order. Each passage hit has
     ``cite``, a link that survives a re-chunk (``#doc/N?chunk=M&find=…``,
     words the door chose): paste it as the citation, after the door's
-    address and ``/ui/``.
+    address and ``/ui/``. A hit whose document says under what licence it
+    is offered carries ``licence`` (``CC-BY-4.0``); ``licence`` keeps those
+    under one: ``open`` (reuse and change allowed, commercially too),
+    ``cc``, ``any``, a family (``CC-BY``) or an id.
     """
     params: dict[str, Any] = {
         "q": query,
@@ -136,6 +140,7 @@ def search(
         ("published_since", published_since),
         ("published_before", published_before),
         ("include_stale", include_stale),
+        ("licence", licence),
     ):
         if v is not None:
             params[k] = v
@@ -248,6 +253,7 @@ def traverse(
     domain: str | None = None,
     as_of: str | None = None,
     world_at: str | None = None,
+    licence: str | None = None,
 ) -> dict[str, Any]:
     """Expand the knowledge graph 1-2 hops from a named entity.
 
@@ -280,6 +286,9 @@ def traverse(
     ``world_at`` (``2019``, ``2019-07``) keeps the facts that hold in the
     world then, and the undated ones; ``world`` counts how many of the
     entity's facts were dated, since most are not.
+
+    ``licence`` (``open``, ``cc``, ``any``, ``CC-BY``…) keeps the facts read
+    from documents offered under one: what a reader may reuse.
     """
     params: dict[str, Any] = {"entity": entity, "hops": hops}
     if type:
@@ -290,6 +299,8 @@ def traverse(
         params["as_of"] = as_of
     if world_at:
         params["world_at"] = world_at
+    if licence:
+        params["licence"] = licence
     out = _guard(lambda: door().get_json("/traverse", params))
     return out if isinstance(out, dict) else {"error": str(out)}
 

@@ -41,7 +41,7 @@ from typing import Any
 from prax import config
 from prax.graph import ontology
 from prax.ml import clusters, embeddings
-from prax.text import acronyms, dates, language, quotes, schemaorg
+from prax.text import acronyms, dates, language, licences, quotes, schemaorg
 
 from .base import (
     LIVE,
@@ -56,6 +56,7 @@ from .base import (
 )
 from .documents import (
     HISTORY_KEEP,
+    LICENCE_VERSION,
     _due,
     _of_this_text,
     _put_meta,
@@ -64,6 +65,8 @@ from .documents import (
     dedupe_captures,
     fill_text_lengths,
     get_meta,
+    licence_entry,
+    licence_records,
     original_file,
     published_of,
     quality_record,
@@ -122,6 +125,7 @@ PASSES = (
     "lengths",
     "languages",
     "published",
+    "licences",
     "places",
     "markup",
     "quality",
@@ -666,6 +670,63 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"read": len(rows), "dated": sum(found.values()), "by": dict(found)}
 
 
+_SET_LICENCE_READ = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.licence_read', json(?)) WHERE id = ? AND text_hash = ?"
+)
+_SET_LICENCE = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.licence', json(?)) WHERE id = ?"
+    # what the pass read: a licence a person set while it ran stays theirs
+    " AND coalesce(json_extract(meta, '$.licence.by'), '') != 'human'"
+)
+
+
+def _licences(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """Under what licence every text not read for it yet is offered: the
+    line it prints about itself at its head or its tail
+    (``licences.printed``) and what its own records name (a Zotero item's
+    rights, a repository's licence on GitHub), the most trusted kept
+    (``store.LICENCE_BY``) in ``meta.licence``. Each text is read once a
+    version of the reading (``meta.licence_read``), so the nightly reads
+    only what arrived since; a text that changed while the pass read it is
+    left for the next."""
+    rows = con.execute(
+        "SELECT id, text_hash, meta FROM documents"
+        f" WHERE text_hash IS NOT NULL AND {LIVE}"
+        f" AND {_due('licences')} ORDER BY id",
+        (LICENCE_VERSION,),
+    ).fetchall()
+    found: Counter[str] = Counter()
+    read: list[tuple[Any, ...]] = []
+    kept: list[tuple[Any, ...]] = []
+    for n, r in enumerate(rows, 1):
+        try:
+            text = archive_path(r["text_hash"]).read_text(
+                encoding="utf-8", errors="replace"
+            )
+        except OSError:
+            continue
+        meta = meta_of(r["meta"])
+        said = licence_records(meta)
+        if printed := licences.printed(text):
+            said["printed"] = printed
+        entry = licence_entry(meta, said)
+        if entry is not None:
+            found[entry["by"]] += 1
+            kept.append((json.dumps(entry), r["id"]))
+        mark = {"text_hash": r["text_hash"], "v": LICENCE_VERSION, "at": now()}
+        read.append((json.dumps(mark), r["id"], r["text_hash"]))
+        if len(read) >= BATCH:
+            _write(con, _SET_LICENCE, kept)
+            _write(con, _SET_LICENCE_READ, read)
+            kept, read = [], []
+            job.update(done=n, total=len(rows), note=f"licences: {n} of {len(rows)}")
+    _write(con, _SET_LICENCE, kept)
+    _write(con, _SET_LICENCE_READ, read)
+    return {"read": len(rows), "licensed": sum(found.values()), "by": dict(found)}
+
+
 def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The checks of every text not checked yet, or checked under an older
     version of them or another text (``parsers.quality``, stage AO), kept
@@ -1078,6 +1139,7 @@ _RUN = {
     "lengths": _lengths,
     "languages": _languages,
     "published": _published,
+    "licences": _licences,
     "places": _places,
     "markup": _markup,
     "quality": _quality,

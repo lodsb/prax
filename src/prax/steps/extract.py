@@ -77,6 +77,10 @@ class Extract(Step):
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         extractor = str(t.payload.get("extractor") or t.worker)
+        # the version of the instructions the worker gave its model (a
+        # worker from before it was posted says none)
+        prompt = t.payload.get("prompt")
+        prompt = int(prompt) if isinstance(prompt, int) else None
         run = t.run("promote" if self.name == "promote" else "work")
         totals = extraction.ApplyReport()
         for r in t.results:
@@ -92,7 +96,9 @@ class Extract(Step):
             try:
                 ex = extraction_from(r["extraction"])
                 leases.note_spend(t.con, self.name, ex.usage, doc_id=doc_id, run=run)
-                rep = extraction.apply(t.con, doc_id, ex, extractor=extractor, run=run)
+                rep = extraction.apply(
+                    t.con, doc_id, ex, extractor=extractor, run=run, prompt=prompt
+                )
             except Exception as exc:  # noqa: BLE001 - one result must not stop the rest
                 t.out["errors"].append(
                     {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
@@ -134,6 +140,7 @@ class Extract(Step):
             {
                 "results": results,
                 "extractor": ext.name,
+                "prompt": extraction.PROMPT_VERSION,
                 "run": store.run_name(prefix),
             },
         )

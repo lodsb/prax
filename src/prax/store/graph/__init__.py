@@ -99,6 +99,7 @@ from .decisions import (  # noqa: F401
 )
 from .edges import (  # noqa: F401
     CONFIDENCE_LEVELS,
+    PROMPT_MARK,
     Edge,
     SelfLoop,
     Stated,
@@ -130,7 +131,9 @@ from .edges import (  # noqa: F401
     invalidate_edge,
     link,
     node_document,
+    prompted,
     provenance_summary,
+    reader_of,
     restore_run,
     retire_reading,
     retire_run,

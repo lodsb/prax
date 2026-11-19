@@ -38,11 +38,18 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from prax import config, store
+from prax.text import licences
 
 OPENALEX = "https://api.openalex.org"
 CROSSREF = "https://api.crossref.org"
 BATCH = 50  # OpenAlex ids per filter request
-OPENALEX_FIELDS = "id,title,doi,publication_year,cited_by_count,referenced_works"
+OPENALEX_FIELDS = (
+    "id,title,doi,publication_year,cited_by_count,referenced_works,primary_location"
+)
+# Crossref's licences of a work, the one that speaks of the version a reader
+# gets first: the version of record, then one that does not say, then the
+# accepted manuscript; a text-and-data-mining licence is not a reader's
+CROSSREF_VERSIONS = ("vor", "unspecified", "am")
 _DOI = re.compile(r"10\.\d{4,9}/\S+", re.IGNORECASE)
 
 Fetcher = Callable[[str], dict[str, Any]]
@@ -103,6 +110,31 @@ class HttpFetcher:
 # ---------------------------------------------------------------- sources
 
 
+def crossref_licence(items: list[dict[str, Any]]) -> licences.Licence | None:
+    """The licence of a Crossref record's ``license`` list that speaks of
+    what a reader gets (``CROSSREF_VERSIONS``), by its URL."""
+    for version in CROSSREF_VERSIONS:
+        for item in items:
+            if (item.get("content-version") or "unspecified") == version and (
+                got := licences.from_url(item.get("URL"))
+            ):
+                return got
+    return None
+
+
+def openalex_licence(value: str | None) -> licences.Licence | None:
+    """OpenAlex's short licence (``cc-by-nc``, ``cc0``, ``public-domain``)
+    as an id; its other words (``publisher-specific-oa``, ``other-oa``)
+    name no licence."""
+    if not value:
+        return None
+    if value == "public-domain":
+        return licences.Licence(licences.PUBLIC_DOMAIN)
+    if value.startswith("cc"):
+        return licences.from_name(value.replace("-", " ").upper())
+    return None
+
+
 @dataclass
 class Ref:
     doi: str | None
@@ -118,6 +150,8 @@ class Work:
     year: int | None
     cited_by_count: int | None
     references: list[Ref] = field(default_factory=list)
+    # under what licence the source says the work is offered
+    licence: licences.Licence | None = None
 
 
 class Source(Protocol):
@@ -149,6 +183,7 @@ class OpenAlexSource:
             w.get("publication_year"),
             w.get("cited_by_count"),
             refs,
+            openalex_licence((w.get("primary_location") or {}).get("license")),
         )
 
     def by_doi(self, doi: str) -> Work | None:
@@ -215,6 +250,7 @@ class CrossrefSource:
             year,
             m.get("is-referenced-by-count"),
             refs,
+            crossref_licence(m.get("license") or []),
         )
 
     def by_doi(self, doi: str) -> Work | None:
@@ -375,6 +411,15 @@ def _one(
         linked += 1
     rep.linked += linked
     rep.documents += 1
+    if work.licence is not None:
+        store.set_licence(
+            con,
+            doc_id,
+            work.licence.id,
+            by=source.name,
+            url=work.licence.url,
+            run=stamp["fetched_at"][:10],
+        )
     resolved = {
         **stamp,
         "resolved": True,

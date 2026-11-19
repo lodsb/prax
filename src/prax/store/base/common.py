@@ -84,6 +84,7 @@ class SearchHit(TypedDict, total=False):
     domain_rank: int  # its rank in the domain prior's vote
     rerank_score: float
     published: str | None  # ``meta.published``, as precise as its source
+    licence: str  # ``meta.licence``'s id, when the document says one
     stale: dict[str, Any]  # ``staleness``: the state, its date, the replacement
     versions: list[int]  # older versions of its work folded under it
     cite: str  # ``cite_link``, with ``cite=``
@@ -200,6 +201,8 @@ class DocumentMeta(TypedDict, total=False):
     sections: dict[str, Any]  # a long document's chapter summaries
     published: dict[str, Any]  # date, precision, by, words, confidence
     published_tried: dict[str, Any]  # the dates step found no date
+    licence: dict[str, Any]  # id, by, url, words: under what licence
+    licence_read: dict[str, Any]  # the licences pass read this text: text_hash, v
     extraction: dict[str, Any]  # the last reading of the graph, its stamp
     extraction_history: list[dict[str, Any]]  # earlier readings' stamps
     extraction_stale: dict[str, Any]  # the text read is replaced, or asked again
