@@ -116,3 +116,58 @@ def test_an_acronym_folds_into_its_phrase_and_stays_a_label(
     # and the round is taken back whole
     assert store.unmerge_run(con, "resolve-abbr") == 1
     assert len(resolution.plan(con, likely=False).abbreviations) == 1
+
+
+def test_an_acronym_of_rival_meanings_is_offered_to_a_person(
+    con: sqlite3.Connection,
+) -> None:
+    store.replace_acronyms(
+        con,
+        [
+            ("GIS", "geographic information system", 5),
+            ("GIS", "generalized interval system", 4),
+            ("GIS", "Generalized Interval Systems", 1),
+        ],
+    )
+    assert resolution.rival_meanings([("pulse code modulation", 34)]) == []
+    store.link(con, E("R", "paper", "about", "GIS", "concept"))
+    store.link(con, E("S", "paper", "about", "generalized interval system", "concept"))
+    store.link(
+        con, E("U", "paper", "about", "geographic information system", "concept")
+    )
+    # the same words as another type are not a meaning of this acronym
+    store.link(con, E("V", "paper", "uses", "GIS", "tool"))
+    plan = resolution.plan(con, likely=False)
+    assert plan.abbreviations == []
+    got = sorted((c.keep_name, c.drop_name, c.score) for c, _ in plan.rivals)
+    assert got == [
+        ("generalized interval system", "GIS", 0.5),
+        ("geographic information system", "GIS", 0.5),
+    ]
+    why = plan.rivals[0][1]
+    assert (
+        why.startswith("GIS has 2 meanings")
+        and "generalized interval system in 5" in why
+    )
+
+    report = resolution.apply(con, plan, abbreviations=True, run="resolve-rivals")
+    assert report.offered == 2 and report.merged_abbreviations == 0
+    page = store.candidates_page(con)
+    assert page["total"] == 2 and all(it["held"] == why for it in page["items"])
+    # out of every model's list, and kept when a worker computes the type again
+    assert store.entity_candidates(con, "concept") == []
+    store.replace_entity_candidates(con, "concept", [], producer="worker")
+    assert store.candidates_page(con)["total"] == 2
+    assert "concept" not in store.candidate_runs(con)
+    # offered once: the next round adds nothing
+    assert (
+        resolution.apply(
+            con, resolution.plan(con, likely=False), abbreviations=True
+        ).offered
+        == 0
+    )
+    # a person's answer settles it: different stays decided, never offered again
+    first = page["items"][0]
+    store.decide_pair(con, first["keep"]["id"], first["other"]["id"], same=False)
+    resolution.apply(con, resolution.plan(con, likely=False), abbreviations=True)
+    assert store.candidates_page(con)["total"] == 1

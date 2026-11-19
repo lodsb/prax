@@ -102,6 +102,7 @@ def start_resolve(
             f"done: merged {rep.merged_sure} sure,"
             f" {rep.merged_subtypes} subtypes, {rep.merged_twins} twins,"
             f" {rep.merged_abbreviations} abbreviations,"
+            f" {rep.offered} acronyms of rival meanings offered,"
             f" {rep.merged_venues} venues; {rep.editions} editions linked;"
             f" {len(plan.likely)} likely left for a person"
         )

@@ -472,9 +472,14 @@ function pairRow(it) {
   // the local model's calibrated probability, when it asked and left the pair
   const p = it.p_same == null ? "" : ` · model: ${Math.round(it.p_same * 100)}% same`;
   // a model said one thing, and the merge waits for a person: why
-  const held = it.held ? `<p class="decide-held">The model said these are one thing; the merge waits for you (${esc(it.held.replace(/^held: /, ""))}).</p>` : "";
+  // or a rule offered it: an acronym of rival meanings, the score that
+  // meaning's share of the library's definitions
+  const held = !it.held ? ""
+    : it.offered ? `<p class="decide-held">${esc(it.held)}. Is “${esc(o.name)}” this one?</p>`
+    : `<p class="decide-held">The model said these are one thing; the merge waits for you (${esc(it.held.replace(/^held: /, ""))}).</p>`;
+  const score = it.offered ? `${Math.round(it.score * 100)}% of its definitions` : `names ${it.score}`;
   return `<article class="decide-row${it.held ? " held" : ""}">${held}${nameDiff(k.name, o.name)}<div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
-    <div class="decide-acts"><span class="muted">${esc(it.type)} · names ${it.score}${p}</span>
+    <div class="decide-acts"><span class="muted">${esc(it.type)} · ${score}${p}</span>
       <button type="button" data-act="same" data-keep="${k.id}" data-other="${o.id}">same, keep “${esc(k.name)}”</button>
       <button type="button" class="secondary" data-act="same" data-keep="${o.id}" data-other="${k.id}">same, keep “${esc(o.name)}”</button>
       <button type="button" class="secondary" data-act="different" data-keep="${k.id}" data-other="${o.id}">different</button>

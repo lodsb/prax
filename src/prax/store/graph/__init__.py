@@ -75,6 +75,7 @@ from .context import (  # noqa: F401
 )
 from .decisions import (  # noqa: F401
     HUB_EDGES,
+    OFFERED,
     REVIEW_KEEP_DAYS,
     _review_where,
     candidate_runs,
@@ -87,6 +88,7 @@ from .decisions import (  # noqa: F401
     hold_candidate,
     list_review,
     merge_risk,
+    offer_candidates,
     queue_review,
     reopen_reviews,
     replace_entity_candidates,

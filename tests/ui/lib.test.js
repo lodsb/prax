@@ -902,3 +902,13 @@ test("licenceLabel: the licence linked to its deed, and what said so", () => {
   assert.match(mine, /data-licence="clear"/);
   assert.match(mine, /over CC-BY-NC-4\.0 \(Crossref\)/);
 });
+
+test("pairRow: an acronym of rival meanings is asked as a rule's question, not a model's yes", () => {
+  const side = (id, name, edges) => ({ id, name, type: "concept", edges, document: "A paper" });
+  const why = "GIS has 2 meanings in the library's documents: generalized interval system in 5, geographic information system in 5";
+  const row = lib.pairRow({ type: "concept", score: 0.5, held: why, offered: true, keep: side(1, "generalized interval system", 1), other: side(2, "GIS", 4) });
+  assert.match(row, /GIS has 2 meanings/);
+  assert.match(row, /Is “GIS” this one\?/);
+  assert.match(row, /50% of its definitions/);
+  assert.doesNotMatch(row, /The model said/);
+});

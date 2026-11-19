@@ -15,8 +15,10 @@ nothing deleted; ``traverse`` follows the pointers):
   type, when that is what the acronym means in the library: its only
   meaning, or one ``ABBREVIATION_DOMINANCE`` times better attested than the
   next. The phrase survives and the acronym stays a label. An acronym
-  with a rival meaning is left alone ("GIS" is a geographic information
-  system and a generalized interval system).
+  with a rival meaning is not merged ("GIS" is a geographic information
+  system and a generalized interval system): it is offered to a person
+  with each meaning that is an entity (``_rival_abbreviations``,
+  ``store.offer_candidates``), held at the head of the Review page.
 * **likely**: same type, close by embedding similarity of the names
   (``bge-small`` on short strings) but not equal after normalization. These
   go to an adjudicator, which by default merges nothing; ``ClaudeAdjudicator``
@@ -109,6 +111,9 @@ class Plan:
     editions: list[Candidate] = field(default_factory=list)
     # an acronym and the phrase it stands for (keep: the phrase)
     abbreviations: list[Candidate] = field(default_factory=list)
+    # an acronym of rival meanings and each meaning, with the reason: offered
+    # to a person, never merged (``_rival_abbreviations``)
+    rivals: list[tuple[Candidate, str]] = field(default_factory=list)
 
 
 SELF_KINDS = ontology.SELF_KINDS  # the store's own kinds: no subtype fold
@@ -293,6 +298,65 @@ def _abbreviations(
     return out
 
 
+RIVALS_SHOWN = 3  # meanings an offered pair's reason names, best attested first
+
+
+def rival_meanings(senses: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    """An ambiguous acronym's meanings as ``normalize`` keys with their
+    documents, best attested first (one phrase written several ways counted
+    together); empty when ``meaning`` settles it or there are none."""
+    if meaning(senses) is not None:
+        return []
+    counts: dict[str, int] = defaultdict(int)
+    for phrase, docs in senses:
+        if key := normalize(phrase):
+            counts[key] += docs
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def _rival_abbreviations(
+    ents: list[Entity], taken: set[int], acronyms: dict[str, list[tuple[str, int]]]
+) -> list[tuple[Candidate, str]]:
+    """The acronyms the abbreviation tier leaves alone because the library
+    gives them rival meanings ("GIS": a generalized interval system in 5
+    documents, a geographic information system in 4): each paired with
+    every meaning that is an entity of its type, for a person to decide.
+    The score is that meaning's share of the definitions; the reason
+    names the meanings and their counts. Never merged here."""
+    by_key: dict[tuple[str, str], list[Entity]] = defaultdict(list)
+    for e in ents:
+        if e["id"] not in taken and _abbreviates(e["type"]):
+            by_key[(e["type"], normalize(e["name"]))].append(e)
+    out: list[tuple[Candidate, str]] = []
+    for e in ents:
+        if e["id"] in taken or not is_acronym(e["name"]) or not _abbreviates(e["type"]):
+            continue
+        rivals = rival_meanings(acronyms.get(e["name"].lower(), []))
+        if len(rivals) < 2:
+            continue
+        total = sum(n for _, n in rivals)
+        said = ", ".join(f"{k} in {n}" for k, n in rivals[:RIVALS_SHOWN])
+        more = len(rivals) - RIVALS_SHOWN
+        why = (
+            f"{e['name']} has {len(rivals)} meanings in the library's documents:"
+            f" {said}" + (f" and {more} more" if more > 0 else "")
+        )
+        for key, n in rivals:
+            for m in by_key.get((e["type"], key), []):
+                if m["id"] != e["id"]:
+                    c = Candidate(
+                        m["id"],
+                        e["id"],
+                        m["name"],
+                        e["name"],
+                        e["type"],
+                        "abbreviation?",
+                        round(n / total, 4),
+                    )
+                    out.append((c, why))
+    return out
+
+
 def _subtypes(
     ents: list[Entity],
     taken: set[int],
@@ -466,7 +530,9 @@ def plan(
         out.venues, out.editions = _venues(con, ents, taken)
     if etype is None or etype in TWIN_TYPES:
         out.twins = _twins(ents, taken)
-    out.abbreviations = _abbreviations(ents, taken, store.acronym_senses(con))
+    senses = store.acronym_senses(con)
+    out.abbreviations = _abbreviations(ents, taken, senses)
+    out.rivals = _rival_abbreviations(ents, taken, senses)
     if likely:
         out.likely = _likely(con, ents, etype, taken)
     return out
@@ -792,6 +858,7 @@ class Report:
     merged_subtypes: int = 0
     merged_venues: int = 0
     merged_abbreviations: int = 0
+    offered: int = 0  # an acronym's rival meanings put to a person
     editions: int = 0  # an edition linked part_of its series
     declined: int = 0
     held: int = 0  # a yes whose merge waits for a person (``store.merge_risk``)
@@ -808,8 +875,10 @@ def apply(
     run: str | None = None,
 ) -> Report:
     """Merge every sure candidate, the concept/method twins, the subtype
-    folds and the abbreviations when asked, and ask the adjudicator about
-    the likely ones. Idempotent: a re-run finds nothing left to merge."""
+    folds and the abbreviations when asked (and offer an acronym's rival
+    meanings to a person, ``store.offer_candidates``), and ask the
+    adjudicator about the likely ones. Idempotent: a re-run finds nothing
+    left to merge or offer."""
     report = Report()
     run = run or store.run_name("resolve")
     for c in p.sure:
@@ -856,6 +925,10 @@ def apply(
             except ValueError:
                 continue  # one side was merged by an earlier tier of the round
             report.merged_abbreviations += 1
+        report.offered = store.offer_candidates(
+            con,
+            [(c.keep, c.drop, c.type, c.score, why) for c, why in p.rivals],
+        )
     if p.likely:
         _adjudicate(con, p.likely, adjudicator, run, report)
     return report

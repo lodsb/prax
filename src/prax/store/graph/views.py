@@ -24,6 +24,7 @@ from ..base import (
     live,
     rows_in,
 )
+from .decisions import OFFERED
 from .edges import doc_node_ids, held_in_world, visible_edges, with_aliases
 from .lookups import entity_answering, entity_named_in
 
@@ -396,7 +397,7 @@ def candidates_page(
     args: list[Any] = [etype] if etype else []
     total = con.execute("SELECT count(*)" + where, args).fetchone()[0]
     rows = con.execute(
-        "SELECT c.a, c.b, c.type, c.score, c.p_same, c.held"
+        "SELECT c.a, c.b, c.type, c.score, c.p_same, c.held, c.producer"
         + where
         + " ORDER BY c.held IS NULL, c.score DESC, c.a, c.b LIMIT ? OFFSET ?",
         [*args, max(1, min(limit, LIST_PAGE)), max(0, offset)],
@@ -406,8 +407,14 @@ def candidates_page(
     for r in rows:
         a, b = sides.get(r["a"]), sides.get(r["b"])
         if a and b:
-            # the one with more edges first: the one to keep, by default
-            first, second = (a, b) if a["edges"] >= b["edges"] else (b, a)
+            # the one with more edges first: the one to keep, by default;
+            # an offered acronym's phrase first, the name it would keep
+            offered = r["producer"] == OFFERED
+            if offered:
+                longer = len(a["name"]) >= len(b["name"])
+                first, second = (a, b) if longer else (b, a)
+            else:
+                first, second = (a, b) if a["edges"] >= b["edges"] else (b, a)
             items.append(
                 {
                     "type": r["type"],
@@ -418,6 +425,9 @@ def candidates_page(
                     # the adjudicator said one thing, and the merge waits
                     # for a person: why (``store.merge_risk``)
                     "held": r["held"],
+                    # offered for a person by a rule, not a model's yes: the
+                    # score is the meaning's share of the definitions
+                    "offered": offered,
                 }
             )
     by_type = dict(

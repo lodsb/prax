@@ -677,6 +677,17 @@ the acronym stays a label, so a search for it still lands. The
 nightly round (`schedule: resolve`) applies it with the twins and
 the subtypes.
 
+An acronym with rival meanings is not merged ("GIS" is a geographic
+information system in some of your documents and a generalized
+interval system in others). The same round offers it to you instead:
+for each meaning that is an entity of the acronym's type, a pair on the
+Review page's "same thing?" tab, held at the top. The pair shows the
+meanings and how many documents define each, and its score is that
+meaning's share. "Same" merges the pair as for any other, and
+"different" is kept, so the pair is not offered again
+(`store.offer_candidates`; a worker's new likely pairs do not replace
+these). On 2026-11-19 the library had 110 such pairs from 80 acronyms.
+
 The likely tier is listed for you. Only an adjudicator merges it: the
 `adjudicate` step of the worker, whose model is `steps.adjudicate` in
 `prax.yaml`. Both kinds of model get the same rule for what "the same

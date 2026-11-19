@@ -180,6 +180,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
             ("subtypes", plan.subtypes),
             ("twins", plan.twins),
             ("abbreviations", plan.abbreviations),
+            ("rival meanings", [c for c, _ in plan.rivals]),
             ("venues", plan.venues),
             ("editions", plan.editions),
             ("likely", plan.likely),

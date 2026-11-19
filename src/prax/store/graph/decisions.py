@@ -11,6 +11,12 @@ from prax.graph import ontology
 
 from ..base import _NOW, LIVE, NotFound, _reading, _serialized, hidden_documents
 
+# who offers a pair a person must decide, not a worker's computation: an
+# acronym with rival meanings and one of them (``resolution._rival_abbreviations``).
+# A worker's run of a type replaces its own pairs, never these, and these
+# do not say when a type was last computed.
+OFFERED = "abbreviation"
+
 
 @_serialized
 def replace_entity_candidates(
@@ -37,7 +43,9 @@ def replace_entity_candidates(
         if a != b and a in ids and b in ids:
             rows.append((a, b, etype, float(score), producer))
     con.execute(
-        "DELETE FROM entity_candidates WHERE type = ? AND decided IS NULL", (etype,)
+        "DELETE FROM entity_candidates WHERE type = ? AND decided IS NULL"
+        " AND producer != ?",
+        (etype, OFFERED),
     )
     con.executemany(
         "INSERT OR IGNORE INTO entity_candidates (a, b, type, score, producer, at)"
@@ -186,11 +194,43 @@ def hold_candidate(con: sqlite3.Connection, x: int, y: int, reason: str) -> bool
     return cur.rowcount > 0
 
 
+@_serialized
+def offer_candidates(
+    con: sqlite3.Connection, pairs: list[tuple[int, int, str, float, str]]
+) -> int:
+    """Pairs only a person decides: (entity, entity, type, score, why),
+    held at the head of the Review page's "same thing?" list with the
+    reason, out of every model's list. A pair decided before stays
+    decided; a worker's undecided pair is held with the reason. Returns
+    the pairs newly offered or held."""
+    before = con.total_changes
+    for x, y, etype, score, why in pairs:
+        a, b = (int(x), int(y)) if int(x) < int(y) else (int(y), int(x))
+        if a == b:
+            continue
+        con.execute(
+            "INSERT OR IGNORE INTO entity_candidates"
+            " (a, b, type, score, producer, at, held)"
+            f" VALUES (?, ?, ?, ?, ?, {_NOW}, ?)",
+            (a, b, etype, float(score), OFFERED, why),
+        )
+        con.execute(
+            "UPDATE entity_candidates SET held = ?"
+            " WHERE a = ? AND b = ? AND decided IS NULL AND held IS NULL",
+            (why, a, b),
+        )
+    n = con.total_changes - before
+    con.commit()
+    return n
+
+
 def candidate_runs(con: sqlite3.Connection) -> dict[str, str]:
     """When each type's likely pairs were last computed (its newest row's
-    stamp); a type with no pairs left has no entry."""
+    stamp, a worker's); a type with no pairs left has no entry."""
     rows = con.execute(
-        "SELECT type, max(at) AS at FROM entity_candidates GROUP BY type"
+        "SELECT type, max(at) AS at FROM entity_candidates WHERE producer != ?"
+        " GROUP BY type",
+        (OFFERED,),
     ).fetchall()
     return {str(r["type"]): str(r["at"]) for r in rows}
 
