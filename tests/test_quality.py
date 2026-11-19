@@ -305,3 +305,35 @@ def test_a_pdfs_profile_is_read_from_its_original_once(
     pipeline.assess(con, doc)
     assert len(profiled) == 2
     assert store.get_meta(con, doc)["profile"]["version"] == pdf.PROFILE_VERSION
+
+
+def test_a_text_layer_that_is_not_text_is_garbled() -> None:
+    plain = {**TYPED, "maths": 0}
+    # a font with no map to Unicode: replacement characters for its glyphs
+    lost = (
+        "\ufffd\ufffd\ufffd\ufffd \ufffd\ufffd\ufffd \ufffd\ufffd\ufffd\ufffd\ufffd\n"
+    )
+    text = "Analysis and Synthesis\n\n" + lost * 40
+    got = _checks(quality.check(text, stamp=LAYER, mime=PDF, profile=plain))
+    assert got["garbled"].fix == quality.Fix("marker", ocr=True)
+    assert got["garbled"].detail["unreadable"] > 0.5 and got["garbled"].evidence
+    # junk with a few lost glyphs and hardly a word in it
+    junk = "<>=@?BADCFE+=:GH<!IKJLJ VXWZQK<X<O[ ;tD~~I=t \ufffd Z~ \ufffd»p>;¥\n" * 30
+    assert "garbled" in _checks(
+        quality.check(junk, stamp=LAYER, mime=PDF, profile=plain)
+    )
+    # prose with a missing ligature here and there is not
+    prose = "The filter is stable and the e\ufffdect is small in practice.\n" * 30
+    assert "garbled" not in _checks(
+        quality.check(prose, stamp=LAYER, mime=PDF, profile=plain)
+    )
+    # a table of symbols has few words and nothing unreadable
+    symbols = r"- ⇙ \Swarrow - ⇘ \Searrow - ↔ \leftrightarrow - ↕ \updownarrow" "\n"
+    symbols *= 30
+    assert "garbled" not in _checks(
+        quality.check(symbols, stamp=LAYER, mime=PDF, profile=plain)
+    )
+    # marker's own reading of the pages is what it should be
+    assert "garbled" not in _checks(
+        quality.check(text, stamp="marker/2.0.0+fast-ocr", mime=PDF, profile=plain)
+    )

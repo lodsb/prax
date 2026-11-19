@@ -24,6 +24,9 @@ The checks, each from a fix a person asked for by hand on 2026-10-17:
 - ``bare-figures``: captions with no picture beside them (``fix``: the
   crops, unless they have just run);
 - ``short-text``: a text much shorter than the PDF's own text layer;
+- ``garbled``: a PDF's text layer read as characters that are not text,
+  a font without a map to Unicode (``fix``: marker reading every page
+  itself; AV, 2026-11-19);
 - ``leftovers``: what a reader left that is not text (a latex2html
   comment, ``*f**s*`` for a subscript, an HTML entity).
 
@@ -46,8 +49,9 @@ from . import figures
 # 2: a line with code is not a formula's debris; 3: the crops seen in the
 # history; 4: a slide's words over its background are no scan; 5: a fix is
 # a reading with its mode, not a word to decode, and a scan without a
-# text layer is a finding (the quality review of 2026-10-18)
-VERSION = 5
+# text layer is a finding (the quality review of 2026-10-18); 6: a garbled
+# text layer is one (AV, 2026-11-19)
+VERSION = 6
 EVIDENCE = 3  # pieces of the text a finding shows
 SNIPPET = 120  # characters of each
 
@@ -66,6 +70,15 @@ SCANNED = 0.5  # the share of profiled pages that makes a PDF a scan
 MATHS_PAGES = 2  # profiled pages in a maths font that make it a paper with formulas
 DEBRIS_LINES = 3  # lines of loose symbols that make its maths garbled
 SHORT = 0.5  # a text this much shorter a page than the PDF's layer is short
+# a text layer read as what is not text: this share of its characters a
+# replacement character, a control character or a private-use glyph, or
+# GARBLED_LOW with under WORDISH of its tokens shaped like words (a font
+# mapped to plain ASCII junk). On the library, 2026-11-19: of the PDFs read
+# from their layer, those under a tenth wordish were junk but for symbol
+# tables and dot leaders, which hold no unreadable characters
+GARBLED = 0.05
+GARBLED_LOW = 0.02
+WORDISH = 0.1
 
 # a line where the formulas were: mostly tokens of one or two characters,
 # some of them symbols a formula is made of
@@ -79,6 +92,13 @@ _BRACKET = re.compile(r"[()\[\]{}|/^]")
 _NOT_MATHS = re.compile(
     r"`[^`]*`|https?://\S+|\*\*|(?<!\S)[*_]|[*_](?!\S)|^(?:[-*>]|\d+[.)]?)\s+"
 )
+# a character a text layer holds where its font had no Unicode for a glyph
+_UNREADABLE = re.compile(r"[�\x00-\x08\x0b\x0c\x0e-\x1f-]")
+# a token shaped like a word: letters, perhaps in quotes or brackets, with a
+# vowel where it is Latin (a CJK or Greek word has none of these)
+_WORDISH = re.compile(r"^[(\"'“]*[^\W\d_]{2,}[)\"'”.,;:!?]*$")
+_VOWEL = re.compile(r"[aeiouyäöüàáâèéêìíîòóôùúûåæøœ]", re.IGNORECASE)
+_LATIN = re.compile(r"[A-Za-z]")
 # what one reader left in one document. Not the HTML pymupdf4llm writes
 # on purpose (<sup> for a footnote's mark and an exponent, <br> in a
 # table's cell and in a picture's text: 7,426 documents on 2026-10-18),
@@ -206,6 +226,36 @@ def debris_lines(lines: list[str]) -> list[str]:
     return out
 
 
+def garbled_share(lines: list[str]) -> tuple[float, float, list[str]]:
+    """Of a text's prose (not its figure lines, tables or page marks): the
+    share of its characters that are unreadable, the share of its tokens
+    shaped like words, and the lines richest in the unreadable ones."""
+    chars = bad = tokens = words = 0
+    worst: list[tuple[int, str]] = []
+    for line in lines:
+        s = line.strip()
+        if not s or s.startswith(("![", "|")) or markup.PAGE_MARK.match(s):
+            continue
+        dense = "".join(s.split())
+        n = len(_UNREADABLE.findall(dense))
+        chars += len(dense)
+        bad += n
+        if n:
+            worst.append((n, s))
+        for tok in s.split():
+            if len(tok) > 40 or tok.startswith(("http", "<")):
+                continue
+            tokens += 1
+            if _WORDISH.match(tok) and (_VOWEL.search(tok) or not _LATIN.search(tok)):
+                words += 1
+    worst.sort(key=lambda x: -x[0])
+    return (
+        bad / chars if chars else 0.0,
+        words / tokens if tokens else 1.0,
+        [x for _, x in worst[:EVIDENCE]],
+    )
+
+
 def since_text(history: list[Mapping[str, Any]] | None, stamp: str) -> set[str]:
     """The readings that ran on the current text: the extractors in
     ``meta.parse_history`` after the entry that wrote it, the last that
@@ -290,6 +340,22 @@ def check(
                     len(bare),
                     tuple(_snippet(lines[i]) for i in bare[:EVIDENCE]),
                     fix=None if "figure-crops" in since else Fix("figure-crops"),
+                )
+            )
+
+    if pdf and layer_read and scan < SCANNED:
+        unreadable, wordish, worst = garbled_share(lines)
+        if unreadable >= GARBLED or (unreadable >= GARBLED_LOW and wordish < WORDISH):
+            found.append(
+                Finding(
+                    "garbled",
+                    round(unreadable * 100) or 1,
+                    tuple(_snippet(x) for x in worst),
+                    fix=Fix("marker", ocr=True),
+                    detail={
+                        "unreadable": round(unreadable, 3),
+                        "wordish": round(wordish, 3),
+                    },
                 )
             )
 

@@ -97,6 +97,7 @@ const CHECK_ABOUT = {
   "ocr-layer": "a scan read from the text an old OCR laid under its pictures",
   "bare-figures": "figure captions with no picture beside them",
   "short-text": "the text is much shorter than the PDF's own text layer",
+  "garbled": "the PDF's text layer is not text: a font with no map to Unicode, read as � or junk",
   "leftovers": "what a reader left that is not text: a latex2html comment, a subscript as emphasis, an HTML entity",
 };
 // the readings that wait for the card
