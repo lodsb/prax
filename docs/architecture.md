@@ -191,7 +191,11 @@ flowchart TD
    An edge's quote keeps where it stood: `evidence_start`,
    `evidence_end` and `evidence_text_hash` (migration 48), placed by
    `prax.text.quotes` and written once. The `places` pass of `prax
-   maintain` places the quotes of older edges. The `worlddates` step
+   maintain` places the quotes of older edges. Evidence that is a note
+   of where a fact came from, not words of the text (a citation record,
+   a page's link, a rule's premises: the producers of
+   `store.graph.edges.NOTED`), is never looked for, and `why` answers
+   `a note, not a quote` for it. The `worlddates` step
    (`prax.graph.worlddates`) reads the sentences that date a fact and
    states the fact again with `world_from`/`world_to`. It ends the
    undated edge with `edge_endings.corrected_by`. The `rules` pass

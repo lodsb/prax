@@ -351,7 +351,9 @@ def why(edge_id: int) -> dict[str, Any]:
     ``disputed``, the facts it disagrees with (``conflicts``): a paper said
     to be published in two venues, each with the document that says so.
     And where the fact's quote stood in its document's text (``place``):
-    still there, moved by a re-read (with where it stands now), or gone."""
+    still there, moved by a re-read (with where it stands now), or gone;
+    or that its evidence is a note of where the fact came from (a citation
+    record, a page's link), with who wrote it."""
     return _answer(lambda: door().get_json(f"/edge/{edge_id}/why"))
 
 

@@ -120,3 +120,69 @@ def test_heal_names_the_edges_and_extraction_sends_them_to_review(
         "SELECT reason FROM review_queue ORDER BY id DESC LIMIT 1"
     ).fetchone()[0]
     assert reason == "the quote is no evidence: negated"
+
+
+def test_an_importers_note_is_no_quote_and_is_not_looked_for(
+    con: sqlite3.Connection,
+) -> None:
+    """AV, 2026-11-20: a citation record, a page's link or a rule's
+    premises is a note of where a fact came from. The quote matcher had
+    stamped some 69,000 of them "not found"; it no longer looks for one,
+    heal does not read one as a quote, and ``why`` says what it is."""
+    doc_id = _doc(con, "The arbitrary polygon oscillator draws a polygon. " * 3)
+    note = store.link(
+        con,
+        store.Edge("Polygon oscillators", "paper", "cites", "Some Paper", "paper"),
+        source_doc=doc_id,
+        evidence="crossref W1 references doi:10.1/x (not here, not nowhere)",
+        producer="crossref",
+    )
+    quote = store.link(
+        con,
+        store.Edge("Polygon oscillators", "paper", "about", "polygon", "concept"),
+        source_doc=doc_id,
+        evidence="draws a polygon",
+        producer="test",
+    )
+    out = store.maintain(con, only=["places"])["places"]
+    assert (out["placed"], out["not_in_text"]) == (1, 0)
+    assert store.evidence_place(con, note) == {
+        "stands": "a note, not a quote",
+        "note": "crossref",
+    }
+    assert store.evidence_place(con, quote)["stands"] == "where it stood"
+    # the same words from a model are a doubtful quote; from the importer, none
+    assert _flags("Note: the text only says so", rel="cites") == ["commentary"]
+    store.link(
+        con,
+        store.Edge("Polygon oscillators", "paper", "cites", "Other Paper", "paper"),
+        source_doc=doc_id,
+        evidence="Note: the text only says so",
+        producer="references",
+    )
+    found = store.health(con, only=["doubtful-evidence"])["ailments"]
+    assert not found or found[0]["count"] == 0
+
+
+def test_every_writer_of_notes_is_on_the_list() -> None:
+    """``graph.edges.NOTED`` names the writers' own constants, so a renamed
+    producer cannot fall off it."""
+    from prax.graph import resolution
+    from prax.importers import citations
+    from prax.store.graph import citations as cited
+    from prax.store.graph import edges, geo, schemaorg
+
+    for producer in (
+        citations.CrossrefSource.name,
+        citations.OpenAlexSource.name,
+        cited.REFERENCES_PRODUCER,
+        schemaorg.MARKUP_PRODUCER,
+        geo.PLACE_PRODUCER,
+        resolution.PRODUCER,
+        "rule:transitive",
+        "page",
+        "polysemy",
+    ):
+        assert edges.noted(producer), producer
+    for producer in ("test", "human", "qwen3.6-35b/prompt1", "typing-rules", "heal"):
+        assert not edges.noted(producer), producer

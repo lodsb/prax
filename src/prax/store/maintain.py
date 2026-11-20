@@ -78,6 +78,7 @@ from .graph import (
     MARKUP_PRODUCER,
     Edge,
     Stated,
+    _noted_sql,
     communities_input,
     corpus_rulings,
     derive_rules,
@@ -1029,13 +1030,15 @@ def _places(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     night; a later matcher (``quotes.VERSION``) looks for it once more in
     that same text (migration 71). A place filled here is where the quote
     stood when this pass looked, which may be a later text than the one it
-    was read from."""
+    was read from. A note of where a fact came from (a citation record, a
+    page's link, ``graph.edges.NOTED``) is no quote and is not looked for."""
     # never looked for, or not found by an older matcher in the text the
-    # document has now
+    # document has now; a quote, not a note
     due = (
         "e.valid_to IS NULL AND e.evidence IS NOT NULL AND e.evidence_start IS NULL"
         " AND (e.evidence_text_hash IS NULL OR (e.evidence_text_hash = d.text_hash"
         "  AND coalesce(e.evidence_looked, 1) < ?))"
+        f" AND NOT {_noted_sql('e.producer')}"
     )
     docs = [
         (int(r[0]), str(r[1]))

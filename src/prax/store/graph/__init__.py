@@ -101,6 +101,7 @@ from .decisions import (  # noqa: F401
 )
 from .edges import (  # noqa: F401
     CONFIDENCE_LEVELS,
+    NOTED,
     PROMPT_MARK,
     Edge,
     SelfLoop,
@@ -109,6 +110,7 @@ from .edges import (  # noqa: F401
     _entity_id,
     _invalidate_edge,
     _link,
+    _noted_sql,
     _said_openly,
     _subset_version_case,
     alias_group,
@@ -133,6 +135,7 @@ from .edges import (  # noqa: F401
     invalidate_edge,
     link,
     node_document,
+    noted,
     prompted,
     provenance_summary,
     reader_of,

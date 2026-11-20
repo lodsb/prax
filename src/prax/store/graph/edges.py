@@ -52,6 +52,42 @@ CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 # speak of (the structure review of 2026-11-07).
 _ASSERTED = "COALESCE(producer, '') NOT LIKE 'rule:%'"
 
+# The producers whose evidence is a note of where a fact came from, not
+# words of its document: a citation record ("crossref W1 references
+# doi:…", the import's sources), the reference list's match, a page's
+# link, "the library holds a document of this title", a page's markup, a
+# place's record, a merge, a rule's premises. The quote matcher never
+# looks for one in the text (the ``places`` pass), heal's evidence check
+# does not read one as a quote, and ``why`` says what it is (AV,
+# 2026-11-20: some 69,000 notes had been stamped "not found" by then). A
+# writer of notes adds its producer here; an entry ending in ``:`` is a
+# prefix. Its test holds the writers' own names to it.
+NOTED = (
+    "crossref",
+    "openalex",
+    "references",
+    "page",
+    "polysemy",
+    "jsonld",
+    "geonames",
+    "resolution",
+    "rule:",
+)
+
+
+def noted(producer: str | None) -> bool:
+    """Whether ``producer`` writes a note rather than a quote (``NOTED``)."""
+    p = producer or ""
+    return any(p.startswith(n) if n.endswith(":") else p == n for n in NOTED)
+
+
+def _noted_sql(column: str = "producer") -> str:
+    """``noted`` as SQL over ``column``: true for a note's producer."""
+    col = f"COALESCE({column}, '')"
+    exact = ", ".join(f"'{n}'" for n in NOTED if not n.endswith(":"))
+    prefixes = [f"{col} LIKE '{n}%'" for n in NOTED if n.endswith(":")]
+    return "(" + " OR ".join([f"{col} IN ({exact})", *prefixes]) + ")"
+
 
 @_reading
 def find_entities(
@@ -339,15 +375,19 @@ def evidence_place(con: sqlite3.Connection, edge_id: int) -> dict[str, Any] | No
     range in the text it was read from, and that text's hash), and
     ``stands``: ``where it stood`` (the document's text is the same one),
     ``moved`` (the text changed; the quote is found at ``now``) or
-    ``gone`` (the quote is in the text no more). None for an edge with no
-    place recorded or no document."""
+    ``gone`` (the quote is in the text no more). An edge whose evidence is
+    a note (``NOTED``) says so, ``note`` naming who wrote it, whatever an
+    older pass stamped. None for an edge with no place recorded or no
+    document."""
 
     row = con.execute(
         "SELECT e.evidence, e.source_doc, e.evidence_start, e.evidence_end,"
-        " e.evidence_text_hash, d.text_hash FROM edges e"
+        " e.evidence_text_hash, e.producer, d.text_hash FROM edges e"
         " LEFT JOIN documents d ON d.id = e.source_doc WHERE e.id = ?",
         (edge_id,),
     ).fetchone()
+    if row is not None and row["evidence"] and noted(row["producer"]):
+        return {"stands": "a note, not a quote", "note": row["producer"]}
     if row is None or row["evidence_text_hash"] is None:
         return None
     stood = {

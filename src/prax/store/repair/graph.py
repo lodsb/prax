@@ -28,6 +28,7 @@ from ..base import (
 )
 from ..graph import (
     Edge,
+    _noted_sql,
     _refresh_name,
     add_label,
     correct_edge,
@@ -422,13 +423,15 @@ def _doubtful_evidence(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Live edges whose quote cannot carry them (``prax.text.evidence``,
     the lexicon's ``evidence`` cues): the model's own note for a quote, a
     contents line or a negation behind a relation that asserts something,
-    OCR noise. Each with its flags; at most ``CAP``."""
+    OCR noise. Each with its flags; at most ``CAP``. A note of where a fact
+    came from (``graph.edges.NOTED``) is no quote and is not read."""
     cues = ontology.evidence_cues()
     out: list[dict[str, Any]] = []
     rows = con.execute(
         "SELECT e.id, e.rel, e.evidence, e.source_doc, s.name AS src, d.name AS dst"
         " FROM edges e JOIN entities s ON s.id = e.src JOIN entities d ON d.id = e.dst"
         " WHERE e.valid_to IS NULL AND e.evidence IS NOT NULL AND e.evidence != ''"
+        f" AND NOT {_noted_sql('e.producer')}"
     )
     for r in rows:
         found = evidence.flags(r["evidence"], r["src"], r["rel"], r["dst"], cues)
