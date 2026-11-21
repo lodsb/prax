@@ -1022,7 +1022,9 @@ def apply(
             )
             report.queued += 1
             continue
-        if store.find_edges(con, edge):
+        # this reader's reading of this document holds it already (a
+        # triple said twice); another document's is its own evidence
+        if store.find_edges(con, edge, source_doc=doc_id, producer=extractor):
             report.existing += 1
         else:
             try:

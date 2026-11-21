@@ -391,7 +391,7 @@ def _one(
             rep.untitled += 1 if not name else 0
             continue
         edge = store.Edge(title, "paper", "cites", name, "paper")
-        if store.find_edges(con, edge):
+        if store.find_edges(con, edge, source_doc=doc_id, producer=source.name):
             rep.existing += 1
             continue
         try:

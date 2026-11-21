@@ -278,7 +278,7 @@ def _page_link(
     (a page that links to its own address)."""
     if (edge.src, edge.src_type) == (edge.dst, edge.dst_type):
         return
-    if not find_edges(con, edge):
+    if not find_edges(con, edge, source_doc=doc_id):
         _link(
             con,
             edge,
@@ -431,7 +431,7 @@ def _link_edges(
             continue
         wanted_titles.add(target_name)
         edge = Edge(page_title, page_type, rel, target_name, target_type)
-        if not find_edges(con, edge):
+        if not find_edges(con, edge, source_doc=doc_id):
             _link(
                 con,
                 edge,
@@ -638,7 +638,7 @@ def add_to_project(
     name, node_type = document_node(con, doc_id)
     is_page = node_type in ("page", "project")
     edge = Edge(name, node_type, "part_of", *document_node(con, project["doc_id"]))
-    if find_edges(con, edge):
+    if find_edges(con, edge, source_doc=project["doc_id"]):
         return None
     if not is_page and promote:
         _set_promote(con, doc_id, by="page", reason=f"member of project {project_slug}")

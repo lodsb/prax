@@ -64,7 +64,7 @@ def replay(
             edge = store.Edge(
                 it["src"], it["src_type"], it["rel"], it["dst"], it["dst_type"]
             )
-            if store.find_edges(con, edge):
+            if store.find_edges(con, edge, source_doc=it["source_doc"]):
                 rep.existing += 1
             else:
                 try:
@@ -868,7 +868,7 @@ def apply_typing_rules(
         rep.hit(rule or "link")
         wrote = False
         for e in edges:
-            if store.find_edges(con, e):
+            if store.find_edges(con, e, source_doc=it["source_doc"]):
                 continue
             if commit:
                 try:

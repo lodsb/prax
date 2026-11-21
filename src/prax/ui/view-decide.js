@@ -175,7 +175,7 @@ async function viewCleanup(p) {
     b.disabled = true;
     try {
       const r = await post("/cleanup-restore", { run: b.dataset.restore });
-      b.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `restored ${r.restored}, ${r.edges_restated} facts restated` }));
+      b.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `restored ${r.restored}, ${r.edges_restated} statements restated` }));
     } catch (err) { b.disabled = false; b.insertAdjacentHTML("afterend", ` <span class="error">${esc(err.message)}</span>`); }
   }));
   if (!p.rule) return;
@@ -193,7 +193,7 @@ async function viewCleanup(p) {
     const out = box.querySelector(".decide-out");
     try {
       const r = await post(`/cleanup/${encodeURIComponent(res.rule)}`, { folder: res.folder });
-      out.textContent = `retired ${r.retired} (${r.edges_ended} facts ended, ${r.edges_moved} moved to a first copy) as ${r.run}`;
+      out.textContent = `retired ${r.retired} (${r.edges_ended} statements ended, ${r.edges_moved} moved to a first copy) as ${r.run}`;
       document.getElementById("cleanup-runs").innerHTML = cleanupRuns((await api("/cleanup")).runs);
     } catch (err) { go.disabled = false; out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
   });

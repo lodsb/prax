@@ -408,7 +408,7 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             continue
         for thing in things:
             edge = Edge(name, src_type, "proposes", name, thing)
-            if find_edges(con, edge):
+            if find_edges(con, edge, source_doc=titles[low]):
                 existing += 1
                 continue
             link(

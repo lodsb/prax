@@ -196,7 +196,7 @@ def test_the_cap_keeps_distinct_facts_the_best_supported_first(
 ) -> None:
     """One fact five papers state is one fact with five witnesses: it
     leads its relation, says so, and takes one slot of the cap, not
-    five."""
+    five; the first hop lists it once (AV, 2026-11-21)."""
     monkeypatch.setenv("PRAX_GRAPH_EDGES", "4")
     papers = [_paper(con, n) for n in range(6)]
     for n in range(3):
@@ -211,7 +211,9 @@ def test_the_cap_keeps_distinct_facts_the_best_supported_first(
     assert sorted(d for d, _ in kept) == ["phase", "topic 0", "topic 1", "topic 2"]
     assert dict(kept)["phase"] == 5 and dict(kept)["topic 1"] == 2
     assert dict(kept)["topic 0"] is None
-    assert answer["left_out"]["edges"] == 5
+    # the four facts fit: the repeats are witnesses, not facts left out
+    assert answer["left_out"]["edges"] == 0
+    assert {e["dst"]: e.get("sources") for e in answer["edges"]}["phase"] == 5
 
     monkeypatch.setenv("PRAX_GRAPH_EDGES", "1")
     only = store.traverse_map(con, "STFT", hops=1)["edges"]

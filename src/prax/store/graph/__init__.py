@@ -114,6 +114,7 @@ from .edges import (  # noqa: F401
     _said_openly,
     _subset_version_case,
     alias_group,
+    as_facts,
     backfill_provenance,
     canonical_entity,
     correct_edge,

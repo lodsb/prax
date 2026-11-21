@@ -177,6 +177,13 @@ revisit threshold, under "Decision thresholds" below.
    Enrichment invalidates edges by setting `valid_to`; it never deletes
    them, and the database refuses a delete or a change to an edge's
    fact (migration 35's triggers).
+   An edge is one reader's assertion; a fact is what the live edges
+   state, a relation between two canonical entities, derived under the
+   current entity resolution and never stored (`docs/one-edge-per-fact.md`).
+   A writer asks whether its own source states a fact already
+   (`store.find_edges` with `source_doc`, under any name of its things),
+   so a second document's statement is its own edge, and a read that lists
+   facts lists each once with its sources (`store.graph.edges.as_facts`).
    Provenance is a column on the fact, never an edge in the graph.
    Upgrading a producer's work is `retire_run` plus a new pass. A repair
    that ends edges records them (`edge_endings`, migration 44), so

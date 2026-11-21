@@ -358,7 +358,7 @@ def _apply(
         rep.samples.append(
             ("link", f"[{st}] {it['src'][:36]!r} -{rel}-> [{dt}] {it['dst'][:36]!r}")
         )
-    if store.find_edges(con, edge):
+    if store.find_edges(con, edge, source_doc=it["source_doc"]):
         rep.existing += 1
     else:
         rep.linked += 1

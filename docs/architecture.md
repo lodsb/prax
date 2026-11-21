@@ -281,11 +281,16 @@ at that moment: written at or before it and not ended before it
 (`store.held_at`, the one place that builds the condition). That is
 record time. An edge whose source says when the fact holds in the world
 also carries `world_from`/`world_to` with their precision, and says
-nothing about it otherwise. The first hop is capped (`graph.edges`). A
-fact several documents state is one edge per document, and each row
-says how many (`support`). The cap is spent on distinct facts first:
-the best supported first within a relation, round-robin over the
-relations. A walk as of an earlier day still follows today's entity
+nothing about it otherwise. An edge is one reader's assertion. The
+first hop lists facts: the edges of one relation between two canonical
+entities are one row (`store.graph.edges.as_facts`), shown as the surest of them,
+with `sources` (the edges), `support` (their documents) and `also` (the
+others' ids, documents and producers). It is capped (`graph.edges`),
+the best supported fact first within a relation, round-robin over the
+relations, and `left_out` counts facts. A writer asks whether its own
+source states a fact already (`store.find_edges` with `source_doc`,
+under any name of its things), so each document's statement is its own
+edge (`docs/one-edge-per-fact.md`). A walk as of an earlier day still follows today's entity
 merges.
 
 `ask` is retrieval plus generation on top of the same search

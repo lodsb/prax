@@ -205,7 +205,9 @@ def test_rereading_under_another_subset_retires_the_earlier_reading(
         (doc,),
     ).fetchall()
     whole = ontology.current().version  # no domain set: the whole ontology
-    assert [tuple(r) for r in live()] == [("local", whole)]  # sonnet's: existing
+    # another reader's assertion of the same fact is its own edge (AV,
+    # 2026-11-21: before, it was dropped as "existing")
+    assert [tuple(r) for r in live()] == [("local", whole), ("sonnet", whole)]
     store.set_domains(con, doc, ["family"])
     second = extraction.Extraction(
         summary="s",
@@ -223,7 +225,11 @@ def test_rereading_under_another_subset_retires_the_earlier_reading(
     )
     rep = extraction.apply(con, doc, second, extractor="local")
     assert rep.retired == 1 and rep.linked == 1
-    assert [tuple(r) for r in live()] == [("local", "core8+family1")]
+    # local's earlier reading retired; sonnet's stands until it reads again
+    assert [tuple(r) for r in live()] == [
+        ("sonnet", whole),
+        ("local", "core8+family1"),
+    ]
     assert (
         con.execute(
             "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NOT NULL",

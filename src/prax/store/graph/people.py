@@ -33,7 +33,7 @@ from ..base import (
     hidden_documents,
     store_state,
 )
-from .edges import alias_group, visible_edges
+from .edges import alias_group, as_facts, visible_edges
 from .events import RECORDED_AT
 
 PERSON_TYPE = "person"
@@ -173,7 +173,15 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
     attended = {
         int(e["other_id"]) for e in edges if e["rel"] == ATTENDED and e["dir"] == "out"
     }
-    facts = [e for e in edges if e["rel"] not in (DEPICTS, ATTENDED)]
+    # each edge one document's statement; the page lists each fact once
+    # (``as_facts``: the relation, its direction and the other end)
+    stated = [e for e in edges if e["rel"] not in (DEPICTS, ATTENDED)]
+    facts = [
+        fact
+        for fact, _ in as_facts(
+            stated, lambda e: (e["rel"], e["dir"], int(e["other_id"])), doc="doc"
+        )
+    ]
     persons = set(person_types())
     for f in facts:  # the page links another person to their page
         f["person"] = f["other_type"] in persons
@@ -194,7 +202,7 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
         }
         for rows in sorted(undated.values(), key=lambda rows: -len(rows))
     ]
-    said = Counter(int(f["doc"]) for f in facts if f["doc"] is not None)
+    said = Counter(int(e["doc"]) for e in stated if e["doc"] is not None)
     titles = {
         int(r["id"]): r
         for r in con.execute(
@@ -271,25 +279,31 @@ def _people(con: sqlite3.Connection, q: str, limit: int) -> list[dict[str, Any]]
         )
         pattern = f"%{q.strip()}%"
         args = [pattern, pattern]
-    counts: Counter[int] = Counter()
+    facts: dict[int, set[tuple[str, str, int]]] = {}
     photos: Counter[int] = Counter()
     for end in ("src", "dst"):
         for r in con.execute(
             # a person merged into a thing of another type is that thing;
             # counted in SQL by document, which is what the wall needs
-            f"SELECT c.id AS cid, e.rel = ? AS shown, e.source_doc, count(*) AS n"
+            f"SELECT c.id AS cid, e.rel = ? AS shown, e.source_doc, e.rel,"
+            f" COALESCE(o.canonical_id, o.id) AS other, count(*) AS n"
             f" FROM entities n"
             f" JOIN entities c ON c.id = COALESCE(n.canonical_id, n.id)"
             f" JOIN edges e ON e.{end} = n.id AND e.valid_to IS NULL"
-            f" WHERE c.type IN ({marks}){where} GROUP BY 1, 2, 3",
+            f" JOIN entities o ON o.id = e.{'dst' if end == 'src' else 'src'}"
+            f" WHERE c.type IN ({marks}){where} GROUP BY 1, 2, 3, 4, 5",
             (DEPICTS, *types, *args),
         ):
             if not doc_visible(r["source_doc"], hidden):
                 continue
             if not r["shown"]:
-                counts[int(r["cid"])] += int(r["n"])
+                # a fact once, however many visible documents state it
+                facts.setdefault(int(r["cid"]), set()).add(
+                    (end, str(r["rel"]), int(r["other"]))
+                )
             elif end == "dst":
                 photos[int(r["cid"])] += int(r["n"])
+    counts = Counter({i: len(f) for i, f in facts.items()})
     seen = set(counts) | set(photos)
     ranked = sorted(seen, key=lambda i: (-photos[i], -counts[i], i))[:limit]
     names = {

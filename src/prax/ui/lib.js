@@ -870,7 +870,7 @@ function cleanupPreview(res) {
     <span class="muted">${esc(it.path || "")}${it.duplicate_of ? ` · a copy of doc ${it.duplicate_of}` : ""}</span></li>`).join("");
   const personal = res.personal ? ` · ${res.personal} marked or suspected personal` : "";
   return `<article class="decide-row"><h3 style="font-size:1rem;margin:.2rem 0">${esc(res.about)}${res.folder ? `: ${esc(res.folder)}` : ""}</h3>
-    <p class="muted">${res.total.toLocaleString()} documents · ${res.edges.toLocaleString()} facts${personal}${res.total > (res.items || []).length ? ` · a sample of ${(res.items || []).length}` : ""}</p>
+    <p class="muted">${res.total.toLocaleString()} documents · ${res.edges.toLocaleString()} statements in the graph${personal}${res.total > (res.items || []).length ? ` · a sample of ${(res.items || []).length}` : ""}</p>
     <ul class="entities">${rows}</ul>
     <div class="decide-acts">${res.total ? `<button type="button" data-retire="1">retire ${res.total} documents</button>` : `<span class="muted">nothing to retire</span>`}
       <span class="decide-out muted"></span></div></article>`;

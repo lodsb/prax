@@ -698,7 +698,7 @@ def _merge_meta(old: store.MetaLike, new: dict[str, Any]) -> dict[str, Any]:
 
 
 def _seed_edges(con: sqlite3.Connection, p: Planned, doc_id: int, version: str) -> int:
-    """``paper --authored_by--> author`` per creator; once per (title, author)."""
+    """``paper --authored_by--> author`` per creator; once per document."""
     if p.item is None or not p.title or p.kind not in EDGE_KINDS:
         return 0
     n = 0
@@ -706,7 +706,7 @@ def _seed_edges(con: sqlite3.Connection, p: Planned, doc_id: int, version: str) 
         if c["type"] not in AUTHOR_CREATOR_TYPES or not c["name"]:
             continue
         edge = store.Edge(p.title, "paper", "authored_by", c["name"], "author")
-        if store.find_edges(con, edge):
+        if store.find_edges(con, edge, source_doc=doc_id, producer="zotero"):
             continue
         store.link(
             con,

@@ -357,7 +357,7 @@ test("cleanupRules, cleanupPreview, cleanupRuns: a set shown before it goes, and
   assert.match(rules, /id="cleanup-folder"/);
   const preview = lib.cleanupPreview({ rule: "same-text", about: "the same text", folder: null, total: 55, edges: 308, personal: 8,
     items: [{ id: 9, title: "Paper copy", path: "/nas/b/paper.pdf", duplicate_of: 4 }] });
-  assert.match(preview, /55 documents · 308 facts · 8 marked or suspected personal · a sample of 1/);
+  assert.match(preview, /55 documents · 308 statements in the graph · 8 marked or suspected personal · a sample of 1/);
   assert.match(preview, /a copy of doc 4/);
   assert.match(preview, /data-retire="1">retire 55 documents/);
   assert.match(lib.cleanupPreview({ rule: "help", about: "help", total: 0, edges: 0, personal: 0, items: [] }), /nothing to retire/);

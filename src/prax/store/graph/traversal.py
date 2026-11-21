@@ -29,6 +29,7 @@ from .edges import (
     _MOMENT_ISO,
     _changed_between,
     _end_of,
+    as_facts,
     document_node,
     held_at,
     held_in_world,
@@ -61,59 +62,58 @@ def _neighbourhood_limits() -> tuple[int, int, int]:
     )
 
 
+def _facts(near: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The first hop's edges as facts (``as_facts``), keyed by their two
+    canonical entities, each carrying its edges' ids and documents for the
+    marks after it (``_edges``, ``_docs``; taken off before it is sent)."""
+    out = []
+    for fact, group in as_facts(near, _fact):
+        fact["_edges"] = [int(e["edge_id"]) for e in group]
+        fact["_docs"] = sorted(
+            {int(e["source_doc"]) for e in group if e.get("source_doc") is not None}
+        )
+        out.append(fact)
+    return out
+
+
 def _first_hop(
     near: list[dict[str, Any]], limit: int
 ) -> tuple[list[dict[str, Any]], int]:
-    """A hub's own edges, capped, with every relation represented.
+    """A hub's own facts (``_facts``), capped, with every relation
+    represented.
 
-    The first hop is a fact list and stays one — but `nonnegative matrix
-    factorization` carries 642 edges and answers with 319 KB, which is
+    The first hop is a fact list and stays one, but `nonnegative matrix
+    factorization` carries 642 edges and answered with 319 KB, which is
     the same breach of invariant 6 the second hop had, one level down.
-    Taking the first 150 rows would take them in id order, which is the
-    order they were extracted in: 229 `about` edges before the first
+    Taking the first 150 would take them in id order, which is the order
+    they were extracted in: 229 `about` edges before the first
     `implements`. So the cap is spent round-robin over the relations,
-    commonest first, and every relation an entity has appears before any
-    relation has a second row.
-
-    A fact several documents state is one row per document, and each row
-    says how many there are (``support``, absent for one). The cap is
-    spent on distinct facts first, the best supported first within a
-    relation, and a fact's further rows only after every distinct fact
-    has had its place: twenty papers saying a method is `about` audio
-    are one fact with twenty witnesses, not twenty slots.
+    commonest first, the best supported fact first within a relation, and
+    every relation an entity has appears before any relation has a second
+    fact. ``left_out`` counts the facts past the cap.
 
     A caller that wants the whole list asks for it (``limit=0``), which
     is what the UI's canvas does.
     """
-    witnesses: dict[tuple[str, str, str], set[Any]] = {}
-    for e in near:
-        witnesses.setdefault(_fact(e), set()).add(e.get("source_doc"))
-    for e in near:
-        n = len(witnesses[_fact(e)])
-        if n > 1:
-            e["support"] = n
-    if limit <= 0 or len(near) <= limit:
-        return near, 0
-    firsts: dict[str, list[dict[str, Any]]] = {}
-    repeats: dict[str, list[dict[str, Any]]] = {}
-    met: set[tuple[str, str, str]] = set()
-    for e in near:
-        rel = str(e.get("rel") or "")
-        (repeats if _fact(e) in met else firsts).setdefault(rel, []).append(e)
-        met.add(_fact(e))
-    for rows in firsts.values():
-        rows.sort(key=lambda e: -int(e.get("support") or 1))  # stable: id order
-    order = sorted(firsts, key=lambda r: (-len(firsts[r]), r))
-    kept = _round_robin(firsts, order, limit)
-    if len(kept) < limit:
-        kept += _round_robin(repeats, sorted(repeats), limit - len(kept))
-    keep = {id(e) for e in kept}
-    return [e for e in near if id(e) in keep], len(near) - len(kept)
+    facts = _facts(near)
+    if limit <= 0 or len(facts) <= limit:
+        return facts, 0
+    by_rel: dict[str, list[dict[str, Any]]] = {}
+    for f in facts:
+        by_rel.setdefault(str(f.get("rel") or ""), []).append(f)
+    for rows in by_rel.values():
+        rows.sort(key=lambda f: -int(f.get("support") or 1))  # stable
+    order = sorted(by_rel, key=lambda r: (-len(by_rel[r]), r))
+    keep = {id(f) for f in _round_robin(by_rel, order, limit)}
+    return [f for f in facts if id(f) in keep], len(facts) - len(keep)
 
 
-def _fact(e: dict[str, Any]) -> tuple[str, str, str]:
-    """What an edge states, whoever states it: its two ends (canonical
-    names) and its relation."""
+def _fact(e: dict[str, Any]) -> tuple[Any, ...]:
+    """What an edge states, whoever states it: its relation between its
+    two ends as canonical entities (``src_id``, ``dst_id``; their names
+    where a row has no ids). Two entities may share a name."""
+    if e.get("src_id") is not None and e.get("dst_id") is not None:
+        return (int(e["src_id"]), str(e.get("rel")), int(e["dst_id"]))
     return (str(e.get("src")), str(e.get("rel")), str(e.get("dst")))
 
 
@@ -583,7 +583,7 @@ def _walk(
         reach(id, depth) AS (
             SELECT id, MIN(depth) FROM walk GROUP BY id
         )
-        SELECT e.id AS edge_id,
+        SELECT e.id AS edge_id, cs.id AS src_id, cd.id AS dst_id,
                cs.name AS src, cs.type AS src_type, e.rel,
                cd.name AS dst, cd.type AS dst_type,
                e.confidence, e.source_doc, e.evidence, e.ontology_version,
@@ -624,6 +624,9 @@ def _walk(
     near, edges_left = _first_hop(near, limit)
     _mark_disputed(con, near, hidden)
     _mark_stated(con, near)
+    for row in [*near, *far]:
+        for key in ("_edges", "_docs", "src_id", "dst_id"):
+            row.pop(key, None)
     return near + far, {"edges": edges_left, "neighbours": neighbours_left}
 
 
@@ -631,12 +634,15 @@ def _mark_stated(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
     """A fact whose source gives no world date is anchored to when its
     document appeared (``stated``: ``meta.published``, as precise as it
     is): not when the fact holds, but the latest it was already said
-    (AL, "as Utopia does it"). Said only where the document is dated."""
-    docs = {
-        int(r["source_doc"])
-        for r in rows
-        if r.get("source_doc") is not None and not r.get("world_from")
-    }
+    (AL, "as Utopia does it"). Said only where a document is dated; for a
+    fact several documents state, the earliest of them (``_docs``)."""
+
+    def docs_of(r: dict[str, Any]) -> list[int]:
+        if r.get("_docs") is not None:
+            return [int(d) for d in r["_docs"]]
+        return [] if r.get("source_doc") is None else [int(r["source_doc"])]
+
+    docs = {d for r in rows if not r.get("world_from") for d in docs_of(r)}
     if not docs:
         return
     marks = ",".join("?" * len(docs))
@@ -650,9 +656,9 @@ def _mark_stated(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
         )
     }
     for r in rows:
-        doc = r.get("source_doc")
-        if doc is not None and not r.get("world_from") and int(doc) in dated:
-            r["stated"] = dated[int(doc)]
+        said = [dated[d] for d in docs_of(r) if d in dated]
+        if said and not r.get("world_from"):
+            r["stated"] = min(said)
 
 
 def _mark_disputed(
@@ -660,7 +666,11 @@ def _mark_disputed(
 ) -> None:
     """A fact another one contradicts says so (``disputed``: how many),
     counting only the others the viewer may see; ``why`` lists them."""
-    ids = [int(r["edge_id"]) for r in rows if r.get("edge_id") is not None]
+    edges_of = {
+        id(r): r.get("_edges") or ([int(r["edge_id"])] if r.get("edge_id") else [])
+        for r in rows
+    }
+    ids = sorted({i for got in edges_of.values() for i in got})
     if not ids:
         return
     marks = ",".join("?" * len(ids))
@@ -677,7 +687,7 @@ def _mark_disputed(
         if doc_visible(doc, hidden):
             counts[int(mine)] = counts.get(int(mine), 0) + 1
     for r in rows:
-        n = counts.get(int(r.get("edge_id") or 0))
+        n = sum(counts.get(i, 0) for i in edges_of[id(r)])
         if n:
             r["disputed"] = n
 

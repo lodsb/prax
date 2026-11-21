@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Hashable, Iterable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
@@ -641,41 +641,91 @@ def _end_of(got: tuple[str, str] | None) -> str:
     return f"{date}T23:59:59Z"
 
 
-@_reading
-def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
-    """Ids of currently-valid edges with exactly this src, rel and dst.
+def _fact_edges(
+    con: sqlite3.Connection,
+    edge: Edge,
+    columns: str,
+    *,
+    source_doc: int | None = None,
+    producer: str | None = None,
+) -> list[sqlite3.Row]:
+    """The live edges that state the fact ``edge`` names (AV, 2026-11-21).
 
-    Lets importers seed edges idempotently without touching SQL themselves.
-    """
-    rows = con.execute(
-        """
-        SELECT e.id FROM edges e
-        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
-        WHERE s.name = ? AND s.type = ? AND e.rel = ?
-          AND t.name = ? AND t.type = ? AND e.valid_to IS NULL
-        ORDER BY e.id
-        """,
-        (edge.src, edge.src_type, edge.rel, edge.dst, edge.dst_type),
+    An edge is one reader's assertion; the fact is its relation between
+    the things its two names stand for. Each name is read as ``link``
+    resolves it (the entity called that, else the one that carries it as
+    a label) and followed to its survivor, and an edge written under any
+    name of that survivor's group states the fact: a merge or a rename
+    since does not hide it. Before this, an edge was found only under the
+    exact names written, so a pass that asked again after a merge wrote
+    the fact a second time.
+
+    ``source_doc`` keeps one document's edges; ``producer`` one reader's,
+    the producer or it with a ``/`` suffix (the prompt's version:
+    ``store.prompted``)."""
+    a = _named(con, edge.src, edge.src_type, follow=True)
+    b = _named(con, edge.dst, edge.dst_type, follow=True)
+    if a is None or b is None:
+        return []
+    srcs, dsts = sorted(with_aliases(con, [a])), sorted(with_aliases(con, [b]))
+    where = [
+        "e.valid_to IS NULL",
+        "e.rel = ?",
+        f"e.src IN ({','.join('?' * len(srcs))})",
+        f"e.dst IN ({','.join('?' * len(dsts))})",
+    ]
+    args: list[Any] = [edge.rel, *srcs, *dsts]
+    if source_doc is not None:
+        where.append("e.source_doc = ?")
+        args.append(source_doc)
+    if producer is not None:
+        where.append("(e.producer = ? OR substr(e.producer, 1, ?) = ?)")
+        args += [producer, len(producer) + 1, producer + "/"]
+    return con.execute(
+        f"SELECT {columns} FROM edges e WHERE {' AND '.join(where)} ORDER BY e.id",
+        args,
     ).fetchall()
-    return [r["id"] for r in rows]
+
+
+@_reading
+def find_edges(
+    con: sqlite3.Connection,
+    edge: Edge,
+    *,
+    source_doc: int | None = None,
+    producer: str | None = None,
+) -> list[int]:
+    """Ids of the live edges that state this fact (``_fact_edges``): its
+    relation between the things its names stand for, whatever name each
+    edge was written under.
+
+    A writer asks whether its own source states the fact already: an
+    extraction or an import its document and itself (``source_doc``,
+    ``producer``), a reading settled from the review queue its document.
+    Without either, any source: for a fact of the graph itself (an
+    edition ``part_of`` its series), or a pass that leaves a fact another
+    reader holds. A second document stating a fact is a second edge, its
+    own evidence (invariant 8)."""
+    return [
+        int(r["id"])
+        for r in _fact_edges(
+            con, edge, "e.id", source_doc=source_doc, producer=producer
+        )
+    ]
 
 
 @_reading
 def document_edges_of(
     con: sqlite3.Connection, edge: Edge, doc_id: int
 ) -> list[dict[str, Any]]:
-    """The currently-valid edges of exactly this fact that ``doc_id``
+    """The live edges of this fact (``_fact_edges``) that ``doc_id``
     states, with their world dates."""
-    rows = con.execute(
-        """
-        SELECT e.id, e.world_from, e.world_to, e.world_to_precision FROM edges e
-        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
-        WHERE s.name = ? AND s.type = ? AND e.rel = ?
-          AND t.name = ? AND t.type = ? AND e.source_doc = ? AND e.valid_to IS NULL
-        ORDER BY e.id
-        """,
-        (edge.src, edge.src_type, edge.rel, edge.dst, edge.dst_type, doc_id),
-    ).fetchall()
+    rows = _fact_edges(
+        con,
+        edge,
+        "e.id, e.world_from, e.world_to, e.world_to_precision",
+        source_doc=doc_id,
+    )
     return [dict(r) for r in rows]
 
 
@@ -1040,6 +1090,62 @@ def hidden_by_premise(
 
 
 EdgeRow = TypeVar("EdgeRow", bound=dict[str, Any])
+
+ALSO_SHOWN = 4  # a fact's further assertions listed beside its first
+_SUREST = {"EXTRACTED": 0, "INFERRED": 1, "AMBIGUOUS": 2}
+
+
+def as_facts(
+    rows: Iterable[dict[str, Any]],
+    key: Callable[[dict[str, Any]], Hashable],
+    *,
+    doc: str = "source_doc",
+) -> list[tuple[dict[str, Any], list[dict[str, Any]]]]:
+    """Edges as facts, the one grouping every read that lists facts uses
+    (AV, 2026-11-21; ``docs/one-edge-per-fact.md``). An edge is one
+    reader's assertion; the edges of one ``key`` (a relation between two
+    canonical entities) state one fact. Before, a read listed and counted
+    a fact two readers or two documents stated twice (the BWS survey,
+    2026-11-17).
+
+    Each fact is a copy of its best edge: the surest confidence, then one
+    with a quote, then the oldest. It keeps that edge's fields and
+    ``edge_id``, so what keys a line by its edge (the canvas, ``why``)
+    still can. When more than one edge states it, ``sources`` counts the
+    edges, ``support`` the documents (``doc``; absent for one), and
+    ``also`` lists the others' ``edge_id``, document and ``producer``, the
+    first ``ALSO_SHOWN``. Each comes with its edges, in the order the
+    facts were first met."""
+    groups: dict[Hashable, list[dict[str, Any]]] = {}
+    for row in rows:
+        groups.setdefault(key(row), []).append(row)
+    out: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+    for group in groups.values():
+        best = min(
+            group,
+            key=lambda e: (
+                _SUREST.get(str(e.get("confidence")), len(_SUREST)),
+                not e.get("evidence"),
+                int(e["edge_id"]),
+            ),
+        )
+        fact = dict(best)
+        if len(group) > 1:
+            documents = len({e.get(doc) for e in group})
+            if documents > 1:
+                fact["support"] = documents
+            fact["sources"] = len(group)
+            fact["also"] = [
+                {
+                    "edge_id": e["edge_id"],
+                    doc: e.get(doc),
+                    "producer": e.get("producer"),
+                }
+                for e in group
+                if e is not best
+            ][:ALSO_SHOWN]
+        out.append((fact, group))
+    return out
 
 
 def visible_edges(
