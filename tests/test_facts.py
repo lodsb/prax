@@ -118,6 +118,25 @@ def test_a_walk_lists_a_fact_once_with_its_sources(
     assert len(capped["edges"]) == 1 and capped["left_out"]["edges"] == 1
 
 
+def test_two_versions_of_one_work_are_one_witness(con: sqlite3.Connection) -> None:
+    """A preprint and its journal version both state a fact: two sources,
+    one witness, so no ``support``. A third document that is no version of
+    the work makes it two."""
+    preprint, journal, other = _doc(con, "One"), _doc(con, "Two"), _doc(con, "Three")
+    for doc_id in (preprint, journal):
+        _says(con, doc_id)
+    store.state_versions(
+        con, [preprint, journal], by="test", run="versions:test", evidence="a test"
+    )
+    walk = store.traverse_map(con, "Vocoders", 1)
+    (fact,) = [r for r in walk["edges"] if r["dst"] == "filter bank"]
+    assert fact["sources"] == 2 and "support" not in fact
+    _says(con, other)
+    walk = store.traverse_map(con, "Vocoders", 1)
+    (fact,) = [r for r in walk["edges"] if r["dst"] == "filter bank"]
+    assert (fact["sources"], fact["support"]) == (3, 2)
+
+
 def test_a_persons_page_lists_a_fact_once(con: sqlite3.Connection) -> None:
     """Two documents saying who wrote a paper: one fact on the author's
     page and in the list of people, two documents behind it."""

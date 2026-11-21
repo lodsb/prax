@@ -23,6 +23,7 @@ from ..base import (
     hidden_documents,
     now,
 )
+from ..retrieval import works_of
 from .communities import community_of
 from .edges import (
     _ASSERTED,
@@ -62,12 +63,15 @@ def _neighbourhood_limits() -> tuple[int, int, int]:
     )
 
 
-def _facts(near: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _facts(
+    near: list[dict[str, Any]], works: dict[int, int] | None = None
+) -> list[dict[str, Any]]:
     """The first hop's edges as facts (``as_facts``), keyed by their two
-    canonical entities, each carrying its edges' ids and documents for the
-    marks after it (``_edges``, ``_docs``; taken off before it is sent)."""
+    canonical entities, their support counted by work (``works``), each
+    carrying its edges' ids and documents for the marks after it
+    (``_edges``, ``_docs``; taken off before it is sent)."""
     out = []
-    for fact, group in as_facts(near, _fact):
+    for fact, group in as_facts(near, _fact, works=works):
         fact["_edges"] = [int(e["edge_id"]) for e in group]
         fact["_docs"] = sorted(
             {int(e["source_doc"]) for e in group if e.get("source_doc") is not None}
@@ -77,7 +81,7 @@ def _facts(near: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _first_hop(
-    near: list[dict[str, Any]], limit: int
+    near: list[dict[str, Any]], limit: int, works: dict[int, int] | None = None
 ) -> tuple[list[dict[str, Any]], int]:
     """A hub's own facts (``_facts``), capped, with every relation
     represented.
@@ -95,7 +99,7 @@ def _first_hop(
     A caller that wants the whole list asks for it (``limit=0``), which
     is what the UI's canvas does.
     """
-    facts = _facts(near)
+    facts = _facts(near, works)
     if limit <= 0 or len(facts) <= limit:
         return facts, 0
     by_rel: dict[str, list[dict[str, Any]]] = {}
@@ -621,7 +625,8 @@ def _walk(
     shaped, neighbours_left = _second_hop(seen)
     near = [r for r in shaped if int(r["hop"]) < 2]
     far = [r for r in shaped if int(r["hop"]) >= 2]
-    near, edges_left = _first_hop(near, limit)
+    docs = {int(r["source_doc"]) for r in near if r.get("source_doc") is not None}
+    near, edges_left = _first_hop(near, limit, works_of(con, sorted(docs)))
     _mark_disputed(con, near, hidden)
     _mark_stated(con, near)
     for row in [*near, *far]:

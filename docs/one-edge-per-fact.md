@@ -97,6 +97,10 @@ then the oldest), keeping that edge's fields and `edge_id`, so the
 canvas and `why` work unchanged. When more than one edge states it,
 `sources` counts the edges, `support` the documents, and `also` lists the
 others' `edge_id`, document and `producer` (the first four).
+A version of a work (`example_of`, plan item AS) is no second witness:
+`support` counts a work's versions once (`as_facts(works=)`, from
+`store.retrieval.works_of`, 2026-11-22; migration 73 indexes the live
+edges by relation and document for it).
 `traverse`'s first hop lists facts, keyed by the canonical entities, and
 caps and counts them (`left_out`). `stated` is the earliest dated document
 behind a fact, and `disputed` counts the conflicts of all its edges. A
@@ -113,15 +117,20 @@ of `connect` is one fact per (source, relation, target). `changes` is
 about record time and lists edges, which is right for what was written
 and ended.
 
+### The duplicates ended (2026-11-22)
+
+`prax heal --apply` ended the later edges of each fact one reader stated
+twice in one document: 3,429 edges of 730 facts (`heal:duplicate-facts`,
+the oldest kept, `restore_run` takes them back). Two readers of one
+document stay two assertions.
+
 ## What is left
 
-- The duplicates already in the graph: heal's `duplicate-facts` ends a
-  reader's later edges of one fact in one document (`prax heal --apply`,
-  the owner's call). They no longer show twice in a walk either way.
-- Support by work, AV's second design question: the count of works
-  (`example_of`, plan item AS) among a fact's documents. Two versions of
-  one paper are one work, so they are one witness. It is one more column of
-  `as_facts`.
 - The evidence lost before 2026-11-21: a document whose facts were
   already held got no edges for them. Only a new extraction of it brings
-  them back. The extraction reports counted them as `existing`.
+  them back. The extraction reports counted them as `existing`, together
+  with a fact a reading stated twice, which lost nothing: 2,773 live
+  documents read before then counted 8,832 (2026-11-22). The 1,117
+  documents heal's `stale-extractions` sent back to the extract step say
+  how many of those were lost: each is read again under the new rule, and
+  its earlier stamp is in `meta.extraction_history`.

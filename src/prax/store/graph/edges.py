@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
@@ -1100,6 +1100,7 @@ def as_facts(
     key: Callable[[dict[str, Any]], Hashable],
     *,
     doc: str = "source_doc",
+    works: Mapping[int, int] | None = None,
 ) -> list[tuple[dict[str, Any], list[dict[str, Any]]]]:
     """Edges as facts, the one grouping every read that lists facts uses
     (AV, 2026-11-21; ``docs/one-edge-per-fact.md``). An edge is one
@@ -1112,10 +1113,20 @@ def as_facts(
     with a quote, then the oldest. It keeps that edge's fields and
     ``edge_id``, so what keys a line by its edge (the canvas, ``why``)
     still can. When more than one edge states it, ``sources`` counts the
-    edges, ``support`` the documents (``doc``; absent for one), and
-    ``also`` lists the others' ``edge_id``, document and ``producer``, the
-    first ``ALSO_SHOWN``. Each comes with its edges, in the order the
-    facts were first met."""
+    edges, ``support`` the witnesses (absent for one), and ``also`` lists
+    the others' ``edge_id``, document and ``producer``, the first
+    ``ALSO_SHOWN``. A witness is a document (``doc``), or the work it is a
+    version of (``works``, a document's work as
+    ``store.retrieval.works_of`` gives it; plan item AS): a preprint and
+    its journal version are one witness, not two. Each fact comes with its
+    edges, in the order the facts were first met."""
+    of_work = works or {}
+
+    def witness(e: dict[str, Any]) -> Hashable:
+        d = e.get(doc)
+        work = of_work.get(int(d)) if d is not None else None
+        return ("work", work) if work is not None else ("doc", d)
+
     groups: dict[Hashable, list[dict[str, Any]]] = {}
     for row in rows:
         groups.setdefault(key(row), []).append(row)
@@ -1131,9 +1142,9 @@ def as_facts(
         )
         fact = dict(best)
         if len(group) > 1:
-            documents = len({e.get(doc) for e in group})
-            if documents > 1:
-                fact["support"] = documents
+            witnesses = len({witness(e) for e in group})
+            if witnesses > 1:
+                fact["support"] = witnesses
             fact["sources"] = len(group)
             fact["also"] = [
                 {

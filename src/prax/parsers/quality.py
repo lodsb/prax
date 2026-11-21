@@ -243,16 +243,38 @@ def garbled_share(lines: list[str]) -> tuple[float, float, list[str]]:
         if n:
             worst.append((n, s))
         for tok in s.split():
-            if len(tok) > 40 or tok.startswith(("http", "<")):
+            word = _word(tok)
+            if word is None:
                 continue
             tokens += 1
-            if _WORDISH.match(tok) and (_VOWEL.search(tok) or not _LATIN.search(tok)):
-                words += 1
+            words += word
     worst.sort(key=lambda x: -x[0])
     return (
         bad / chars if chars else 0.0,
         words / tokens if tokens else 1.0,
         [x for _, x in worst[:EVIDENCE]],
+    )
+
+
+def _word(tok: str) -> bool | None:
+    """Whether a token is shaped like a word; None for one that is not
+    counted at all (a link, a tag, a run too long to be a word)."""
+    if len(tok) > 40 or tok.startswith(("http", "<")):
+        return None
+    return bool(_WORDISH.match(tok) and (_VOWEL.search(tok) or not _LATIN.search(tok)))
+
+
+def words(text: str) -> int:
+    """How many of a text's tokens are shaped like words, figure lines
+    left out: what a reading is measured by against the text it would
+    replace (``parsers.queue``). A text layer that is not text is long
+    and holds hardly a word."""
+    return sum(
+        1
+        for line in text.split("\n")
+        if not line.lstrip().startswith("![")
+        for tok in line.split()
+        if _word(tok)
     )
 
 

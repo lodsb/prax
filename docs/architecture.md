@@ -284,8 +284,9 @@ also carries `world_from`/`world_to` with their precision, and says
 nothing about it otherwise. An edge is one reader's assertion. The
 first hop lists facts: the edges of one relation between two canonical
 entities are one row (`store.graph.edges.as_facts`), shown as the surest of them,
-with `sources` (the edges), `support` (their documents) and `also` (the
-others' ids, documents and producers). It is capped (`graph.edges`),
+with `sources` (the edges), `support` (their documents, the versions of
+one work counted once) and `also` (the others' ids, documents and
+producers). It is capped (`graph.edges`),
 the best supported fact first within a relation, round-robin over the
 relations, and `left_out` counts facts. A writer asks whether its own
 source states a fact already (`store.find_edges` with `source_doc`,

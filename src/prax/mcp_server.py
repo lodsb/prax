@@ -260,8 +260,9 @@ def traverse(
     ``edges`` is the first hop: every fact the entity itself carries,
     each once, shown as its surest edge with that edge's evidence. A fact
     more than one edge states says how many (``sources``), in how many
-    documents (``support``), and lists the others (``also``: ``edge_id``,
-    ``source_doc``, ``producer``); ``why`` takes any of the ids.
+    documents (``support``; two versions of one paper count once), and
+    lists the others (``also``: ``edge_id``, ``source_doc``,
+    ``producer``); ``why`` takes any of the ids.
     ``hops=2`` adds ``neighbours``, a map of what the documents around it
     are also about — each with the
     relations that reach it and ``documents``, how many documents

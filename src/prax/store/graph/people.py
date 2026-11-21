@@ -33,6 +33,7 @@ from ..base import (
     hidden_documents,
     store_state,
 )
+from ..retrieval import works_of
 from .edges import alias_group, as_facts, visible_edges
 from .events import RECORDED_AT
 
@@ -176,10 +177,14 @@ def person_page(con: sqlite3.Connection, entity_id: int) -> dict[str, Any]:
     # each edge one document's statement; the page lists each fact once
     # (``as_facts``: the relation, its direction and the other end)
     stated = [e for e in edges if e["rel"] not in (DEPICTS, ATTENDED)]
+    docs = sorted({int(e["doc"]) for e in stated if e["doc"] is not None})
     facts = [
         fact
         for fact, _ in as_facts(
-            stated, lambda e: (e["rel"], e["dir"], int(e["other_id"])), doc="doc"
+            stated,
+            lambda e: (e["rel"], e["dir"], int(e["other_id"])),
+            doc="doc",
+            works=works_of(con, docs),
         )
     ]
     persons = set(person_types())

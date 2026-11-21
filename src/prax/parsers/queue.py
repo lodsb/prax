@@ -29,10 +29,10 @@ from typing import Any
 
 from prax import parsers, store
 from prax.errors import NotFound
-from prax.parsers import annotate, figures
+from prax.parsers import annotate, figures, quality
 
 MIN_CHARS = 200  # below this an extraction is "empty"
-MIN_RATIO = 0.2  # an upgrade must keep at least this share of the old length
+MIN_RATIO = 0.2  # an upgrade must keep at least this share of the old words
 
 
 @dataclass
@@ -101,8 +101,17 @@ def seen(meta: dict[str, Any], stamp: str) -> bool:
     )
 
 
-def _too_short(new_len: int, old_len: int) -> bool:
-    return new_len < MIN_CHARS or (old_len > 0 and new_len < MIN_RATIO * old_len)
+def _too_short(new: str, old: str) -> bool:
+    """Whether a reading is too short to take: under ``MIN_CHARS`` it read
+    nothing, and next to a held text it must keep ``MIN_RATIO`` of that
+    text's words (``quality.words``). Words, not characters: a text layer
+    that is not text (``quality``'s ``garbled``) is long and holds hardly
+    a word, and on 2026-11-20 marker's readings of six such layers were
+    refused for the length of their noise (22,787 characters with 172
+    words, against marker's 539)."""
+    if len(new) < MIN_CHARS:
+        return True
+    return bool(old) and quality.words(new) < MIN_RATIO * quality.words(old)
 
 
 def parse_one(
@@ -248,14 +257,14 @@ def apply_parse(
     # is filed in the archive and referenced: no blob in a text artifact
     text, _filed = figures.file_inline(text.strip(), store.archive_blob)
     text = text.strip()
-    if not keep_source and doc["text_hash"]:
+    current = store.get_document(con, doc_id) if doc["text_hash"] else None
+    held_text = str(current["text"] or "") if current is not None else ""
+    if not keep_source and current is not None:
         # a replacing read keeps what a model read of the figures it still
         # holds: the readings were lines of the text it replaces, or of an
         # earlier one a replacing read before this already dropped them from
-        current = store.get_document(con, doc_id)
-        if current is not None:
-            texts = [current["text"], *store.earlier_texts(con, doc_id)]
-            text = annotate.carry(texts, text)
+        texts = [held_text, *store.earlier_texts(con, doc_id)]
+        text = annotate.carry(texts, text)
     old_len = doc["text_len"]
     entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}
     if not text:
@@ -279,7 +288,7 @@ def apply_parse(
         # LaTeX text to the PDF's parse 25 s after it arrived)
         _record(con, doc_id, {**entry, "outcome": "kept"}, pages=pages)
         return "kept"
-    if not force and _too_short(len(text), old_len):
+    if not force and _too_short(text, held_text if old_len else ""):
         action = "kept" if old_len else "empty"
         _record(con, doc_id, {**entry, "outcome": action}, pages=pages)
         return action

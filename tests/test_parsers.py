@@ -635,6 +635,24 @@ def test_queue_keeps_old_text_when_new_is_short(
     assert store.get_document(con, doc_id)["text"] == "tiny"
 
 
+def test_a_reading_is_measured_by_the_words_it_keeps(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A text layer that is not text is long and holds hardly a word: a
+    reading a fifth of its length with words in it replaces it. A real
+    text is not replaced by a reading that keeps a tenth of its words."""
+    prose = "the filter bank splits each frame into bands " * 8  # 368 chars
+    noise = store.ingest_text(con, "\x7f#%&" * 600, title="garbled")["doc_id"]
+    real = store.ingest_text(con, "words of a paper " * 400, title="real")["doc_id"]
+    stub = parsers.Extractor("stub", ("text/",), lambda data: prose)
+    monkeypatch.setattr(parsers, "REGISTRY", [stub, *parsers.REGISTRY])
+    assert len(prose) < 0.2 * 3000
+    assert queue.run(con, [noise]).actions == {"upgraded": 1}
+    assert store.get_document(con, noise)["text"] == prose.strip()
+    assert queue.run(con, [real]).actions == {"kept": 1}
+    assert store.get_document(con, real)["text"].startswith("words of a paper")
+
+
 def test_queue_records_errors_and_continues(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
