@@ -610,12 +610,15 @@ def hand_out(
     limit: int = 10,
     scope: str = "captures",
     worker: str = "worker",
+    want: bool = False,
 ) -> dict[str, Any]:
     """A batch of work for ``step``, leased to ``worker``. A step whose
     model costs money offers nothing once the host's budget for the day
     or the month is spent (``prax.ml.budget``); the reason comes back with
     the empty batch, and the worker says it. What the batch is, is the
-    step's (``prax.steps``)."""
+    step's (``prax.steps``). With ``want`` the worker's model cannot
+    answer: nothing is handed out, and ``wanted`` says whether the step
+    has work, which is then demand for the model's role (``_probe``)."""
     from prax.steps.base import HandOut
 
     limit = _check(step, scope, limit)
@@ -625,8 +628,34 @@ def hand_out(
     may, why = budget.allows(con, step)
     if not may:
         return {"step": step, "items": [], "lease_seconds": 0, "held": why}
+    if want:
+        h = HandOut(con, step, 1, scope, worker, time.monotonic())
+        return {**h.nothing(), "wanted": _probe(h)}
     h = HandOut(con, step, limit, scope, worker, time.monotonic())
     return steps.get(step).hand_out(h)
+
+
+def _probe(h: Any) -> bool:
+    """Whether ``h.step`` has work, asked by a worker whose model for it
+    cannot answer (``steps.base.wait_for_model``); if so the step is
+    wanted, which ``demand`` counts for the role serving its model, and
+    ``prax up`` starts that server again. Without it an idled server came
+    back only for a reading or an ask: the extraction backlog is not in
+    the demand (it is never empty), so 1,106 documents waited twenty hours
+    for a server stopped as quiet (2026-11-24). One item is handed out and
+    given back at once; a step wanted in the last half of
+    ``DEFER_SECONDS`` is not asked again."""
+    now = time.monotonic()
+    if _wanted.get((h.step, 0), float("-inf")) - now > DEFER_SECONDS / 2:
+        return True
+    held = set(_leases)
+    got = steps.get(h.step).hand_out(h)
+    for s, i in set(_leases) - held:
+        release_lease(s, [i])
+    if not got.get("items"):
+        return False
+    want(h.step)
+    return True
 
 
 # ----------------------------------------------------------------- take in

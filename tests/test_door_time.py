@@ -87,9 +87,11 @@ def test_the_adjudicate_hand_out_keeps_its_plan_while_nothing_it_reads_moves(
     assert len(plans) == 3
 
 
-def test_a_worker_asks_for_nothing_while_the_steps_model_cannot_answer(
+def test_a_worker_asks_for_no_batch_while_the_steps_model_cannot_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """It leaves the step's name instead (``want``), and the door says
+    whether that wakes the server (``work._probe``)."""
     monkeypatch.setattr(base, "model_down", REAL_MODEL_DOWN)
     spec = models.ModelSpec(
         name="local", kind="openai", model="m", base_url="http://127.0.0.1:9"
@@ -100,19 +102,20 @@ def test_a_worker_asks_for_nothing_while_the_steps_model_cannot_answer(
 
     class Door:
         def __init__(self) -> None:
-            self.asked: list[str] = []
+            self.asked: list[tuple[str, Any]] = []
 
         def get_json(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
-            self.asked.append(path)
+            self.asked.append((path, params.get("want")))
             return {"items": []}
 
     door = Door()
     p = base.Pass(door)
     assert Titles().run(p) is None and graph.ADJUDICATE.run(p) is None
-    assert door.asked == []
+    assert door.asked == [("/work/titles", "true"), ("/work/adjudicate", "true")]
     verdict["ok"] = True
+    door.asked.clear()
     Titles().run(p)
-    assert door.asked == ["/work/titles"]
+    assert door.asked == [("/work/titles", None)]
 
 
 def test_libreoffice_is_looked_for_once(monkeypatch: pytest.MonkeyPatch) -> None:

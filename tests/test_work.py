@@ -1761,6 +1761,37 @@ def test_work_deferred_for_a_missing_server_is_demand_for_its_role(
     assert work.wanted_roles() == {}
 
 
+def test_a_worker_whose_model_is_down_leaves_its_step_as_the_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker skips a step whose model cannot answer and leaves the
+    step's name with the door (``want``). When the step has work it is
+    demand for the role serving that model, and ``prax up`` starts the
+    idled server again. Before, the extraction backlog never reached the
+    demand, and 1,106 documents waited twenty hours for a server stopped
+    as quiet (2026-11-24). Nothing stays leased."""
+    monkeypatch.setattr(work, "_wanted", {})
+    monkeypatch.setattr(
+        work, "role_of_step", lambda s: "llama-server" if s == "extract" else None
+    )
+    asked = {"want": "true", "scope": "all"}
+
+    def waiting() -> int:
+        return int(client.get("/work/demand").json()["roles"].get("llama-server", 0))
+
+    got = client.get("/work/extract", params=asked).json()
+    assert got["items"] == [] and got["wanted"] is False and waiting() == 0
+    a = client.post(
+        "/ingest",
+        json={"text": "reverb design by feedback delay networks " * 30, "title": "A"},
+    ).json()["doc_id"]
+    got = client.get("/work/extract", params=asked).json()
+    assert got["items"] == [] and got["wanted"] is True and waiting() == 1
+    assert work.leased("extract") == set()
+    batch = client.get("/work/extract", params={"scope": "all"}).json()
+    assert [i["doc_id"] for i in batch["items"]] == [a]
+
+
 def test_a_step_on_the_served_address_wakes_the_server_by_another_name(
     con: Any, data_dir: Path
 ) -> None:

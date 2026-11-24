@@ -127,7 +127,7 @@ class Extract(Step):
         refused = self.refusal(p)
         if refused:
             return refused
-        if base.model_down(models.resolve(self.name)):
+        if base.wait_for_model(p, self.name, models.resolve(self.name)):
             return None
         items = p.fetch(self.name).get("items") or []
         if not items:

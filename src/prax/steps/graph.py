@@ -64,7 +64,7 @@ class Typing(Step):
         )
         if refused:
             return refused
-        if base.model_down(spec):
+        if base.wait_for_model(p, self.name, spec):
             return None
         items = p.fetch(self.name).get("items") or []
         if not items:
@@ -274,7 +274,7 @@ class Adjudicate(Step):
         )
         if refused:
             return refused
-        if base.model_down(spec):
+        if base.wait_for_model(p, self.name, spec):
             return None
         items = p.fetch(self.name, limit=p.limit * 20).get("items") or []
         if not items:

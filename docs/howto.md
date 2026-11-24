@@ -2985,9 +2985,12 @@ it, and brings it back when something is:
 Quiet is the server's own count (`/metrics`: decode calls, requests in
 flight), read every thirty seconds; the Jobs view and `prax up --status`
 show the role as `idle`. What loads it again is demand from the door
-(`GET /work/demand`). A worker whose step finds the server gone defers
-the item ("not yet", no error against the document), and the door counts
-it for the role serving that step's model. An `ask` that finds it gone
+(`GET /work/demand`). A worker whose step's model is not answering
+asks for no batch. It leaves the step's name with the door instead
+(`GET /work/{step}?want=true`), and the door counts the step for the role
+serving its model when the step has work. A worker whose server goes
+away in the middle of a batch defers the item ("not yet", no error
+against the document), which counts the same way. An `ask` that finds it gone
 counts too, and answers that the model is loading. A load takes a few
 minutes, which is why the quiet time is the hysteresis: nothing unloads
 a server that was used in the last half hour. `prax up --start

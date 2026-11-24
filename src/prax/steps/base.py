@@ -15,6 +15,7 @@ pass over a local model.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from collections.abc import Callable, Iterable
@@ -325,12 +326,25 @@ def paid_refusal(
 def model_down(spec: models.ModelSpec | None) -> bool:
     """Whether the step's model says it cannot answer now
     (``models.ready``: a server that is not up, a key that is not set).
-    The worker then asks for nothing; the supervisor starts the server
-    from the demand, which the door counts without a hand-out. A batch
-    fetched for a server that was down was built, leased and given back
-    on every pass: in the database-only days of 2026-10 that was some
-    9 s of the door's time each 20 s, for work nobody could do."""
+    A batch fetched for a server that was down was built, leased and
+    given back on every pass: in the database-only days of 2026-10 that
+    was some 9 s of the door's time each 20 s, for work nobody could do."""
     return spec is not None and not models.ready(spec).get("ok", True)
+
+
+def wait_for_model(p: Pass, step: str, spec: models.ModelSpec | None) -> bool:
+    """True when the step's model cannot answer now (``model_down``): the
+    worker then fetches no batch, and leaves the step's name with the door
+    instead (``GET /work/{step}?want=true``), the key that says which model
+    its work waits for. The door wants the step if it has work, and the
+    supervisor starts the server that model is on (``work.demand``, ``prax
+    up``'s ``idle_minutes``). A door that cannot be reached is asked again
+    next pass."""
+    if not model_down(spec):
+        return False
+    with contextlib.suppress(Exception):
+        p.door.get_json(f"/work/{step}", {"limit": 1, "scope": p.scope, "want": "true"})
+    return True
 
 
 class ModelStep(Step):
@@ -360,7 +374,7 @@ class ModelStep(Step):
         )
         if refused:
             return refused
-        if model_down(spec):
+        if wait_for_model(p, self.name, spec):
             return None
         batch = p.fetch(self.name)
         items = batch.get("items") or []

@@ -135,16 +135,23 @@ def work_now(req: NowReq) -> dict[str, Any]:
 
 @router.get("/work/{step}")
 def work_out(
-    step: str, request: Request, limit: int = 10, scope: str = "captures"
+    step: str,
+    request: Request,
+    limit: int = 10,
+    scope: str = "captures",
+    want: bool = False,
 ) -> dict[str, Any]:
     """A leased batch of work: parse, titles, extract, embed, or the
-    names of an entity type to resolve."""
+    names of an entity type to resolve. With ``want`` the worker's model
+    for the step cannot answer: no batch, and ``wanted`` says whether the
+    step has work, which wakes the server that model needs."""
     return work.hand_out(
         _con(request),
         step,
         limit=limit,
         scope=scope,
         worker=_worker(request),
+        want=want,
     )
 
 
