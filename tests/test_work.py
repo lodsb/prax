@@ -1768,8 +1768,8 @@ def test_a_worker_whose_model_is_down_leaves_its_step_as_the_key(
     step's name with the door (``want``). When the step has work it is
     demand for the role serving that model, and ``prax up`` starts the
     idled server again. Before, the extraction backlog never reached the
-    demand, and 1,106 documents waited twenty hours for a server stopped
-    as quiet (2026-11-24). Nothing stays leased."""
+    demand, and the nightly pass found the server stopped as quiet and
+    extracted nothing (2026-11-24). Nothing stays leased."""
     monkeypatch.setattr(work, "_wanted", {})
     monkeypatch.setattr(
         work, "role_of_step", lambda s: "llama-server" if s == "extract" else None

@@ -641,8 +641,9 @@ def _probe(h: Any) -> bool:
     wanted, which ``demand`` counts for the role serving its model, and
     ``prax up`` starts that server again. Without it an idled server came
     back only for a reading or an ask: the extraction backlog is not in
-    the demand (it is never empty), so 1,106 documents waited twenty hours
-    for a server stopped as quiet (2026-11-24). One item is handed out and
+    the demand (it is never empty), and the worker's nightly pass over the
+    library found the server stopped as quiet and extracted nothing
+    (2026-11-24). One item is handed out and
     given back at once; a step wanted in the last half of
     ``DEFER_SECONDS`` is not asked again."""
     now = time.monotonic()
