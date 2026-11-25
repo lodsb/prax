@@ -1,0 +1,467 @@
+# prax ontology, music module: what music is made of, as the literature
+# speaks of it. Theory (intervals, scales, modes, chords, harmonic function,
+# progressions, rhythm, meter, form), jazz harmony (voicings, tensions,
+# substitutions, the scales played over chords), orchestration (ensembles,
+# registers, doubling, ways of playing, texture), the works and recordings a
+# text names, kinds of instrument, genres and traditions, and the role a part
+# plays in an arrangement. Requires core and craft: composing is a craft, and a sequence,
+# a modulation or a reharmonization is craft's `technique`, as a joint or a
+# sauce is. Its own kinds of technique, composing and arranging and playing,
+# are subtypes of craft's, so a relation that takes a technique takes them.
+#
+# Theory is what is known, not what is computed. The notes of D Dorian or the
+# intervals of a minor ninth chord are a tool's answer and never edges, so a
+# type here is a kind (the dominant seventh chord) and never one instance of
+# it (G7, C major). What holds only in one tradition says so with `valid_in`.
+#
+# A rule of composition is a convention of a style, never a law: parallel
+# fifths are avoided in common-practice part writing, are the sound of a rock
+# power chord, and were the point of medieval organum. So a rule is
+# `avoided_in` or `typical_of` between a pattern and the genre, tradition or
+# form it holds in, and two traditions that disagree are two contexts, never
+# a contradiction.
+#
+# The names are music's own where a plain word means something else in
+# another field (`musical_scale`, `musical_form`, `music_recording`): a
+# document with no domain is read against every module, and a model that
+# sees `scale` or `form` there takes it for whatever its text means by it.
+# For the same reason no alias is a word other fields use (genre, style,
+# composition, is_a).
+#
+# v1 (2026-11-25): from the sketch in docs/research-code-music-sound.md
+# (musical work, recording, instrument, mode, form, score and lyrics, and
+# their seven relations), grown by a first draft read against harmony and
+# music-theory textbooks and an acoustics primer, and by what books on jazz
+# composition and orchestration speak of.
+module: music
+version: 1
+requires: [core, craft]
+self_types: [score, lyrics]
+
+entity_types:
+  musical_work:
+    parent: work
+    naming: proper
+    same_as: schema:MusicComposition
+    description: >-
+      A piece of music as composed, apart from any performance or
+      recording: a song, a sonata, a jazz standard, a muwashshah. By its
+      title as the text gives it.
+  music_recording:
+    parent: work
+    naming: proper
+    same_as: schema:MusicRecording
+    description: >-
+      One recorded performance or production of a musical work, as
+      released: an album track, a single, a live recording. By its title.
+  musical_instrument:
+    parent: tool
+    naming: common
+    description: >-
+      A kind of instrument or sound source, acoustic or electronic, never
+      one product: piano, electric bass, drum kit, kick drum, string
+      section, analog synthesizer, drum machine, choir. A specific model is
+      studio's device.
+  musical_mode:
+    parent: concept
+    naming: proper
+    description: >-
+      A mode, maqam, raga or other named melodic system: Dorian,
+      Mixolydian, Phrygian dominant, maqam Rast, raga Yaman. The scale it is
+      a rotation of is a musical scale.
+  musical_scale:
+    parent: concept
+    naming: common
+    description: >-
+      A kind of scale as a pattern of intervals, never in one key: major
+      scale, natural minor scale, harmonic minor scale, minor pentatonic
+      scale, blues scale, whole-tone scale. "C major" is a key, which is
+      computed and never an entity.
+  musical_interval:
+    parent: concept
+    naming: common
+    description: >-
+      An interval between two pitches by its name: semitone, minor third,
+      perfect fifth, tritone, octave.
+  chord:
+    parent: concept
+    naming: common
+    description: >-
+      A kind of chord, never one chord on one root: major triad, minor
+      seventh chord, dominant seventh chord, suspended fourth chord, power
+      chord, cluster. G7 is a dominant seventh chord on G, which is
+      computed.
+  harmonic_function:
+    parent: concept
+    naming: common
+    description: >-
+      What a chord does in a key: tonic, dominant, subdominant,
+      predominant, secondary dominant.
+  chord_progression:
+    parent: concept
+    naming: common
+    description: >-
+      A named chord progression or cadence, by its name or its Roman
+      numerals as the text writes them: ii–V–I, I–V–vi–IV, perfect cadence,
+      plagal cadence, Andalusian cadence.
+  rhythm:
+    parent: concept
+    naming: common
+    description: >-
+      A rhythmic idea or pattern in music: syncopation, swing, shuffle,
+      four-on-the-floor, backbeat, half-time feel, polyrhythm, tresillo.
+  musical_meter:
+    parent: concept
+    naming: common
+    description: >-
+      A meter or time signature as a kind: common time, 4/4, 6/8, 7/8,
+      compound duple meter, triple meter, additive meter.
+  voice_leading:
+    parent: concept
+    naming: common
+    description: >-
+      A way parts move against each other, or a pattern of it that a style
+      keeps or avoids: contrary motion, oblique motion, parallel fifths,
+      hidden octaves, voice crossing, suspension, an unresolved leading
+      tone.
+  musical_form:
+    parent: concept
+    naming: common
+    description: >-
+      A form of a piece, or a section of one: sonata form, verse–chorus
+      form, twelve-bar blues, AABA form, rondo, fugue; a verse, a chorus, a
+      bridge, a breakdown, an exposition.
+  music_genre:
+    parent: concept
+    naming: common
+    description: >-
+      A genre or style of music: techno, deep house, drum and bass, jazz,
+      bossa nova, ambient. A subgenre is a genre that specializes another.
+      What kind of text a document is, is not this: that is the document's
+      own genre label.
+  musical_role:
+    parent: concept
+    naming: common
+    description: >-
+      What a part does in an arrangement, whatever plays it: bass line,
+      lead melody, pad, chord stabs, arpeggio, drum groove, counter-melody.
+  musical_tradition:
+    parent: concept
+    naming: common
+    description: >-
+      A tradition or body of theory that a claim about music holds in:
+      Western tonal harmony, jazz harmony, Arabic maqam music, Hindustani
+      classical music.
+  tuning_system:
+    parent: concept
+    naming: common
+    description: >-
+      A tuning system: twelve-tone equal temperament, just intonation,
+      Pythagorean tuning, 24-tone equal temperament.
+  chord_voicing:
+    parent: concept
+    naming: common
+    description: >-
+      A way of spacing and ordering a chord's notes, as a kind: close
+      position, open position, drop 2 voicing, rootless voicing, quartal
+      voicing, upper-structure triad, spread voicing, cluster voicing.
+  chord_tension:
+    parent: concept
+    naming: common
+    description: >-
+      A tone above a chord's seventh, or a kind of such tones: ninth, flat
+      ninth, sharp ninth, sharp eleventh, thirteenth, flat thirteenth,
+      altered tensions.
+  musical_texture:
+    parent: concept
+    naming: common
+    description: >-
+      How the parts of music sound together: monophony, homophony,
+      polyphony, heterophony, melody and accompaniment, unison, soli.
+  articulation:
+    parent: concept
+    naming: common
+    description: >-
+      How a note or phrase is to be played as written, and its dynamics:
+      staccato, legato, accent, marcato, tenuto, ghost note, fall, scoop,
+      crescendo, sforzando.
+  musical_ensemble:
+    parent: concept
+    naming: common
+    description: >-
+      A kind of ensemble by its instrumentation, never one group by name (a
+      named band or orchestra is an organization): big band, string
+      quartet, piano trio, jazz combo, symphony orchestra, wind quintet.
+  instrument_register:
+    parent: concept
+    naming: common
+    description: >-
+      A named part of an instrument's or a voice's range, as the text names
+      it: the clarinet's chalumeau register, the flute's low register, the
+      trumpet's upper register, head voice. Its notes stay in the text.
+  compositional_technique:
+    parent: technique
+    naming: common
+    description: >-
+      A way of composing, arranging or orchestrating, as a craft is
+      practised: reharmonization, tritone substitution, modal interchange,
+      motivic development, sequence, inversion of a line, call and
+      response, doubling, divisi, voicing across sections, line writing.
+  playing_technique:
+    parent: technique
+    naming: common
+    description: >-
+      A way of playing an instrument or singing: pizzicato, col legno,
+      flutter-tonguing, natural harmonics, palm muting, comping, walking a
+      bass line, brushes, vibrato.
+  score:
+    parent: document
+    description: >-
+      A score, lead sheet or part, named by its title. Only the document
+      being extracted.
+  lyrics:
+    parent: document
+    description: >-
+      The words of a song as a text of their own, named by the song's
+      title. Only the document being extracted.
+
+relation_types:
+  composed_by:
+    strength: strong
+    kind: eternal
+    same_as: schema:composer
+    domain: [musical_work]
+    range: [person]
+    description: who wrote the music of the work
+  lyrics_by:
+    strength: strong
+    kind: eternal
+    same_as: schema:lyricist
+    domain: [musical_work]
+    range: [person]
+    description: who wrote the words of the work
+  in_mode:
+    kind: eternal
+    domain: [musical_work]
+    range: [musical_mode]
+    description: the mode, maqam or raga the work is in, as the text states it
+  has_form:
+    kind: eternal
+    domain: [musical_work]
+    range: [musical_form]
+    description: the form the work follows, as the text states it
+  scored_for:
+    kind: eternal
+    domain: [musical_work, score]
+    range: [musical_instrument, musical_ensemble]
+    description: >-
+      an instrument, voice or kind of ensemble the work or score is written
+      for
+  notates:
+    strength: strong
+    kind: eternal
+    domain: [score]
+    range: [musical_work]
+    description: the work the score writes down
+  performance_of:
+    strength: strong
+    kind: eternal
+    same_as: schema:recordingOf
+    domain: [music_recording]
+    range: [musical_work]
+    description: the work the recording is a performance of
+  specializes:
+    strength: strong
+    transitive: true
+    kind: eternal
+    same_as: skos:broader
+    domain: [musical_instrument, musical_mode, musical_scale, chord,
+             harmonic_function, chord_progression, rhythm, musical_meter,
+             voice_leading, musical_form, music_genre, musical_tradition,
+             tuning_system, chord_voicing, chord_tension, musical_texture,
+             articulation, musical_ensemble, compositional_technique,
+             playing_technique]
+    range: [musical_instrument, musical_mode, musical_scale, chord,
+            harmonic_function, chord_progression, rhythm, musical_meter,
+            voice_leading, musical_form, music_genre, musical_tradition,
+            tuning_system, chord_voicing, chord_tension, musical_texture,
+            articulation, musical_ensemble, compositional_technique,
+            playing_technique]
+    description: >-
+      the first is a kind of the second, both the same sort of thing:
+      harmonic minor scale specializes minor scale, deep house specializes
+      house, electric piano specializes keyboard instrument, drop 2 voicing
+      specializes open position. A thing may specialize several, where each
+      is true
+  substitutes_for:
+    kind: eternal
+    domain: [chord, chord_progression, harmonic_function]
+    range: [chord, chord_progression, harmonic_function]
+    description: >-
+      the chord, progression or function can stand in for the other (the
+      tritone substitute for the dominant, a ii–V for a dominant), in the
+      tradition the edge's context names
+  used_over:
+    kind: eternal
+    domain: [musical_scale, musical_mode]
+    range: [chord, harmonic_function]
+    description: >-
+      the scale or mode is what a player or arranger uses over the chord or
+      function, as chord-scale theory pairs them (Dorian over a minor
+      seventh chord, the altered scale over an altered dominant)
+  has_tension:
+    kind: eternal
+    domain: [chord]
+    range: [chord_tension]
+    description: >-
+      the tension is available on the chord, as the text says (a dominant
+      seventh chord takes a flat ninth); one it calls an avoid note is
+      `avoid_note_of`
+  avoid_note_of:
+    kind: eternal
+    domain: [chord_tension, musical_interval]
+    range: [chord]
+    description: >-
+      the text calls the tension or interval an avoid note on the chord (the
+      natural eleventh on a major seventh chord)
+  voicing_of:
+    kind: eternal
+    domain: [chord_voicing]
+    range: [chord]
+    description: >-
+      the voicing is a way to voice this kind of chord (drop 2 voicings of
+      seventh chords, quartal voicings of a minor eleventh chord)
+  has_register:
+    kind: eternal
+    domain: [musical_instrument]
+    range: [instrument_register]
+    description: the instrument or voice has this named register
+  played_on:
+    kind: eternal
+    domain: [playing_technique, articulation]
+    range: [musical_instrument]
+    description: >-
+      the playing technique or articulation is done on this instrument
+      (pizzicato on strings, flutter-tonguing on the flute, a fall on the
+      trumpet)
+  includes_instrument:
+    kind: eternal
+    domain: [musical_ensemble]
+    range: [musical_instrument]
+    description: >-
+      the kind of ensemble has this instrument or section, as the text gives
+      its instrumentation (a big band its saxophone section)
+  doubled_with:
+    symmetric: true
+    kind: eternal
+    domain: [musical_instrument]
+    range: [musical_instrument]
+    description: >-
+      the two instruments or sections are commonly doubled with each other,
+      in unison or octaves, as the text says (flute with the first violins,
+      bass clarinet with the cellos); which octave is in the edge's context
+  takes_from:
+    kind: eternal
+    domain: [music_genre, musical_instrument]
+    range: [music_genre, musical_instrument, musical_tradition]
+    description: >-
+      the genre or instrument takes from the other without being a kind of
+      it: a genre influenced by another or a fusion of several (jazz fusion
+      of jazz and rock), an instrument derived from an older one. A kind of
+      the other is `specializes`
+  resolves_to:
+    kind: eternal
+    domain: [chord, harmonic_function, musical_interval, chord_progression]
+    range: [chord, harmonic_function, musical_interval]
+    description: >-
+      the chord, function, interval or cadence tends to move to the other
+      (the dominant to the tonic, a diminished fifth inward to a third); the
+      tradition it holds in, where the text gives one, in the edge's context
+  typical_of:
+    kind: state
+    domain: [concept, tool, technique]
+    range: [music_genre, musical_tradition, musical_form, musical_ensemble]
+    description: >-
+      the rhythm, instrument, sound, pattern or technique is characteristic
+      of the genre, tradition, form or ensemble (four-on-the-floor of house,
+      the Roland TB-303 of acid house, polyphony of the fugue, the saxophone
+      soli of the big band), as the text
+      claims it, not every one it appears in
+  avoided_in:
+    kind: state
+    domain: [concept, tool, technique]
+    range: [music_genre, musical_tradition, musical_form, musical_ensemble]
+    description: >-
+      the genre, tradition or form avoids the pattern, sound or technique as
+      a convention, which is what a text calls a rule (parallel fifths in
+      common-practice part writing)
+  has_section:
+    kind: eternal
+    domain: [musical_form, musical_work]
+    range: [musical_form]
+    description: >-
+      the form or work has this section or movement (sonata form an
+      exposition, a march a trio), as the text names it
+  exemplifies:
+    kind: eternal
+    domain: [musical_work, music_recording]
+    range: [concept, technique]
+    description: >-
+      the work or recording is what the text names as an example of the
+      concept or technique: a song whose first notes it uses to teach an
+      interval, a piece it plays to show polyphony
+  fills_role:
+    kind: state
+    domain: [musical_instrument, concept]
+    range: [musical_role]
+    description: >-
+      the instrument or sound commonly takes this part in an arrangement
+      (an electric bass the bass line, a string section the pad)
+  valid_in:
+    kind: eternal
+    domain: [concept]
+    range: [musical_tradition, tuning_system]
+    description: >-
+      the concept belongs to this tradition or tuning and is not general
+      (a tritone substitution to jazz harmony, a quarter tone to 24-tone
+      equal temperament)
+
+type_aliases:
+  song: musical_work
+  musical_piece: musical_work
+  maqam: musical_mode
+  raga: musical_mode
+  chord_type: chord
+  chord_quality: chord
+  cadence: chord_progression
+  harmonic_progression: chord_progression
+  time_signature: musical_meter
+  metre: musical_meter
+  voice_motion: voice_leading
+  song_section: musical_form
+  musical_genre: music_genre
+  subgenre: music_genre
+  temperament: tuning_system
+  sheet_music: score
+  lead_sheet: score
+  voicing: chord_voicing
+  chord_extension: chord_tension
+  ensemble_type: musical_ensemble
+  arranging_technique: compositional_technique
+  orchestration_technique: compositional_technique
+  composition_technique: compositional_technique
+  instrumental_technique: playing_technique
+  extended_technique: playing_technique
+
+relation_aliases:
+  composer: composed_by
+  lyricist: lyrics_by
+  recording_of: performance_of
+  subgenre_of: specializes
+  resolves: resolves_to
+  fusion_of: takes_from
+  scored_for_instrument: scored_for
+  substitute_for: substitutes_for
+  played_over: used_over
+  available_tension: has_tension
+  instrumentation: includes_instrument

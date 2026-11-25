@@ -168,3 +168,27 @@ def test_no_pack_module_assigns_a_name_twice() -> None:
                     f"{py.name}: {t.id} at {seen[t.id]} and {node.lineno}"
                 )
                 seen[t.id] = node.lineno
+
+
+def test_the_music_pack_composes_beside_every_module() -> None:
+    """Not registered yet (its manifest says why), so nothing else loads
+    it: this keeps its modules sound meanwhile. They compose with every
+    registered module, lint clean, shadow no name and change no alias; a
+    domain brings what it requires and never studio, which sound no longer
+    needs (a product reaches a kind through research's `implements`)."""
+    from prax.packs.music import MANIFEST
+
+    music = [PACKS_DIR / "music" / f for f in MANIFEST.ontology]
+    every = ontology.load_dir(ontology.path(), packs.ontology_files())
+    with_music = ontology.load_dir(ontology.path(), [*packs.ontology_files(), *music])
+    assert "+music1+" in with_music.version and "+sound1+" in with_music.version
+    assert ontology.lint(with_music.types, with_music.relations) == []
+    for aliases in ("type_aliases", "relation_aliases"):
+        before, after = getattr(every, aliases), getattr(with_music, aliases)
+        assert {k: after.get(k) for k in before} == before
+    assert with_music.for_domains(["sound"]).version == (
+        "core8+craft1+music1+research9+sound1"
+    )
+    assert with_music.for_domains(["music"]).version == "core8+craft1+music1"
+    # a product implements a kind of effect: research's relation, not a new one
+    with_music.check_edge("device", "implements", "audio_effect")

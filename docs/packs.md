@@ -282,8 +282,16 @@ every display formula once and writes `data.check` (`formulas.py`).
 theorems, definitions and variables waits until the extraction measures
 a need for one.
 
-**music** (`docs/research-code-music-sound.md`). The `music.yaml` module
-sketched there. Readers for MIDI and MusicXML through music21, when the
+**music** (`docs/research-code-music-sound.md`). Its knowledge is
+written and not yet registered in `PACKS` (`src/prax/packs/music/`):
+`music.yaml`, the module sketched there, grown by theory, jazz harmony
+and orchestration, and `sound.yaml`, kinds of effect and synthesis, what
+is heard and why, and studio practice. Both hold kinds, never products:
+a product is studio's `device`, which `implements` a kind (research's
+relation). Registering them waits for modules read only where a
+document's domain asks for them, because a document with no domain is
+read against every module, and these two make that prompt 42,201
+characters instead of 23,240. Readers for MIDI and MusicXML through music21, when the
 library holds such files. A `score` kind located by part and bar. Tools
 for key, chords and transposition.
 

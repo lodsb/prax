@@ -1,0 +1,320 @@
+# prax ontology, sound module: how sound is made, shaped and judged, as the
+# literature speaks of it, apart from any one product. Kinds of audio effect
+# and synthesis and their building blocks, the parameters they share, the
+# qualities people hear and the problems they fix, the mechanisms behind
+# them, the features that measure them, and the techniques of recording,
+# mixing and sound design that get from one to the other.
+#
+# Requires core, craft (a mixing technique is a `production_technique`, a
+# kind of craft's `technique`, the practical kind learned by doing), research (a way of synthesis is
+# research's `method`, the scientific kind: FM synthesis, a phase vocoder)
+# and music (its genres for `typical_of`, its theory for `affects`).
+#
+# A kind is not a product. A compressor is a concept here; a product is
+# studio's `device`, which `implements` the kind (research's relation: an
+# 1176 implements a compressor, a synthesizer subtractive synthesis). So
+# nothing here names a product, and the relations hold between kinds:
+# without the split, one device's quirks are said of every compressor. A
+# document about gear that should be read for these kinds carries both
+# domains, studio and sound.
+#
+# Practice is craft, as cooking is: a technique is applied to a source (a
+# vocal, a kick, the drum bus) as an ingredient is prepared, and a kind of
+# sound people name and build (a reese bass, an 808 kick) is what a recipe's
+# dish is. What a sound is like as heard is a `sound_quality`: a scale
+# (bright to dark), a material it evokes (glassy, metallic), a shape in time
+# (swelling, granular), a place in space (wide, distant), or a judgement
+# (muddy, harsh), which makes it a `sound_problem`. Why it sounds so is an
+# `acoustic_mechanism` (masking, comb filtering, the Haas effect), kept apart
+# from what is heard, as a cause from an appearance.
+#
+# The relations that say what to do (`achieved_by`, `remedied_by`, `sets`,
+# `done_with`, `alternative_to`) take their context on the edge rather than
+# more edges: where a claim holds (a drum bus), and the value, range, unit
+# or direction of a setting.
+#
+# As in music, a plain word another field uses is not a name or an alias
+# here (mechanism, parameter, quality, metric, effect).
+#
+# v1 (2026-11-25): first version, grown by a first draft read against an
+# acoustics primer, effect documentation and a chapter on FM synthesis, and
+# by what books on studio technique speak of (miking, mixing).
+module: sound
+version: 1
+requires: [core, craft, research, music]
+
+entity_types:
+  audio_effect:
+    parent: concept
+    naming: common
+    description: >-
+      A kind of audio processing, never one product: compressor, limiter,
+      equalizer, filter, reverb, delay, chorus, distortion, bitcrusher,
+      transient shaper, noise gate, de-esser. A product implements one, and
+      one product may implement several.
+  synthesis_method:
+    parent: method
+    naming: common
+    description: >-
+      A way of making sound: subtractive synthesis, FM synthesis, wavetable
+      synthesis, granular synthesis, additive synthesis, physical
+      modelling, sampling.
+  synthesis_element:
+    parent: concept
+    naming: common
+    description: >-
+      A building block that makes or shapes a signal inside an instrument
+      and is not an audio effect of its own: oscillator, envelope,
+      low-frequency oscillator, noise source, wavetable, operator, sub
+      oscillator. A filter is an audio effect.
+  sound_parameter:
+    parent: concept
+    naming: common
+    description: >-
+      A parameter that a kind of effect or synthesis element has, apart
+      from any product: threshold, ratio, attack time, release time, cutoff
+      frequency, resonance, pre-delay, feedback, dry/wet mix, detune. A
+      product's own control is studio's feature.
+  sound_quality:
+    parent: concept
+    naming: common
+    description: >-
+      What a sound or a mix is like as people hear and describe it, as a
+      noun: on a scale (brightness, warmth, roughness, fullness, punch), a
+      material or source it evokes (glassiness, breathiness), a shape in
+      time (swell, graininess), a place in space (width, depth, distance),
+      or the mix as a whole (clarity, glue, air). "Punchy" and "glassy" are
+      labels of punch and glassiness.
+  sound_problem:
+    parent: sound_quality
+    naming: common
+    description: >-
+      A quality judged unwanted where it is heard, which a technique fixes:
+      muddiness, harshness, sibilance, boominess, boxiness, thinness,
+      clipping distortion. Why it happens is an acoustic mechanism.
+  acoustic_mechanism:
+    parent: concept
+    naming: common
+    description: >-
+      A physical or perceptual mechanism behind what is heard, never the
+      quality itself: masking, comb filtering, phase cancellation, the Haas
+      effect, the proximity effect, room modes, aliasing, intermodulation,
+      equal-loudness contours.
+  audio_band:
+    parent: concept
+    naming: common
+    description: >-
+      A named range of the audible spectrum: sub-bass, bass, low mids, mids,
+      upper mids, presence, air. Its limits in hertz stay in the text, since
+      texts draw them differently.
+  sound_type:
+    parent: concept
+    naming: common
+    description: >-
+      A kind of sound people name, design and build, never one preset:
+      reese bass, supersaw lead, 808 kick, pluck, pad, riser, wobble bass.
+      What a part plays in an arrangement is a musical role.
+  production_technique:
+    parent: technique
+    naming: common
+    description: >-
+      A way of recording, mixing, mastering or designing a sound, as a
+      craft is practised: close miking, XY stereo miking, ORTF, double
+      tracking, gain staging, parallel compression, sidechain compression,
+      high-pass filtering, re-amping, layering, resampling.
+  polar_pattern:
+    parent: concept
+    naming: common
+    description: >-
+      The directions a kind of microphone picks up from: omnidirectional,
+      cardioid, supercardioid, hypercardioid, figure-eight. A product's own
+      pattern switch is studio's feature.
+  audio_feature:
+    parent: concept
+    naming: common
+    description: >-
+      A measurable property of audio: loudness, integrated loudness, peak
+      level, crest factor, spectral centroid, transient, dynamic range,
+      stereo correlation.
+
+relation_types:
+  has_parameter:
+    kind: eternal
+    domain: [audio_effect, synthesis_method, synthesis_element]
+    range: [sound_parameter]
+    description: >-
+      the kind of processing or synthesis has this parameter, whatever
+      product implements it (a compressor has a threshold and a ratio)
+  affects:
+    kind: eternal
+    domain: [sound_parameter, audio_effect, synthesis_element,
+             synthesis_method, technique, chord, musical_interval,
+             harmonic_function, chord_progression, voice_leading,
+             musical_scale, musical_mode, rhythm, musical_meter,
+             tuning_system]
+    range: [sound_quality, audio_feature, sound_parameter]
+    description: >-
+      changing the parameter, or applying the effect, technique or element,
+      changes this quality, problem or feature; which way and by how much is
+      in the edge's context (a slower attack keeps more punch). Harmony and
+      rhythm are heard as well: a dominant seventh chord brings unrest,
+      syncopation surprise
+  measured_by:
+    kind: eternal
+    domain: [sound_quality]
+    range: [audio_feature]
+    description: >-
+      the quality or problem shows in this measurable feature (punch in the
+      crest factor, brightness in the spectral centroid)
+  achieved_by:
+    kind: eternal
+    domain: [sound_quality]
+    range: [technique, audio_effect, synthesis_method, synthesis_element,
+            voice_leading]
+    description: >-
+      the quality is gained by the technique or the kind of effect, in the
+      context the edge names (punch on a drum bus by parallel compression,
+      smoothness by contrary motion)
+  remedied_by:
+    kind: eternal
+    domain: [sound_problem, acoustic_mechanism, voice_leading]
+    range: [technique, audio_effect, synthesis_method, voice_leading]
+    description: >-
+      the problem, or the mechanism behind one, is fixed by the technique or
+      the kind of effect (muddiness by cutting the low mids with an
+      equalizer, consecutive fifths by contrary motion)
+  causes:
+    kind: eternal
+    domain: [technique, audio_effect, synthesis_method, sound_parameter,
+             synthesis_element, sound_type, tuning_system]
+    range: [sound_problem, acoustic_mechanism]
+    description: >-
+      the technique, effect, element, kind of sound or tuning, or a setting
+      of the parameter, brings the problem or the mechanism about (too fast
+      a release distortion on bass, a sawtooth oscillator aliasing,
+      Pythagorean tuning the wolf fifth)
+  done_with:
+    kind: eternal
+    domain: [technique]
+    range: [audio_effect, synthesis_method, synthesis_element, polar_pattern]
+    description: >-
+      the technique is carried out with this kind of effect, synthesis or
+      microphone pattern (sidechain compression with a compressor, ORTF with
+      two cardioids). A tool it needs is craft's `needs`
+  sets:
+    kind: eternal
+    domain: [technique, sound_type, synthesis_method]
+    range: [sound_parameter, audio_feature]
+    description: >-
+      the technique or the recipe of a kind of sound sets this parameter, or
+      brings a measured feature to a target, with the value, range, unit or
+      direction in the edge's context (parallel compression a high ratio,
+      a bell-like FM sound a high modulation index, loudness normalization
+      the integrated loudness)
+  opposite_of:
+    symmetric: true
+    kind: eternal
+    domain: [sound_quality]
+    range: [sound_quality]
+    description: >-
+      the two are opposite ends of one scale (brightness and darkness,
+      muddiness and clarity)
+  heard_in:
+    kind: eternal
+    domain: [sound_quality]
+    range: [audio_band]
+    description: >-
+      the quality or problem sits in this part of the spectrum (muddiness in
+      the low mids, air above 10 kHz), with its limits in the edge's context
+      when the text gives its own
+  evokes:
+    kind: eternal
+    domain: [sound_quality, sound_type]
+    range: [material, musical_instrument]
+    description: >-
+      the quality or kind of sound is heard as the material or source it is
+      named for (glassiness evokes glass, breathiness the voice, a tubular
+      bell sound a bell)
+  arises_from:
+    kind: eternal
+    domain: [sound_quality]
+    range: [acoustic_mechanism, audio_feature]
+    description: >-
+      the quality or problem is how this mechanism or property of the signal
+      is heard (muddiness from masking, a hollow sound from comb filtering,
+      width from the Haas effect, a bell-like timbre from an inharmonic
+      spectrum)
+  exploits:
+    kind: eternal
+    domain: [technique, audio_effect, synthesis_method]
+    range: [acoustic_mechanism]
+    description: >-
+      the technique or effect works by this mechanism (Haas widening by the
+      Haas effect, sidechain ducking by masking)
+  made_from:
+    kind: eternal
+    domain: [sound_type, synthesis_method, audio_effect]
+    range: [synthesis_method, synthesis_element, audio_effect, technique,
+            musical_instrument]
+    description: >-
+      what the kind of sound, synthesis method or effect is built with, as a
+      recipe calls for its ingredients (a reese bass with detuned saw
+      oscillators and a low-pass filter, FM synthesis with oscillators as
+      carrier and modulator, a reverb with delays, a phaser with all-pass
+      filters); amounts and settings stay in the text or in `sets`. What a
+      thing is physically made of is craft's `made_of`
+  applied_to:
+    kind: eternal
+    domain: [technique, audio_effect, tuning_system, rhythm]
+    range: [musical_instrument, musical_role, sound_type]
+    description: >-
+      the technique, kind of effect, tuning or rhythm is used on this source
+      or part, as the text says it usually is (parallel compression on
+      drums, de-essing on vocals, equal temperament on the piano,
+      syncopation in a bass line); what it fixes there is `remedied_by`
+  alternative_to:
+    symmetric: true
+    kind: eternal
+    domain: [technique, synthesis_method, audio_effect, tuning_system]
+    range: [technique, synthesis_method, audio_effect, tuning_system]
+    description: >-
+      the two techniques, effects or tunings reach the same goal, which the
+      edge's context names (sidechain compression and volume shaping for
+      ducking, a limiter and a compressor for peaks)
+
+type_aliases:
+  audio_effect_type: audio_effect
+  effect_type: audio_effect
+  audio_processor: audio_effect
+  synthesis_technique: synthesis_method
+  oscillator_type: synthesis_element
+  audio_parameter: sound_parameter
+  timbre: sound_quality
+  timbral_quality: sound_quality
+  perceptual_descriptor: sound_quality
+  mix_problem: sound_problem
+  psychoacoustic_effect: acoustic_mechanism
+  psychoacoustic_phenomenon: acoustic_mechanism
+  frequency_band: audio_band
+  kind_of_sound: sound_type
+  designed_sound: sound_type
+  mixing_technique: production_technique
+  recording_technique: production_technique
+  mastering_technique: production_technique
+  microphone_technique: production_technique
+  sound_design_technique: production_technique
+  pickup_pattern: polar_pattern
+
+relation_aliases:
+  parameter_of: {to: has_parameter, reversed: true}
+  shows_in: measured_by
+  fixed_by: remedied_by
+  fixes: {to: remedied_by, reversed: true}
+  remedies: {to: remedied_by, reversed: true}
+  uses_effect: done_with
+  sets_parameter: sets
+  sits_in: heard_in
+  reminiscent_of: evokes
+  works_by: exploits
+  constructed_with: made_from
+  used_on: applied_to
