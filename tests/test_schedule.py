@@ -203,6 +203,56 @@ def test_the_nightly_pass_happens_at_the_hour_and_once_a_day(
     assert scopes[-1] == "captures"
 
 
+def _nightly_with_a_model_down(
+    monkeypatch: pytest.MonkeyPatch, down_for: int, step: float, looks: int
+) -> list[dict[str, Any]]:
+    """Watch from 02:59:10 with a look every ``step`` seconds; extract's
+    model is down for its first ``down_for`` passes over everything."""
+    passes: list[dict[str, Any]] = []
+    down = {"left": down_for}
+
+    def fake_run_once(door: Any, **kw: Any) -> dict[str, Any]:
+        passes.append(kw)
+        if kw["scope"] == "all" and "extract" in kw["steps"] and down["left"] > 0:
+            down["left"] -= 1
+            kw["waited"].append("extract")
+        if len(passes) == looks:
+            raise KeyboardInterrupt
+        return {}
+
+    monkeypatch.setattr(worker, "run_once", fake_run_once)
+    _ticking_clock(monkeypatch, datetime(2026, 9, 17, 2, 59, 10).astimezone(), step)
+    with pytest.raises(KeyboardInterrupt):
+        worker.watch(_Door(), interval=0.01, nightly="03:00", nightly_limit=7)  # type: ignore[arg-type]
+    return [p for p in passes if p["scope"] == "all"]
+
+
+def test_the_nightly_pass_runs_a_step_again_once_its_model_is_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The night of 2026-11-24 the pass found the idled llama-server down:
+    extraction left its key, the server woke some three minutes later, and
+    the pass, over in seconds, had read nothing. The step that waited runs
+    again, over everything and with the nightly limit, until its model
+    answers, and then no more."""
+    nightly = _nightly_with_a_model_down(monkeypatch, down_for=2, step=20, looks=20)
+    assert nightly[0]["steps"] == worker.STEPS
+    assert [p["steps"] for p in nightly[1:]] == [("extract",), ("extract",)]
+    assert all(p["limit"] == 7 for p in nightly)
+
+
+def test_the_nightly_pass_stops_waiting_for_a_model_after_an_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A model that never comes back is not asked for all day."""
+    nightly = _nightly_with_a_model_down(
+        monkeypatch, down_for=10**6, step=600, looks=40
+    )
+    again = nightly[1:]
+    assert again and all(p["steps"] == ("extract",) for p in again)
+    assert len(again) * 600 <= worker.NIGHT_WAIT_MINUTES * 60
+
+
 def _pdf_with(con: sqlite3.Connection, name: str, figure: str) -> int:
     doc = store.register(con, name.encode() * 3, mime="application/pdf", title=name)
     store.index_text(con, doc["doc_id"], "# Pictures\n\n" + "Prose. " * 20 + figure)

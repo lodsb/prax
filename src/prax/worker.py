@@ -20,7 +20,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +43,10 @@ STEPS = steps_mod.STEPS
 # enough to outlive any restart and short of the hours both incidents
 # cost.
 GIVE_UP_AFTER = 20
+# how long the nightly pass waits for a model it found down: the steps that
+# waited run again, over everything, on each look until their server
+# answers (a llama-server takes some three minutes to load) or this passes
+NIGHT_WAIT_MINUTES = 60
 
 
 def _kind_of_trouble(exc: BaseException) -> str:
@@ -73,12 +77,14 @@ def run_once(
     session: int | None = None,
     spend: bool = False,
     log_: Log | None = None,
+    waited: list[str] | None = None,
 ) -> dict[str, Any]:
     """One pass over the steps: fetch a batch, do it, post it. Returns what
     each step did; a step with nothing to do is absent. ``spend`` lets the
     promote step run its paid model; without it a paid step is refused
     before anything is fetched. What each step does is the step's
-    (``prax.steps``)."""
+    (``prax.steps``). ``waited`` is given the steps that fetched nothing
+    because their model was down (``steps.base.wait_for_model``)."""
     from prax.steps.base import Pass
 
     p = Pass(door, scope, limit, workers, session, spend, log_)
@@ -98,6 +104,8 @@ def run_once(
             continue
         out[step] = line
         say(log_, f"{step}: {line}")
+    if waited is not None:
+        waited.extend(p.waited)
     if failed is not None:
         raise failed
     return out
@@ -174,7 +182,12 @@ def watch(
     this worker. With ``nightly`` (``"03:00"``) one bounded pass over the
     whole library follows the regular one once that hour has passed each
     day: the backlog and the stale texts, ``nightly_limit`` documents a
-    step, the same steps."""
+    step, the same steps. A step of it whose model was down (an idled
+    server, ``prax up``'s ``idle_minutes``) left its name as the key that
+    wakes the server, and runs again on each next look until the model
+    answers, for ``NIGHT_WAIT_MINUTES``: the pass itself is over in
+    seconds, before the server has loaded (2026-11-24, when the night's
+    extraction found the server idled and the pass read nothing)."""
     from prax import config
     from prax.host import schedule
 
@@ -185,6 +198,10 @@ def watch(
     # for tomorrow's rather than running a pass over everything at noon
     last_night: datetime | None = datetime.now().astimezone() if night else None
     same, last_trouble = 0, ""  # a failure that repeats is not a bad pass
+    # the nightly pass's steps that found their model down, and until when
+    # they are tried again
+    night_left: tuple[str, ...] = ()
+    night_until: datetime | None = None
     session = None
     try:
         session = door.post_json(
@@ -216,22 +233,40 @@ def watch(
                     log_=log_,
                 )
                 now = datetime.now().astimezone()
+                night_steps: tuple[str, ...] = ()
                 if night and schedule.due(night, now, last_night):
                     last_night = now
+                    night_steps = steps
+                    night_until = now + timedelta(minutes=NIGHT_WAIT_MINUTES)
                     say(
                         log_,
                         f"the nightly pass: {nightly_limit} a step over everything",
                     )
-                    done = run_once(
-                        door,
-                        steps=steps,
-                        scope="all",
-                        limit=nightly_limit,
-                        workers=workers,
-                        session=session,
-                        spend=spend,
-                        log_=log_,
+                elif night_left and night_until and now < night_until:
+                    night_steps = night_left
+                elif night_left:
+                    say(
+                        log_,
+                        "the nightly pass gave up waiting for the model of "
+                        + ", ".join(night_left),
                     )
+                    night_left = ()
+                if night_steps:
+                    waited: list[str] = []
+                    try:  # a step's failure must not lose what waited
+                        done = run_once(
+                            door,
+                            steps=night_steps,
+                            scope="all",
+                            limit=nightly_limit,
+                            workers=workers,
+                            session=session,
+                            spend=spend,
+                            log_=log_,
+                            waited=waited,
+                        )
+                    finally:
+                        night_left = tuple(waited)
                 if session:
                     door.post_json(
                         f"/work/session/{session}",

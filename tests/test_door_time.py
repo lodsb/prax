@@ -112,10 +112,12 @@ def test_a_worker_asks_for_no_batch_while_the_steps_model_cannot_answer(
     p = base.Pass(door)
     assert Titles().run(p) is None and graph.ADJUDICATE.run(p) is None
     assert door.asked == [("/work/titles", "true"), ("/work/adjudicate", "true")]
+    assert p.waited == ["titles", "adjudicate"]  # what the nightly pass runs again
     verdict["ok"] = True
     door.asked.clear()
     Titles().run(p)
     assert door.asked == [("/work/titles", None)]
+    assert p.waited == ["titles", "adjudicate"]  # an answering model adds none
 
 
 def test_libreoffice_is_looked_for_once(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -153,6 +153,9 @@ class Pass:
     session: int | None = None
     spend: bool = False
     log: Log | None = None
+    # the steps that found their model down this pass (``wait_for_model``):
+    # the nightly pass runs them again once the server is up
+    waited: list[str] = field(default_factory=list)
 
     def fetch(self, step: str, **params: Any) -> dict[str, Any]:
         got: dict[str, Any] = self.door.get_json(
@@ -342,6 +345,7 @@ def wait_for_model(p: Pass, step: str, spec: models.ModelSpec | None) -> bool:
     next pass."""
     if not model_down(spec):
         return False
+    p.waited.append(step)
     with contextlib.suppress(Exception):
         p.door.get_json(f"/work/{step}", {"limit": 1, "scope": p.scope, "want": "true"})
     return True

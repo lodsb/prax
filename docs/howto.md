@@ -2988,7 +2988,10 @@ show the role as `idle`. What loads it again is demand from the door
 (`GET /work/demand`). A worker whose step's model is not answering
 asks for no batch. It leaves the step's name with the door instead
 (`GET /work/{step}?want=true`), and the door counts the step for the role
-serving its model when the step has work. A worker whose server goes
+serving its model when the step has work. The nightly pass is over
+before a woken server has loaded, so a step of it that found its model
+down runs again, over everything, on each later look until the model
+answers, for an hour at most (`worker.NIGHT_WAIT_MINUTES`). A worker whose server goes
 away in the middle of a batch defers the item ("not yet", no error
 against the document), which counts the same way. An `ask` that finds it gone
 counts too, and answers that the model is loading. A load takes a few
