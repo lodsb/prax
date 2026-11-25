@@ -1,0 +1,12 @@
+# The domain rules the music pack suggests (docs/packs.md); a person tries
+# them with POST /domains/dry-run and copies the ones wanted into
+# prax.yaml, before studio's, which send the same subjects to studio
+# alone. Music is theory, composition and orchestration; sound is what is
+# heard and how it is made and shaped, with music under it; a text about
+# studio practice speaks of gear as well, so it keeps studio beside sound.
+- match: {genre: paper, subject: music}
+  domains: [research, music]
+- match: {genre: paper, subject: audio}
+  domains: [research, sound]
+- match: {subject: [music, audio]}
+  domains: [studio, sound]

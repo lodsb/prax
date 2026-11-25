@@ -282,16 +282,19 @@ every display formula once and writes `data.check` (`formulas.py`).
 theorems, definitions and variables waits until the extraction measures
 a need for one.
 
-**music** (`docs/research-code-music-sound.md`). Its knowledge is
-written and not yet registered in `PACKS` (`src/prax/packs/music/`):
-`music.yaml`, the module sketched there, grown by theory, jazz harmony
-and orchestration, and `sound.yaml`, kinds of effect and synthesis, what
-is heard and why, and studio practice. Both hold kinds, never products:
-a product is studio's `device`, which `implements` a kind (research's
-relation). Registering them waits for modules read only where a
-document's domain asks for them, because a document with no domain is
-read against every module, and these two make that prompt 42,201
-characters instead of 23,240. Readers for MIDI and MusicXML through music21, when the
+**music** (`docs/research-code-music-sound.md`). Its knowledge
+(`src/prax/packs/music/`): `music.yaml`, the module sketched there,
+grown by theory, jazz harmony and orchestration, and `sound.yaml`, kinds
+of effect and synthesis, what is heard and why, and studio practice.
+Both hold kinds, never products: a product is studio's `device`, which
+`implements` a kind (research's relation). Both are `opt_in: true`: a
+document is read against them only when its domain set names music or
+sound (`Ontology.for_domains`), because a document with no set is read
+against every other module, and these two would make that prompt
+42,201 characters instead of 23,240 and every such reading due again.
+The pack's `rules.yaml` suggests `[research, music]` and `[research,
+sound]` for papers and `[studio, sound]` for the rest of music and
+audio, placed before studio's. Readers for MIDI and MusicXML through music21, when the
 library holds such files. A `score` kind located by part and bar. Tools
 for key, chords and transposition.
 

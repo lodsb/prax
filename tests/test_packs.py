@@ -24,7 +24,7 @@ def test_the_knowledge_of_every_pack_is_composed() -> None:
     version string they had in one folder; a golden run compared the whole
     ontology, the sameness rule and the lexicon before and after."""
     assert ontology.current().version == (
-        "core8+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
+        "core8+computing2+craft1+electronics1+kitchen2+music1+research9+society1+sound1+studio5+workshop2"
     )
     files = ontology.module_files()
     assert files["research"].parent == PACKS_DIR / "research"
@@ -170,25 +170,34 @@ def test_no_pack_module_assigns_a_name_twice() -> None:
                 seen[t.id] = node.lineno
 
 
-def test_the_music_pack_composes_beside_every_module() -> None:
-    """Not registered yet (its manifest says why), so nothing else loads
-    it: this keeps its modules sound meanwhile. They compose with every
-    registered module, lint clean, shadow no name and change no alias; a
-    domain brings what it requires and never studio, which sound no longer
-    needs (a product reaches a kind through research's `implements`)."""
+def test_the_music_pack_is_read_only_where_a_domain_names_it() -> None:
+    """music and sound are opt_in: a document with no domain set is read
+    against the modules it was read against before them, so its prompt did
+    not grow and its reading is not due again. Named, they bring what they
+    require and never studio, which sound does not need (a product reaches
+    a kind through research's `implements`). Beside every other module they
+    lint clean and change no alias."""
+    from prax.graph import extraction
     from prax.packs.music import MANIFEST
 
-    music = [PACKS_DIR / "music" / f for f in MANIFEST.ontology]
-    every = ontology.load_dir(ontology.path(), packs.ontology_files())
-    with_music = ontology.load_dir(ontology.path(), [*packs.ontology_files(), *music])
-    assert "+music1+" in with_music.version and "+sound1+" in with_music.version
-    assert ontology.lint(with_music.types, with_music.relations) == []
-    for aliases in ("type_aliases", "relation_aliases"):
-        before, after = getattr(every, aliases), getattr(with_music, aliases)
-        assert {k: after.get(k) for k in before} == before
-    assert with_music.for_domains(["sound"]).version == (
-        "core8+craft1+music1+research9+sound1"
+    onto = ontology.current()
+    mine = {PACKS_DIR / "music" / f for f in MANIFEST.ontology}
+    without = ontology.load_dir(
+        ontology.path(), [f for f in packs.ontology_files() if f not in mine]
     )
-    assert with_music.for_domains(["music"]).version == "core8+craft1+music1"
+    undomained = onto.for_domains(None)
+    assert undomained.version == without.version
+    assert extraction.system_prompt(undomained) == extraction.system_prompt(without)
+    assert ontology.lint(onto.types, onto.relations) == []
+    for aliases in ("type_aliases", "relation_aliases"):
+        before, after = getattr(without, aliases), getattr(onto, aliases)
+        assert {k: after.get(k) for k in before} == before
+    assert onto.for_domains(["sound"]).version == "core8+craft1+music1+research9+sound1"
+    assert onto.for_domains(["music"]).version == "core8+craft1+music1"
+    assert onto.for_domains(["studio", "sound"]).version == (
+        "core8+craft1+music1+research9+sound1+studio5"
+    )
     # a product implements a kind of effect: research's relation, not a new one
-    with_music.check_edge("device", "implements", "audio_effect")
+    onto.for_domains(["studio", "sound"]).check_edge(
+        "device", "implements", "audio_effect"
+    )

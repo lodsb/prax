@@ -41,6 +41,9 @@
 # by what books on studio technique speak of (miking, mixing).
 module: sound
 version: 1
+# read only where a document's domain set names it (or sound, built on
+# it): a document with no set is not read against it
+opt_in: true
 requires: [core, craft, research, music]
 
 entity_types:

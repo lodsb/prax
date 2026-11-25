@@ -133,6 +133,11 @@ class Module:
     # what the document being extracted may be in this module (a paper;
     # a manual, datasheet, schematic or article); empty: a plain document
     self_types: tuple[str, ...] = ()
+    # read only where a document's domain set names it (or a module built
+    # on it): a document with no set is read against the others alone
+    # (``Ontology.for_domains``). A module for one field's own words (music,
+    # sound) that every other document would otherwise be read against
+    opt_in: bool = False
 
 
 @dataclass(frozen=True)
@@ -295,9 +300,12 @@ class Ontology:
     def for_domains(self, domains: list[str] | set[str] | None) -> Ontology:
         """The core plus the named modules (and what they require): the
         ontology a document of those domains is extracted against. None
-        or an empty set is the whole ontology."""
+        or an empty set is every module that is not ``opt_in`` nor built on
+        one, which is the whole ontology while none is."""
         if not domains:
-            return self
+            if not any(m.opt_in for m in self.modules.values()):
+                return self
+            return self._undomained()
         key = frozenset(d for d in domains if d in self.modules)
         if key not in self._subsets:
             wanted: set[str] = {CORE}
@@ -310,6 +318,21 @@ class Ontology:
                 stack.extend(self.modules[m].requires)
             self._subsets[key] = compose(
                 [self.modules[m] for m in self.modules if m in wanted]
+            )
+        return self._subsets[key]
+
+    def _undomained(self) -> Ontology:
+        """Every module whose closure holds no ``opt_in`` one, cached under
+        the empty key (no domain set asks for nothing by name)."""
+        key: frozenset[str] = frozenset()
+        if key not in self._subsets:
+            opt_in = {n for n, m in self.modules.items() if m.opt_in}
+            self._subsets[key] = compose(
+                [
+                    m
+                    for m in self.modules.values()
+                    if not (_closure(m, self.modules) & opt_in)
+                ]
             )
         return self._subsets[key]
 
@@ -479,7 +502,15 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
         relation_aliases=relation_aliases,
         reversed_aliases=frozenset(reversed_aliases),
         self_types=tuple(str(t) for t in (data.get("self_types") or [])),
+        opt_in=_flag(data.get("opt_in", False), f"module {mod!r}: opt_in"),
     )
+
+
+def _flag(value: Any, what: str) -> bool:
+    """A yes or no in a module file, refusing any other word."""
+    if not isinstance(value, bool):
+        raise ValueError(f"{what} is true or false, not {value!r}")  # noqa: TRY004 (a module's fault)
+    return value
 
 
 def _declare(

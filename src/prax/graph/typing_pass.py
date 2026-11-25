@@ -175,7 +175,7 @@ def batches(
     for it in sorted(items, key=lambda x: (x["source_doc"] or 0, x["id"])):
         by_subset.setdefault(subset_of.get(it["source_doc"], ()), []).append(it)
     for key, group in by_subset.items():
-        onto = whole.for_domains(list(key)) if key else whole
+        onto = whole.for_domains(list(key))
         for i in range(0, len(group), size):
             chunk = group[i : i + size]
             yield Batch(
@@ -221,7 +221,7 @@ def batch_of(item: dict[str, Any]) -> Batch:
     """A worker's or the door's Batch from a handed-out item."""
     whole = ontology.current()
     domains = list(item.get("domains") or [])
-    onto = whole.for_domains(domains) if domains else whole
+    onto = whole.for_domains(domains)
     docs = {int(k): (v[0], v[1]) for k, v in (item.get("docs") or {}).items()}
     return Batch(list(item["items"]), docs, onto)
 

@@ -23,12 +23,13 @@ from prax.packs.base import Pack
 from prax.packs.computing import MANIFEST as COMPUTING
 from prax.packs.craft import MANIFEST as CRAFT
 from prax.packs.maths import MANIFEST as MATHS
+from prax.packs.music import MANIFEST as MUSIC
 from prax.packs.research import MANIFEST as RESEARCH
 from prax.packs.society import MANIFEST as SOCIETY
 from prax.packs.studio import MANIFEST as STUDIO
 
 ROOT = Path(__file__).parent
-PACKS: tuple[Pack, ...] = (RESEARCH, CRAFT, STUDIO, COMPUTING, SOCIETY, MATHS)
+PACKS: tuple[Pack, ...] = (RESEARCH, CRAFT, STUDIO, COMPUTING, SOCIETY, MATHS, MUSIC)
 
 
 def by_name(name: str) -> Pack:

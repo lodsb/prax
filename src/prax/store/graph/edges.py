@@ -1413,10 +1413,24 @@ def _subset_version_case(
 ) -> tuple[str, list[Any]]:
     """The SQL for "the version this document's reading should carry": a
     CASE over the domain sets in use (few) mapping each to the version of
-    its subset of ``onto``, ``whole`` for a document without a set. Without
-    ``onto`` every document is held to ``whole``."""
+    its subset of ``onto``, and a document without a set to what such a
+    document is read against (``for_domains(None)``: every module but the
+    ``opt_in`` ones) when ``whole`` is ``onto``'s version or the current
+    one's. Without ``onto`` a document with a set is held to ``whole``; a
+    ``whole`` of another ontology holds every document to itself."""
+    none = whole
     if onto is None:
-        return "?", [whole]
+        current = ontology.current()
+        if whole == current.version:
+            none = current.for_domains(None).version
+        if none == whole:
+            return "?", [whole]
+        return (
+            "CASE WHEN json_extract(meta, '$.domains') IS NULL THEN ? ELSE ? END",
+            [none, whole],
+        )
+    if whole == onto.version:
+        none = onto.for_domains(None).version
     whens: list[str] = []
     args: list[Any] = []
     for raw, domains in domain_sets(con):
@@ -1425,8 +1439,8 @@ def _subset_version_case(
         whens.append("WHEN ? THEN ?")
         args.extend([raw, onto.for_domains(domains).version])
     if not whens:
-        return "?", [whole]
-    args.append(whole)
+        return "?", [none]
+    args.append(none)
     return f"CASE json_extract(meta, '$.domains') {' '.join(whens)} ELSE ? END", args
 
 

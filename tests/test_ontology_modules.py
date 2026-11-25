@@ -11,6 +11,12 @@ from prax.graph import ontology
 from tests.conftest import copy_ontology
 
 EVERY_MODULE = (
+    "core8+computing2+craft1+electronics1+kitchen2+music1+research9"
+    "+society1+sound1+studio5+workshop2"
+)
+# what a document with no domain set is read against: music and sound
+# are opt_in
+UNDOMAINED = (
     "core8+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
 )
 
@@ -135,12 +141,15 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "craft",
         "electronics",
         "kitchen",
+        "music",
         "research",
         "society",
+        "sound",
         "studio",
         "workshop",
     }
     assert o.version == EVERY_MODULE
+    assert o.for_domains(None).version == UNDOMAINED
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -151,6 +160,8 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "build",
         "source_code",
         "essay",
+        "score",
+        "lyrics",
     }
     # software is gear to studio's relations: a manual describes a program
     assert o.is_a("program", "device") and o.is_a("symbol", "component")
@@ -172,8 +183,8 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert (
         ontology.current().version
-        == "core8+computing2+craft1+electronics1+kitchen2+research99"
-        "+society1+studio5+workshop2"
+        == "core8+computing2+craft1+electronics1+kitchen2+music1+research99"
+        "+society1+sound1+studio5+workshop2"
     )
 
 
@@ -326,3 +337,46 @@ def test_electronics_module() -> None:
     # read against studio alone
     assert "electronics" in o.within("studio")
     assert "part_kind" not in o.for_domains(["studio"]).types
+
+
+def test_an_opt_in_module_is_read_only_where_a_domain_names_it() -> None:
+    """A document with no domain set is read against every module but an
+    opt_in one and those built on it; named, the module comes with what it
+    requires. A word other than true or false is refused."""
+    base = """
+module: core
+version: 1
+entity_types: {thing: {description: a thing}}
+"""
+    music = """
+module: music
+version: 1
+opt_in: true
+requires: [core]
+entity_types: {chord: {parent: thing, description: a chord}}
+"""
+    synth = """
+module: synth
+version: 2
+requires: [music]
+entity_types: {patch: {parent: thing, description: a patch}}
+"""
+    kitchen = """
+module: kitchen
+version: 3
+requires: [core]
+entity_types: {dish: {parent: thing, description: a dish}}
+"""
+    o = ontology.compose(
+        [ontology.parse_module(t) for t in (base, music, synth, kitchen)]
+    )
+    assert o.version == "core1+kitchen3+music1+synth2"
+    assert o.for_domains(None).version == "core1+kitchen3"
+    assert o.for_domains([]) is o.for_domains(None)
+    assert o.for_domains(["synth"]).version == "core1+music1+synth2"
+    assert o.for_domains(["kitchen"]).version == "core1+kitchen3"
+    with pytest.raises(ValueError, match="opt_in"):
+        ontology.parse_module(music.replace("opt_in: true", "opt_in: yes please"))
+    # without an opt_in module, no set is the whole ontology, as before
+    plain = ontology.compose([ontology.parse_module(t) for t in (base, kitchen)])
+    assert plain.for_domains(None) is plain

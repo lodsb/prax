@@ -124,11 +124,14 @@ def test_stub_extract_and_apply(con: sqlite3.Connection) -> None:
     edges = store.traverse(con, result.triples[0].src, hops=1)
     assert len(edges) == len(result.triples)
     assert all(e["source_doc"] == doc_id and e["evidence"] for e in edges)
-    assert all(e["ontology_version"] == ontology.current().version for e in edges)
+    # a document with no domain set is read against every module but the
+    # opt_in ones (music, sound), and its edges carry that version
+    undomained = ontology.current().for_domains(None).version
+    assert all(e["ontology_version"] == undomained for e in edges)
     meta = store.get_meta(con, doc_id)
     assert meta["summary"].startswith("Stub summary")
     assert meta["extraction"]["linked"] == report.linked
-    assert meta["extraction"]["ontology_version"] == ontology.current().version
+    assert meta["extraction"]["ontology_version"] == undomained
     queue = store.list_review(con)
     assert queue == []  # the "?" item was dropped by the rules after the extraction
     # a second apply adds nothing (edges exist), stamps again
@@ -390,7 +393,8 @@ def test_a_failed_extraction_is_remembered_and_not_retried_every_pass(
     assert store.select_for_extraction(con, ontology_version=version) == []
     assert store.select_for_extraction(con, ontology_version="v-next") == [doc_id]
     failed = store.get_meta(con, doc_id)["extraction_error"]
-    assert failed["extractor"] == "fake" and failed["ontology_version"] == version
+    assert failed["extractor"] == "fake"
+    assert failed["ontology_version"] == ontology.current().for_domains(None).version
     found = store.health(con, only=["extraction-failed"])["ailments"][0]
     assert found["count"] == 1 and found["examples"][0]["id"] == doc_id
     # a success clears the note
@@ -459,7 +463,7 @@ def test_a_replacing_reread_unstamps_the_extraction_and_the_next_one_supersedes_
     assert meta["extraction_stale"] == {
         "extractor": "stub",
         "run": "first",
-        "ontology_version": version,
+        "ontology_version": ontology.current().for_domains(None).version,
         "text_read_by": "marker/2.0.0",
     }
     assert doc_id in store.select_for_extraction(con, ontology_version=version)

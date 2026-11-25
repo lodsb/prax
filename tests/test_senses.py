@@ -60,7 +60,15 @@ def _found(con: sqlite3.Connection, query: str) -> list[int]:
 def test_a_type_lives_in_its_module_and_what_builds_on_it() -> None:
     onto = ontology.current()
     assert onto.domains_of("ingredient") == {"kitchen"}
-    assert onto.domains_of("material") == {"craft", "kitchen", "workshop"}
+    # music and sound build on craft too (a sound evokes the material it is
+    # named for: glassiness, glass)
+    assert onto.domains_of("material") == {
+        "craft",
+        "kitchen",
+        "workshop",
+        "music",
+        "sound",
+    }
     # a core type is everywhere, so a word for it is never scoped
     assert onto.domains_of("concept") is None
     assert onto.domains_of("organization") is None
