@@ -161,3 +161,17 @@ def test_a_book_is_refused_past_the_bound_on_its_whole_xhtml(
     monkeypatch.setattr(epub, "ZIPPED_XML_MAX", 10_000)
     with pytest.raises(ValueError, match="inflates to"):
         parsers.by_name("epub")(data)
+
+
+def test_no_name_of_the_readers_is_one_the_html_parser_sets() -> None:
+    """CPython 3.13's security releases gave ``HTMLParser`` an attribute
+    ``_pending``, which hid the reader's method of that name (CI, 2026-11-26).
+    A name the parser sets on itself is never one of the readers' own."""
+    from html.parser import HTMLParser
+
+    from prax.parsers import epub
+
+    theirs = set(vars(HTMLParser()))
+    for reader in (epub._Reader, epub._NavReader):
+        ours = set(vars(reader)) - set(vars(HTMLParser))
+        assert not ours & theirs, (reader.__name__, ours & theirs)

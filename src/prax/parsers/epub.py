@@ -91,7 +91,7 @@ class _Reader(HTMLParser):
         self._rows: list[list[str]] = []
         self._cell: list[str] | None = None
 
-    def _pending(self) -> bool:
+    def _has_text(self) -> bool:
         return bool("".join(self._buf).strip())
 
     def _flush(self) -> None:
@@ -126,7 +126,7 @@ class _Reader(HTMLParser):
         # an id on a block stands before it, after the text buffered so far;
         # one inside a paragraph stands before that paragraph
         opens = tag in _BLOCKS or tag in ("li", "pre", "table") or _HEADING.match(tag)
-        at = len(self.blocks) + (self._pending() if opens else 0)
+        at = len(self.blocks) + (self._has_text() if opens else 0)
         for key, value in attrs:
             if key in ("id", "name") and value:
                 self.anchors.setdefault(value, at)
@@ -153,7 +153,7 @@ class _Reader(HTMLParser):
         elif tag == "li":
             self._start("li")
         elif tag in _BLOCKS:
-            if not (self._kind == "li" and not self._pending()):
+            if not (self._kind == "li" and not self._has_text()):
                 self._start("p")  # a paragraph that opens a list item stays it
         elif tag == "br":
             self._buf.append("\n" if self._pre else " ")
