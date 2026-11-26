@@ -893,26 +893,36 @@ def _one_self_type(
     doc_id: int,
     triples: list[Triple],
     onto: ontology.Ontology,
+    *,
+    settled: bool = False,
 ) -> None:
     """The document itself as one entity: every triple that names it by its
-    title as a document type gets the same type. A relation whose domain
-    is ``document`` (``published_by``, ``needs``) had the model write
-    ``document`` on that line and ``recipe`` on the others, and the recipe
-    became two entities (doc 13559, 2026-10-06; ``store.link`` keys an
-    entity by name and type). The type is the most frequent one more
-    specific than ``document`` (ties to the one the graph already gives
-    it, ``store.document_node``), else what ``document_node`` gives."""
+    title as a document type gets the same type and the title itself. A
+    relation whose domain is ``document`` (``published_by``, ``needs``) had
+    the model write ``document`` on that line and ``recipe`` on the
+    others, and the recipe became two entities (doc 13559, 2026-10-06;
+    ``store.link`` keys an entity by name and type). The type is the most
+    frequent one more specific than ``document`` (ties to the one the
+    graph already gives it, ``store.document_node``), else what
+    ``document_node`` gives; when ``settled`` (a part of a reading in
+    full), always what it gives. A name is the title when it differs from
+    it only in case, spacing, punctuation or a file ending: a book read in
+    27 parts was three nodes, "… (Bob Pilkington) .pdf" as a document,
+    "… (Bob Pilkington).pdf" with no document, and a guide as a document
+    and an article (the pilot of 2026-11-26)."""
     try:
         title, known = store.document_node(con, doc_id)
     except KeyError:
         return
     if known in ontology.SELF_KINDS:
         return
-    key = title.casefold()
+    key = _title_key(title)
+    if not key:  # a title of punctuation names nothing to match
+        return
 
     def own(name: str, etype: str) -> bool:
         return (
-            name.casefold() == key
+            _title_key(name) == key
             and etype in onto.entity_types
             and onto.is_a(etype, "document")
             and etype not in ontology.SELF_KINDS
@@ -923,7 +933,7 @@ def _one_self_type(
         for name, etype in ((t.src, t.src_type), (t.dst, t.dst_type)):
             if own(name, etype) and etype != "document":
                 counts[etype] = counts.get(etype, 0) + 1
-    if counts:
+    if counts and not settled:
         top = max(counts.values())
         best = [k for k, n in counts.items() if n == top]
         chosen = known if known in best else min(best)
@@ -933,9 +943,21 @@ def _one_self_type(
         return
     for t in triples:
         if own(t.src, t.src_type):
-            t.src_type = chosen
+            t.src, t.src_type = title, chosen
         if own(t.dst, t.dst_type):
-            t.dst_type = chosen
+            t.dst, t.dst_type = title, chosen
+
+
+# a file's ending a title may carry or not ("….pdf"), and what is not a
+# letter or a digit: the key two spellings of one title share
+_FILE_ENDING = re.compile(
+    r"\.(?:pdf|epub|djvu|docx?|odt|html?|txt|md)\s*$", re.IGNORECASE
+)
+_NOT_WORD = re.compile(r"[\W_]+", re.UNICODE)
+
+
+def _title_key(name: str) -> str:
+    return _NOT_WORD.sub("", _FILE_ENDING.sub("", name.strip()).casefold())
 
 
 def apply(
@@ -1061,6 +1083,7 @@ def apply_part(
         extractor=extractor,
         run=run,
         prompt=prompt,
+        settled=True,
     )
     _settle(con, doc_id, onto, report, run=run, extractor=extractor)
     store.part_done(
@@ -1090,17 +1113,20 @@ def _write(
     extractor: str,
     run: str | None,
     prompt: int | None,
+    settled: bool = False,
 ) -> None:
     """The triples of one reading into the graph: the fitting ones as
     edges (once for this reader and document), the misfits and the
-    unmapped into the review queue, counted in ``report``."""
+    unmapped into the review queue, counted in ``report``. ``settled``:
+    the document's own type is the one its node has (a part of a reading
+    in full), not the one this reading names it by most."""
     cues = ontology.evidence_cues()
     page_titles = store.page_titles(con)
     # where each quote stands in the text it was read from (migration 48)
     read = store.get_document(con, doc_id)
     text, text_hash = (read["text"], read["text_hash"]) if read else ("", None)
     lang = store.get_meta(con, doc_id).get("lang")
-    _one_self_type(con, doc_id, extraction.triples, onto)
+    _one_self_type(con, doc_id, extraction.triples, onto, settled=settled)
     for t in extraction.triples:
         edge = store.Edge(t.src, t.src_type, t.rel, t.dst, t.dst_type)
         # page and project entities exist only as pages in the store; a

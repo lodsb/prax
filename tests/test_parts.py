@@ -297,3 +297,65 @@ def test_the_asked_documents_are_read_through_their_index(
     sql = next(s for s in seen if "$.parts.asked" in s)
     plan = " ".join(str(r[-1]) for r in con.execute("EXPLAIN QUERY PLAN " + sql))
     assert "idx_documents_parts" in plan, plan
+
+
+# The pilot's edges judged (2026-11-26)
+
+
+def test_a_part_names_the_document_as_its_one_node(con: sqlite3.Connection) -> None:
+    """A part that writes the title another way ("Echoes.pdf") or calls the
+    book an article lands on the node the first reading made: the pilot's
+    jazz book was three nodes, its reverb guide two."""
+    doc = int(store.ingest_text(con, BOOK, title="Echoes")["doc_id"])
+    first = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    _take(con, [_result(doc, first[0], "tape echo")])
+    store.ask_parts(con, doc)
+    (item,) = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    triple = extraction.Triple(
+        "echoes .PDF",
+        "article",
+        "uses",
+        "loop 1",
+        "method",
+        "EXTRACTED",
+        "the tape loop",
+    )
+    result = _result(doc, item, "loop 1")
+    result["extraction"]["triples"] = [triple.__dict__]
+    _take(con, [result])
+    assert store.find_edges(
+        con, store.Edge("Echoes", "paper", "uses", "loop 1", "method"), source_doc=doc
+    )
+    assert store.document_node(con, doc) == ("Echoes", "paper")
+    assert not any(
+        "pdf" in str(r["name"]).lower() for r in store.find_entities(con, "echoes")
+    )
+
+
+def test_an_index_at_the_back_is_left_out_and_the_body_kept() -> None:
+    """A PDF's index sits under the last chapter's heading path, its own
+    heading third ("… / INDEX"), or under none, and is known by its page
+    numbers; in the body neither a section called "Index" nor numbers
+    leave a chunk out (a database book, a paper's pitch-class sets)."""
+    pages = " ".join(f"term {i}, {i * 3}–{i * 3 + 2}," for i in range(20))
+    sets = " ".join("{0, 2, 4, 7, 9}" for _ in range(12)) + " are pentatonic sets"
+    chunks, at = [], 0
+    for text, heading in (
+        *(("w " * 499, ["Chapter 1"]) for _ in range(8)),
+        (sets, ["Chapter 2"]),
+        ("w " * 499, ["Chapter 2", "3.2 Index"]),
+        *(("w " * 499, ["Chapter 3"]) for _ in range(8)),
+        (pages, ["Chapter 3", "Strategy", "INDEX"]),
+        (pages, ["Chapter 3", "Strategy", "C"]),
+    ):
+        chunks.append(_chunk(text, at, heading))
+        at += len(text) + 2
+    got = parts.plan(chunks, window=12_000, min_chars=3_000)
+    text = "".join(
+        parts.part_text(chunks, *parts.span({"parts": got_parts}, i), window=12_000)
+        for got_parts in [[[p.start, p.end, p.label] for p in got]]
+        for i in range(len(got))
+    )
+    assert "pentatonic" in text and "term 3" not in text
+    assert got[-1].end <= chunks[-3]["locator"]["char_end"]
+    assert sum(1 for p in got if p.label.startswith("Chapter 2")) == 1

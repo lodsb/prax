@@ -5,7 +5,9 @@ quote alone, without a model.
 - ``contents_line``: a line of a table of contents or an index ("5.1 FM
   synthesis ..... 257", "reverb, 12, 45, 101"). It says a book has a
   chapter on something, which is evidence of what the book is about and
-  of nothing it asserts.
+  of nothing it asserts. ``contents_share`` is the same shape over a
+  block: the share of its words that are page numbers, which a reading in
+  full reads to leave an index out (``prax.graph.parts``).
 - ``negated``: a negation next to an end of the edge ("this technique is
   unrelated to wavetable synthesis" as the evidence of ``uses wavetable
   synthesis``). For a relation that asserts something (``uses``,
@@ -86,6 +88,20 @@ class Cues:
         return re.compile(
             "(?:" + "|".join(parts) + rf")(?!\s+(?:{adding})\b)", re.IGNORECASE
         )
+
+
+_PAGE_NUMBER = re.compile(r"^\(?\d{1,4}(?:\s*[-–]\s*\d{1,4})?[,;.)]?$")
+CONTENTS_MIN_WORDS = 30  # a shorter block is too short to judge
+
+
+def contents_share(text: str) -> float:
+    """The share of a block's words that are page numbers ("106–10,",
+    "43", "(12)"): an index or a contents page is a third or more of them,
+    prose a tenth or less. A block under ``CONTENTS_MIN_WORDS`` words is 0."""
+    words = text.split()
+    if len(words) < CONTENTS_MIN_WORDS:
+        return 0.0
+    return sum(bool(_PAGE_NUMBER.match(w)) for w in words) / len(words)
 
 
 def contents_line(quote: str) -> bool:
