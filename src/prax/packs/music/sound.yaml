@@ -39,8 +39,15 @@
 # v1 (2026-11-25): first version, grown by a first draft read against an
 # acoustics primer, effect documentation and a chapter on FM synthesis, and
 # by what books on studio technique speak of (miking, mixing).
+# v2 (2026-11-26, the reading-in-full pilot): `affects` from a band, a
+# mechanism, a measured feature, a kind of sound, a material or a texture
+# (early reflections the sense of a room's size, the upper mids
+# brightness, a fibreglass board absorption); `arises_from` a band
+# (muddiness from the low mids), `applied_to` a band or an effect
+# (multiband compression on the low mids, automation on a reverb send).
+# Only additions: migration 75 moves the stamps.
 module: sound
-version: 1
+version: 2
 # read only where a document's domain set names it (or sound, built on
 # it): a document with no set is not read against it
 opt_in: true
@@ -154,8 +161,9 @@ relation_types:
              synthesis_method, technique, chord, musical_interval,
              harmonic_function, chord_progression, voice_leading,
              musical_scale, musical_mode, rhythm, musical_meter,
-             tuning_system]
-    range: [sound_quality, audio_feature, sound_parameter]
+             tuning_system, audio_band, acoustic_mechanism, audio_feature,
+             sound_type, material, musical_texture]
+    range: [sound_quality, audio_feature, sound_parameter, acoustic_mechanism]
     description: >-
       changing the parameter, or applying the effect, technique or element,
       changes this quality, problem or feature; which way and by how much is
@@ -241,7 +249,7 @@ relation_types:
   arises_from:
     kind: eternal
     domain: [sound_quality]
-    range: [acoustic_mechanism, audio_feature]
+    range: [acoustic_mechanism, audio_feature, audio_band]
     description: >-
       the quality or problem is how this mechanism or property of the signal
       is heard (muddiness from masking, a hollow sound from comb filtering,
@@ -269,7 +277,8 @@ relation_types:
   applied_to:
     kind: eternal
     domain: [technique, audio_effect, tuning_system, rhythm]
-    range: [musical_instrument, musical_role, sound_type]
+    range: [musical_instrument, musical_role, sound_type, audio_band,
+            audio_effect]
     description: >-
       the technique, kind of effect, tuning or rhythm is used on this source
       or part, as the text says it usually is (parallel compression on

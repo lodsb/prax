@@ -33,8 +33,21 @@
 # their seven relations), grown by a first draft read against harmony and
 # music-theory textbooks and an acoustics primer, and by what books on jazz
 # composition and orchestration speak of.
+# v2 (2026-11-26, the reading-in-full pilot: 131 parts of five books and
+# three papers, 960 review items, 623 of them a type a relation refused).
+# People in music (plan item 6): a person `plays` an instrument, a work or
+# recording is `performed_by` a person or group, a person or group is
+# `active_in` a genre or tradition, and a player may be what the text
+# names as an example (`exemplifies`); influence is core's
+# `influenced_by`. `specializes` takes intervals and roles too (a kind
+# of sixth, a fanfare as a lead melody); widened to any concept, half of
+# a sample of its links were wrong ("counterpoint specializes jazz
+# harmony"), so a plain concept stays in the queue for a person.
+# `valid_in` and `takes_from` take a technique, `takes_from` a tradition
+# on the left, and `played_on` an ensemble. Only additions: migration 75
+# moves the stamps.
 module: music
-version: 1
+version: 2
 # read only where a document's domain set names it (or sound, built on
 # it): a document with no set is not read against it
 opt_in: true
@@ -283,13 +296,13 @@ relation_types:
              voice_leading, musical_form, music_genre, musical_tradition,
              tuning_system, chord_voicing, chord_tension, musical_texture,
              articulation, musical_ensemble, compositional_technique,
-             playing_technique]
+             playing_technique, musical_interval, musical_role]
     range: [musical_instrument, musical_mode, musical_scale, chord,
             harmonic_function, chord_progression, rhythm, musical_meter,
             voice_leading, musical_form, music_genre, musical_tradition,
             tuning_system, chord_voicing, chord_tension, musical_texture,
             articulation, musical_ensemble, compositional_technique,
-            playing_technique]
+            playing_technique, musical_interval, musical_role]
     description: >-
       the first is a kind of the second, both the same sort of thing:
       harmonic minor scale specializes minor scale, deep house specializes
@@ -342,11 +355,12 @@ relation_types:
   played_on:
     kind: eternal
     domain: [playing_technique, articulation]
-    range: [musical_instrument]
+    range: [musical_instrument, musical_ensemble]
     description: >-
-      the playing technique or articulation is done on this instrument
-      (pizzicato on strings, flutter-tonguing on the flute, a fall on the
-      trumpet)
+      the playing technique or articulation is done on this instrument or
+      by this kind of ensemble or section (pizzicato on strings,
+      flutter-tonguing on the flute, a fall on the trumpet, divisi in the
+      strings)
   includes_instrument:
     kind: eternal
     domain: [musical_ensemble]
@@ -365,13 +379,14 @@ relation_types:
       bass clarinet with the cellos); which octave is in the edge's context
   takes_from:
     kind: eternal
-    domain: [music_genre, musical_instrument]
+    domain: [music_genre, musical_instrument, musical_tradition, technique]
     range: [music_genre, musical_instrument, musical_tradition]
     description: >-
-      the genre or instrument takes from the other without being a kind of
-      it: a genre influenced by another or a fusion of several (jazz fusion
-      of jazz and rock), an instrument derived from an older one. A kind of
-      the other is `specializes`
+      the genre, instrument, tradition or technique takes from the other
+      without being a kind of it: a genre influenced by another or a fusion
+      of several (jazz fusion of jazz and rock), an instrument derived from
+      an older one, jazz harmony from Western tonal harmony, a way of
+      arranging from a tradition. A kind of the other is `specializes`
   resolves_to:
     kind: eternal
     domain: [chord, harmonic_function, musical_interval, chord_progression]
@@ -407,12 +422,39 @@ relation_types:
       exposition, a march a trio), as the text names it
   exemplifies:
     kind: eternal
-    domain: [musical_work, music_recording]
+    domain: [musical_work, music_recording, person]
     range: [concept, technique]
     description: >-
-      the work or recording is what the text names as an example of the
-      concept or technique: a song whose first notes it uses to teach an
-      interval, a piece it plays to show polyphony
+      the work, recording or player is what the text names as an example of
+      the concept or technique: a song whose first notes it uses to teach an
+      interval, a piece it plays to show polyphony, a player whose lines it
+      quotes to show an outline
+  performed_by:
+    strength: strong
+    kind: event
+    same_as: schema:byArtist
+    domain: [musical_work, music_recording]
+    range: [person, organization]
+    description: >-
+      who plays or sings the recording, or performed the work as the text
+      says (a solo by a saxophonist, an album by a band); who wrote it is
+      `composed_by`
+  plays:
+    kind: state
+    same_as: schema:instrument
+    domain: [person]
+    range: [musical_instrument]
+    description: >-
+      the person plays or sings this instrument or voice, as the text says
+      (a pianist the piano, a tenor saxophonist the tenor saxophone)
+  active_in:
+    kind: state
+    domain: [person, organization]
+    range: [music_genre, musical_tradition]
+    description: >-
+      the person or group makes or made music in this genre or tradition,
+      as the text places them (a bebop saxophonist, a big band of the swing
+      era); influence from another player is `influenced_by`
   fills_role:
     kind: state
     domain: [musical_instrument, concept]
@@ -422,12 +464,12 @@ relation_types:
       (an electric bass the bass line, a string section the pad)
   valid_in:
     kind: eternal
-    domain: [concept]
+    domain: [concept, technique]
     range: [musical_tradition, tuning_system]
     description: >-
-      the concept belongs to this tradition or tuning and is not general
-      (a tritone substitution to jazz harmony, a quarter tone to 24-tone
-      equal temperament)
+      the concept or technique belongs to this tradition or tuning and is
+      not general (a tritone substitution to jazz harmony, a quarter tone
+      to 24-tone equal temperament)
 
 type_aliases:
   song: musical_work
@@ -468,3 +510,9 @@ relation_aliases:
   played_over: used_over
   available_tension: has_tension
   instrumentation: includes_instrument
+  performer: performed_by
+  played_by: performed_by
+  recorded_by: performed_by
+  plays_instrument: plays
+  instrument_of: {to: plays, reversed: true}
+  active_in_genre: active_in

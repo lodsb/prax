@@ -227,7 +227,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core8+computing2+craft1+electronics1+kitchen2+music1+research9+society1+sound1+studio5+workshop2`) is what
+   (`core9+computing2+craft2+electronics1+kitchen2+music2+research9+society2+sound2+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. The plain
    numbers of the single file before the modules ("0" to "5") were restated
    as the research module's (migration 72). A module may be `opt_in`:
@@ -235,8 +235,8 @@ revisit threshold, under "Decision thresholds" below.
    `music.yaml` and `sound.yaml`). A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module that is not `opt_in` nor built on
-   one (`Ontology.for_domains(None)`, the version without `music1` and
-   `sound1`). It is extracted against that
+   one (`Ontology.for_domains(None)`, the version without `music2` and
+   `sound2`). It is extracted against that
    subset and stamped with the subset's version (`core1+family1`).
    A relation says what follows from it (`transitive`, `symmetric`,
    `functional`, `inverse_of`, `kind`, and `chain`, two relations it

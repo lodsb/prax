@@ -40,7 +40,7 @@ repository diffs line by line. The first line is the header:
 | `format` | `prax-graph/2`; an import reads `/1` and `/2` and refuses any other |
 | `exported_at` | UTC, `store.now()` |
 | `seed` | the options that chose it |
-| `ontology` | the composed version, e.g. `core7+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2` |
+| `ontology` | the composed version, e.g. `core9+computing2+craft2+electronics1+kitchen2+research9+society2+studio5+workshop2` |
 | `modules` | each ontology module's YAML, as text |
 | `counts` | `documents`, `edges` |
 

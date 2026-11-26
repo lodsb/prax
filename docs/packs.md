@@ -292,7 +292,14 @@ document is read against them only when its domain set names music or
 sound (`Ontology.for_domains`), because a document with no set is read
 against every other module, and these two would make that prompt
 42,201 characters instead of 23,240 and every such reading due again.
-The pack's `rules.yaml` suggests `[research, music]` and `[research,
+Music 2 (2026-11-26, grown by the reading-in-full pilot's review queue)
+holds people in music: a person `plays` an instrument, a work or
+recording is `performed_by` a person or group, a person is `active_in` a
+genre or tradition, and a player may be what the text names as an
+example (`exemplifies`). Influence is core's `influenced_by`. A book read
+against `[music]` alone has core, craft and music and no research, so
+craft's `applies` is its one relation for what it teaches, and it takes
+a concept since craft 2. The pack's `rules.yaml` suggests `[research, music]` and `[research,
 sound]` for papers and `[studio, sound]` for the rest of music and
 audio, placed before studio's. Readers for MIDI and MusicXML through music21, when the
 library holds such files. A `score` kind located by part and bar. Tools

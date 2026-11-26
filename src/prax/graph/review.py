@@ -38,11 +38,34 @@ class ReplayReport:
     ontology_version: str = ""
 
 
+class _Subsets:
+    """The ontology each document is read against (its domains' subset),
+    one per document: an item fits, or a rule's edge does, only under the
+    modules its document is read with. Before 2026-11-26 the queue was
+    checked against every module, and a music book's triple could have
+    been linked through research's ``about``, which the book is not read
+    against."""
+
+    def __init__(self, con: sqlite3.Connection, fixed: ontology.Ontology | None):
+        self.con, self.fixed, self.full = con, fixed, ontology.current()
+        self._by_doc: dict[int | None, ontology.Ontology] = {}
+
+    def of(self, doc_id: int | None) -> ontology.Ontology:
+        if self.fixed is not None:
+            return self.fixed
+        if doc_id not in self._by_doc:
+            domains = store.document_domains(self.con, doc_id) if doc_id else None
+            self._by_doc[doc_id] = self.full.for_domains(domains)
+        return self._by_doc[doc_id]
+
+
 def replay(
     con: sqlite3.Connection, *, onto: ontology.Ontology | None = None
 ) -> ReplayReport:
-    onto = onto or ontology.current()
-    rep = ReplayReport(ontology_version=onto.version)
+    """Link the open items that fit now, each under its document's own
+    subset of the ontology (``onto`` for all of them when given)."""
+    subsets = _Subsets(con, onto)
+    rep = ReplayReport(ontology_version=(onto or subsets.full).version)
     offset = 0
     while True:
         items = store.list_review(con, limit=500, offset=offset, unmapped=False)
@@ -53,6 +76,7 @@ def replay(
             if not (it["src_type"] and it["dst_type"] and it["rel"]):
                 continue
             rep.checked += 1
+            onto = subsets.of(it["source_doc"])
             try:
                 onto.check_edge(it["src_type"], it["rel"], it["dst_type"])
                 onto.check_names(
@@ -73,9 +97,10 @@ def replay(
                         edge,
                         confidence="EXTRACTED",
                         source_doc=it["source_doc"],
+                        ontology_version=onto.version,
                         evidence=it["evidence"],
                         producer="replay",
-                        run=f"ontology-v{onto.version}",
+                        run=f"ontology-v{rep.ontology_version}",
                     )
                 except store.SelfLoop:
                     store.resolve_review(con, it["id"], "dropped")
@@ -673,6 +698,11 @@ def _written_backwards(
         rel == "authored_by"
         and st in ("author", "person")
         and dt in ("paper", "document")
+        # a paper's author list: only where the document is read with
+        # research. A music book's "50. Blue Mitchell:" heads a musical
+        # example, and all 18 such items of the pilot (2026-11-26) would
+        # have made the player the book's author
+        and "paper" in onto.types
     ):
         return _link(
             "flip-authored_by", store.Edge(dst, "paper", "authored_by", src, "author")
@@ -769,14 +799,19 @@ def _by_table(src: str, st: str, rel: str, dst: str, dt: str) -> Decision | None
     return None
 
 
-def decide(item: dict[str, Any], doc: tuple[str, str, str | None] | None) -> Decision:
+def decide(
+    item: dict[str, Any],
+    doc: tuple[str, str, str | None] | None,
+    onto: ontology.Ontology | None = None,
+) -> Decision:
     """What the rules say about one typed item: ``("link", edges, rule)``,
     ``("drop", [], rule)`` or ``("open", [], None)``. Pure; the ontology
-    check happens in ``apply_typing_rules``. The rules run in this order,
-    and the first that decides wins."""
+    check happens in ``apply_typing_rules``. ``onto`` is the one the item's
+    document is read against (its domains' subset), the whole ontology by
+    default. The rules run in this order, and the first that decides wins."""
     src, dst = item["src"], item["dst"]
     rel, st, dt = item["rel"], item["src_type"], item["dst_type"]
-    onto = ontology.current()
+    onto = onto or ontology.current()
     if onto.is_reversed(rel):  # "X publisher_of Y": Y published_by X
         src, dst, st, dt = dst, src, dt, st
     rel = onto.canonical_relation(rel)
@@ -809,7 +844,69 @@ def decide(item: dict[str, Any], doc: tuple[str, str, str | None] | None) -> Dec
         return _link(rule, store.Edge(src, st, rel, dst, dt))
     if aliased:  # under its canonical name (and way round) as it stands
         return _link(f"alias-{item['rel']}", store.Edge(src, st, rel, dst, dt))
+    if (d := _written_the_other_way(onto, item, src, st, rel, dst, dt)) is not None:
+        return d
     return _OPEN
+
+
+# relations a flip never writes: part_of has its own check of which end is
+# the part (``ontology.part_of_suspect``), authored_by its own rule for a
+# paper's author list (a music book's "50. Blue Mitchell:" is a player's
+# example, not its author); depicts, example_of, links_to, taken_in and
+# recorded_at are never read from a text at all (a person's answer, the
+# sync, a GPS position). And uses: a model's "X uses Y" with X of a type
+# the relation refuses is mostly said the right way round with the wrong
+# type ("the digital spring uses the bilinear transform"): of 8 such flips
+# in a sample of the whole queue (2026-11-26), none was right
+NEVER_FLIPPED = frozenset(
+    {
+        "part_of",
+        "authored_by",
+        "depicts",
+        "example_of",
+        "links_to",
+        "taken_in",
+        "recorded_at",
+        "uses",
+    }
+)
+
+
+def _written_the_other_way(
+    onto: ontology.Ontology,
+    item: dict[str, Any],
+    src: str,
+    st: str,
+    rel: str,
+    dst: str,
+    dt: str,
+) -> Decision | None:
+    """The ends the wrong way round, for any relation: the source's type
+    was what the relation refused, the edge does not fit as written and
+    does reversed. A model writes the thing that is named first ("the
+    de-esser remedies sibilance" as ``de-esser remedied_by sibilance``,
+    "Bach's Brandenburg concerto" as ``Bach composed_by …``). Measured on
+    the pilot's queue (2026-11-26): of 80 items whose reverse fit, the
+    wrong flips were those where the target's type was refused ("decay
+    time affects rhythm"), a ``depicts`` and a ``part_of``, which this
+    rule leaves open. INFERRED, like every rule's edge."""
+    if rel in NEVER_FLIPPED or "does not accept src type" not in str(
+        item.get("reason") or ""
+    ):
+        return None
+    r = onto.relations.get(rel)
+    if r is None or r.symmetric:
+        return None
+    try:
+        onto.check_edge(st, rel, dt)
+        return None  # it fits as written: not this rule's to turn
+    except ValueError:
+        pass
+    try:
+        onto.check_edge(dt, rel, st)
+    except ValueError:
+        return None
+    return _link("flip-fits", store.Edge(dst, dt, rel, src, st))
 
 
 def apply_typing_rules(
@@ -826,8 +923,9 @@ def apply_typing_rules(
     rule read what the model meant), producer ``typing-rules`` and one run
     id per pass; an edge already in the graph closes the item as
     ``linked`` too. With ``commit=False`` nothing is written and the
-    report says what would be."""
-    onto = onto or ontology.current()
+    report says what would be. Each item is judged under its document's
+    subset of the ontology (``onto`` for all of them when given)."""
+    subsets = _Subsets(con, onto)
     rep = TypingReport(run=run or store.run_name("typing"))
     items: list[dict[str, Any]] = []
     offset = 0
@@ -845,8 +943,9 @@ def apply_typing_rules(
         if str(it.get("reason") or "").startswith(evidence.REASON):
             rep.still_open += 1  # the quote, not the type: a person decides
             continue
+        onto = subsets.of(it["source_doc"])
         if it["src_type"] and it["dst_type"]:
-            action, edges, rule = decide(it, docs.get(it["source_doc"]))
+            action, edges, rule = decide(it, docs.get(it["source_doc"]), onto)
         else:
             action, edges, rule = decide_unmapped(it, docs.get(it["source_doc"]))
         if action == "open":
@@ -877,6 +976,7 @@ def apply_typing_rules(
                         e,
                         confidence="INFERRED",
                         source_doc=it["source_doc"],
+                        ontology_version=onto.version,
                         evidence=it["evidence"],
                         producer=rule_producer(rule),
                         run=rep.run,

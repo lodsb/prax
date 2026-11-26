@@ -478,7 +478,9 @@ def test_review_filters_bulk_and_replay(
     assert (rep["linked"], rep["still_open"]) == (1, 1)
     edge = client.get("/traverse", params={"entity": "Fourier"}).json()["edges"][0]
     assert (edge["rel"], edge["evidence"]) == ("uses", "q")
-    assert edge["ontology_version"] == ontology_version_now()
+    # under the modules its document is read with: one with no domain set
+    # is read without the opt_in ones (music, sound)
+    assert edge["ontology_version"] == ontology.current().for_domains(None).version
     assert client.get("/review").json()["total"] == 1
     # a bumped research module in a copy of the ontology directory: cites
     # may now target a tool, and the replay links the last item under it

@@ -16,8 +16,11 @@
 # assign it. No rule assigns it yet. Left out until a review queue asks:
 # claims and counter-claims (research's `claim` reaches them where both
 # are loaded), dates and periods, and economic figures.
+# v2 (2026-11-26): `influenced_by` moved to core (core 9), where influence
+# in music and science can say it too; a theory is a concept, so what was
+# said here still validates there.
 module: society
-version: 1
+version: 2
 requires: [core]
 self_types: [essay]
 
@@ -63,12 +66,6 @@ relation_types:
     description: >-
       the person, group or text argues against this theory, thinker or
       group, as the text says
-  influenced_by:
-    domain: [person, theory]
-    range: [person, theory, work]
-    description: >-
-      the thinker or theory draws on, continues or answers another thinker,
-      theory or classic work
   enacted_by:
     domain: [legal_act]
     range: [polity, organization]

@@ -12,8 +12,14 @@
 # document had been read against it. Grown the way research v2 and studio
 # v1 were: read twenty documents with the local model, then let the review
 # queue say what is missing.
+# v2 (2026-11-26, the reading-in-full pilot): `applies` takes a concept
+# too. For a book read against music alone (core, craft, music) it is the
+# one relation that says what the book teaches, and an orchestration book
+# applies voice leading, close position and legato, which are music's
+# concepts, as a recipe applies a technique. Only a widening: migration 75
+# moves the stamps.
 module: craft
-version: 1
+version: 2
 requires: [core]
 
 entity_types:
@@ -39,10 +45,11 @@ entity_types:
 relation_types:
   applies:
     domain: [document]
-    range: [technique]
+    range: [technique, concept]
     description: >-
-      the document teaches, follows or demonstrates the technique — how
-      the thing is made, not a technique named in passing
+      the document teaches, follows or demonstrates the technique, or the
+      principle or pattern of the craft (voice leading, a voicing, a
+      grain direction) — how the thing is made, not one named in passing
   made_of:
     domain: [tool, work, material]
     range: [material]

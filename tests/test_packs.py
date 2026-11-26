@@ -24,7 +24,7 @@ def test_the_knowledge_of_every_pack_is_composed() -> None:
     version string they had in one folder; a golden run compared the whole
     ontology, the sameness rule and the lexicon before and after."""
     assert ontology.current().version == (
-        "core8+computing2+craft1+electronics1+kitchen2+music1+research9+society1+sound1+studio5+workshop2"
+        "core9+computing2+craft2+electronics1+kitchen2+music2+research9+society2+sound2+studio5+workshop2"
     )
     files = ontology.module_files()
     assert files["research"].parent == PACKS_DIR / "research"
@@ -192,10 +192,10 @@ def test_the_music_pack_is_read_only_where_a_domain_names_it() -> None:
     for aliases in ("type_aliases", "relation_aliases"):
         before, after = getattr(without, aliases), getattr(onto, aliases)
         assert {k: after.get(k) for k in before} == before
-    assert onto.for_domains(["sound"]).version == "core8+craft1+music1+research9+sound1"
-    assert onto.for_domains(["music"]).version == "core8+craft1+music1"
+    assert onto.for_domains(["sound"]).version == "core9+craft2+music2+research9+sound2"
+    assert onto.for_domains(["music"]).version == "core9+craft2+music2"
     assert onto.for_domains(["studio", "sound"]).version == (
-        "core8+craft1+music1+research9+sound1+studio5"
+        "core9+craft2+music2+research9+sound2+studio5"
     )
     # a product implements a kind of effect: research's relation, not a new one
     onto.for_domains(["studio", "sound"]).check_edge(

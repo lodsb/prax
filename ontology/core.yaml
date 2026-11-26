@@ -55,8 +55,14 @@
 # the Review page; and `attended` (person → event), for step 6's rule
 # that a person a picture of an event depicts was there. Only additions:
 # migration 56 moves the stamps.
+# core v9 (2026-11-26, the reading-in-full pilot): `influenced_by` moved
+# here from society, between people, works and concepts: influence holds
+# in music, science and craft as in philosophy (a player influenced by
+# another, a theory by a classic). Society's thinkers and theories are a
+# person and a concept, so nothing society wrote stops validating.
+# Only additions: migration 75 moves the stamps.
 module: core
-version: 8
+version: 9
 
 entity_types:
   person:
@@ -201,6 +207,15 @@ relation_types:
     description: >-
       an event a person was at: the inverse of schema:attendee, which an
       event says of a person
+  influenced_by:
+    kind: eternal
+    domain: [person, work, concept]
+    range: [person, work, concept]
+    description: >-
+      the person, work or idea draws on, continues or answers another, as
+      the text says: a thinker another thinker or a classic work, a player
+      another player, a style an earlier one. A kind of the other is not
+      influence (music's `specializes`)
   example_of:
     kind: eternal
     same_as: schema:exampleOfWork
@@ -275,4 +290,6 @@ relation_aliases:
   superseded_by: {to: supersedes, reversed: true}
   replaced_by: {to: supersedes, reversed: true}
   invalidated_by: {to: invalidates, reversed: true}
+  influenced: {to: influenced_by, reversed: true}
+  inspired_by: influenced_by
   retracts: invalidates
