@@ -109,3 +109,31 @@ same_as:
   letter: schema:Message
   invoice: schema:Invoice
   source: schema:SoftwareSourceCode
+
+# What an extraction asks of a document, by what it is: the first of the
+# document's labels (at p 0.5 or more) in the order of `by_label` names
+# its ask, and a document with none of them is asked `default`, what the
+# prompt has always asked of a paper (`extraction.PAPER_ASK`). Not given
+# to the model that labels, so it moves no measured number and no version
+# of this file; a change to an ask is a change to the extraction prompt
+# (`extraction.PROMPT_VERSION`, tests/test_prompt_versions.py). Chosen by
+# genre, not by length: of the reading-in-full pilot's eight documents
+# the five books were labelled `book` and the papers `paper`, two of them
+# of 52 and 64 pages (2026-11-26). Read in parts, a book asked the paper's
+# questions answered with `applies` and `covers` for whatever a chapter
+# named; `teaching` asks what a book that explains or teaches holds.
+# Tutorials and the instructional level follow once measured.
+reading:
+  asks:
+    teaching: >-
+      what the text teaches or explains (the techniques, concepts and terms,
+      2-6 of them), how one relates to another as the text states it (a kind
+      of, part of, used for, avoided in), the works, recordings, devices and
+      people it gives as examples and what each is an example of, the terms it
+      defines, and other books or papers it names by title
+  by_label:
+    paper: default
+    thesis: default
+    report: default
+    book: teaching
+    lecture: teaching

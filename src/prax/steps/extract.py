@@ -69,6 +69,7 @@ class Extract(Step):
             "header": doc.header,
             "text": doc.text,
             "domains": doc.domains,
+            "asks": doc.asks,
             "ontology_version": doc.ontology().version,
         }
 
@@ -115,6 +116,7 @@ class Extract(Step):
             "header": parts.part_header(doc.header, index, part["of"], label),
             "text": parts.part_text(chunks, start, end, window=plan.get("window")),
             "domains": doc.domains,
+            "asks": doc.asks,
             "ontology_version": plan["version"],
             "part": part,
         }
@@ -402,6 +404,8 @@ def do_extract(
             it.get("header") or "",
             it.get("text") or "",
             it.get("domains"),
+            asks=it.get("asks"),
+            part=bool(it.get("part")),
         )
         try:
             result = ext.extract(doc)

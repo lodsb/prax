@@ -284,7 +284,11 @@ revisit threshold, under "Decision thresholds" below.
    words, is `ontology/subjects.yaml` in the same shape (society:
    philosophy, politics, sociology…; technology: audio, electronics…),
    no label in both files. `ontology.genres()` and `ontology.subjects()`
-   load them as a `Facet`. A person's labels come from the Review page's
+   load them as a `Facet`. The `reading` section of `genres.yaml` says
+   what an extraction asks of a document by its labels: a book or a
+   lecture what it teaches (`teaching`), anything else a paper's questions
+   (`extraction.PAPER_ASK`); `extraction.asks_of`, and a change to an ask
+   is a new `extraction.PROMPT_VERSION`. A person's labels come from the Review page's
    "genre" tab (`store.set_genres`, `store.genre_sample`) and are kept
    as `meta.genres` and `meta.subjects` with `genres_by: human`. They
    are the gold sample stage Z of `docs/PLAN.md` measures against. A

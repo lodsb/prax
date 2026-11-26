@@ -675,7 +675,13 @@ whole, so a "Literature review" chapter is read. In the first and last
 numbers, when its heading was lost: a chunk whose words are 30% page
 numbers, and the chunks beside it at 15% or more. Each part is sent with the
 document's header and a line naming the part (`Part: 4 of 25
-(Chapter 3 > Voicings)`).
+(Chapter 3 > Voicings)`). A part is asked only what its own text states:
+the model is told not to repeat the authors and venue and not to add what
+it knows of the things the text names. A triple it marks AMBIGUOUS goes
+to the review queue instead of the graph. What any reading asks follows
+the document's genre (the `reading` section of `ontology/genres.yaml`): a
+book or a lecture is asked what it teaches and the examples it gives, any
+other document what a paper is asked. A 60-page paper is still a paper.
 
 The plan is kept in `meta.parts` with the text's hash and the ontology
 version. A new text or version makes a new plan, and every part is due

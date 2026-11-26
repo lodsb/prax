@@ -645,6 +645,9 @@ LEXICON = "lexicon"  # a file beside the modules that is not one of them
 SAMENESS = "sameness"  # nor is this one: what "the same thing" means
 GENRES = "genres"  # nor this: what a document is (stage Z)
 SUBJECTS = "subjects"  # nor this: what a document is about, in a person's words
+# the ask of genres.yaml's `reading` that is the prompt's own, written in
+# `prax.graph.extraction` (`PAPER_ASK` there): what a paper is asked
+DEFAULT_ASK = "default"
 BESIDE = (LEXICON, SAMENESS, GENRES, SUBJECTS)
 
 
@@ -1101,6 +1104,24 @@ class Facet:
     levels: tuple[Level, ...] = ()
     # a label in schema.org's words, where a type says the same thing
     same_as: tuple[tuple[str, str], ...] = ()
+    # what an extraction asks of a document by its labels (genres.yaml's
+    # ``reading``): the asks by name, and label -> ask in the order chosen
+    asks: tuple[tuple[str, str], ...] = ()
+    reading: tuple[tuple[str, str], ...] = ()
+
+    def ask_for(self, labels: Iterable[str]) -> str | None:
+        """The name of what an extraction asks of a document with these
+        labels: the first of them in ``reading``'s order, None for the
+        default ask (no label of the list, or one mapped to ``default``)."""
+        have = set(labels)
+        for label, ask in self.reading:
+            if label in have:
+                return None if ask == DEFAULT_ASK else ask
+        return None
+
+    def ask(self, name: str) -> str | None:
+        """An ask's words, or None when the file has no such ask."""
+        return dict(self.asks).get(name)
 
     def standard(self, label: str) -> str | None:
         """A label's schema.org type (``schema:Recipe``), or None."""
@@ -1192,8 +1213,27 @@ def parse_facet(text: str, *, name: str = GENRES) -> Facet:
     unknown = sorted(k for k, _ in same if k not in seen)
     if unknown:
         raise ValueError(f"{name}.yaml maps labels it does not name: {unknown}")
+    reading = data.get("reading") or {}
+    asks = tuple(
+        (str(k), " ".join(str(v).split()))
+        for k, v in (reading.get("asks") or {}).items()
+    )
+    by_label = tuple(
+        (str(k), str(v)) for k, v in (reading.get("by_label") or {}).items()
+    )
+    named = {DEFAULT_ASK, *(k for k, _ in asks)}
+    wrong = sorted(
+        {k for k, _ in by_label if k not in seen}
+        | {v for _, v in by_label if v not in named}
+    )
+    if wrong:
+        raise ValueError(f"{name}.yaml reading names what it does not hold: {wrong}")
     return Facet(
-        version=str(data.get("version") or "0"), levels=tuple(levels), same_as=same
+        version=str(data.get("version") or "0"),
+        levels=tuple(levels),
+        same_as=same,
+        asks=asks,
+        reading=by_label,
     )
 
 

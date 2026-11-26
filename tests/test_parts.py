@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import config, store, work
-from prax.graph import extraction, parts
+from prax.graph import extraction, ontology, parts
 from prax.steps import leases
 from prax.text import evidence
 
@@ -389,3 +389,59 @@ def test_an_index_runs_on_over_its_thinner_and_shorter_chunks() -> None:
     )
     assert "topic" not in text and "term" not in text and "zither" not in text
     assert "trombone" in text
+
+
+def test_a_book_is_asked_what_it_teaches_and_a_part_only_what_it_states(
+    con: sqlite3.Connection,
+) -> None:
+    """What a document is asked follows its genre, not its length: a book
+    what it teaches, a paper of any length a paper's questions. A part is
+    told it is one, and a triple its model was unsure of goes to a person
+    (the pilot of 2026-11-26)."""
+    doc = int(store.ingest_text(con, BOOK, title="Echoes")["doc_id"])
+    store.set_genres(con, doc, ["book"], by="labeller", p={"book": 0.99})
+    store.ask_parts(con, doc)
+    (first,) = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    assert first["asks"] == "teaching" and not first.get("part")
+    _take(con, [_result(doc, first, "tape echo")])
+    (item,) = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    assert item["asks"] == "teaching" and item["part"]["index"] == 0
+    unsure = extraction.Triple(
+        "Echoes", "paper", "uses", "a guess", "method", "AMBIGUOUS", "the tape loop"
+    )
+    result = _result(doc, item, "loop 1")
+    result["extraction"]["triples"].append(unsure.__dict__)
+    _take(con, [result])
+    assert store.find_edges(
+        con, store.Edge("Echoes", "paper", "uses", "loop 1", "method"), source_doc=doc
+    )
+    (queued,) = [r for r in store.list_review(con) if r["dst"] == "a guess"]
+    assert queued["reason"].startswith(evidence.REASON)
+    # the prompt the worker builds from the item: the book's ask, the part's rules
+    doc_in = extraction.DocumentInput(doc, "Echoes", "", "", asks="teaching", part=True)
+    onto = doc_in.ontology()
+    prompt = extraction.system_prompt(onto, asks=doc_in.asks, part=doc_in.part)
+    assert "what the text teaches" in prompt and "one part of a longer" in prompt
+    assert "INFERRED" not in prompt.split("Rules:")[1]
+    paper = extraction.system_prompt(onto)
+    assert extraction.PAPER_ASK in paper and "one part of a longer" not in paper
+    # a paper is asked a paper's questions, however long; an unsure label nothing
+    assert extraction.asks_of({"genres": [{"genre": "paper", "p": 1.0}]}) is None
+    assert extraction.asks_of({"genres": [{"genre": "book", "p": 0.3}]}) is None
+    both = [{"genre": "paper", "p": 1.0}, {"genre": "book", "p": 0.9}]
+    assert extraction.asks_of({"genres": both}) is None
+
+
+def test_the_reading_names_only_labels_and_asks_the_file_holds() -> None:
+    text = (
+        "levels:\n  informational:\n    description: d\n    genres:\n"
+        "      book: b\n"
+        "reading:\n  asks:\n    teaching: what it teaches\n"
+        "  by_label:\n    book: {ask}\n"
+    )
+    facet = ontology.parse_facet(text.format(ask="teaching"))
+    assert facet.ask_for(["informational", "book"]) == "teaching"
+    assert facet.ask("teaching") == "what it teaches"
+    assert ontology.parse_facet(text.format(ask="default")).ask_for(["book"]) is None
+    with pytest.raises(ValueError, match="lecturing"):
+        ontology.parse_facet(text.format(ask="lecturing"))

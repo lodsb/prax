@@ -56,7 +56,19 @@ MAX_TRIPLES = 20  # the models rarely need more; halves output tokens (docs/eval
 # any change to what the prompt says; tests/test_prompt_versions.py holds the
 # fingerprint of each version and fails on a change made without a bump.
 # The ontology's part is its own version (``ontology_version``), not this.
-PROMPT_VERSION = 1
+# 2 (2026-11-26): what a document is asked by its genre (genres.yaml's
+# ``reading``), and a part of a reading in full asked only what its text
+# states.
+PROMPT_VERSION = 2
+# what the prompt asks of a document that genres.yaml's ``reading`` asks
+# nothing else of: a paper's questions, as from the start
+PAPER_ASK = (
+    "what the paper is about (2-6 concepts), what it proposes, what methods,"
+    " tools and datasets it uses, its listed authors and venue, its central"
+    " claims (at most 3), and other papers it names by title"
+)
+# a label counts for the ask at this probability or more
+ASK_P = 0.5
 CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 # What a small model writes for the document itself instead of its title.
 _SELF_NAMES = frozenset(
@@ -116,6 +128,8 @@ class DocumentInput:
     header: str  # metadata lines
     text: str  # the text budget of the document
     domains: list[str] | None = None  # the ontology modules to read it against
+    asks: str | None = None  # genres.yaml's ask for it; None: a paper's
+    part: bool = False  # one part of a reading in full
 
     def as_message(self) -> str:
         return f"{self.header}\n\n---\n\n{self.text}"
@@ -124,6 +138,18 @@ class DocumentInput:
         """The ontology this document is extracted against: the core plus
         its domains, or the whole when it has no domain set."""
         return ontology.current().for_domains(self.domains)
+
+
+def asks_of(meta: dict[str, Any]) -> str | None:
+    """What an extraction asks of a document by its genre labels
+    (``meta.genres`` at ``ASK_P`` or more; genres.yaml's ``reading``),
+    None for a paper's questions."""
+    labels = [
+        g["genre"] if isinstance(g, dict) else str(g)
+        for g in meta.get("genres") or []
+        if not isinstance(g, dict) or float(g.get("p", 1.0)) >= ASK_P
+    ]
+    return ontology.genres().ask_for(labels)
 
 
 def self_types(onto: ontology.Ontology) -> tuple[str, ...]:
@@ -178,7 +204,12 @@ def build_input(
         text += TAIL_MARK + "\n\n".join(tail)
     header = _header_lines(doc["title"], meta, domains)
     return DocumentInput(
-        doc_id, doc["title"] or "", "\n".join(header), text, domains=domains
+        doc_id,
+        doc["title"] or "",
+        "\n".join(header),
+        text,
+        domains=domains,
+        asks=asks_of(meta),
     )
 
 
@@ -189,7 +220,13 @@ def document_header(doc: dict[str, Any]) -> DocumentInput:
     domains = list(meta["domains"]) if meta.get("domains") else None
     header = _header_lines(doc.get("title"), meta, domains)
     return DocumentInput(
-        int(doc["id"]), doc.get("title") or "", "\n".join(header), "", domains=domains
+        int(doc["id"]),
+        doc.get("title") or "",
+        "\n".join(header),
+        "",
+        domains=domains,
+        asks=asks_of(meta),
+        part=True,
     )
 
 
@@ -411,18 +448,24 @@ def system_prompt(
     *,
     output: str = "json",
     max_triples: int = MAX_TRIPLES,
+    asks: str | None = None,
+    part: bool = False,
 ) -> str:
     """Built from the ontology file, so the prompt and the validator agree.
 
     ``output`` is ``json`` (the schema of ``output_schema``, Claude) or
     ``lines`` (the tab-separated format of ``prax.graph.lineformat``, local
     models). The json text must stay stable: it is cached across calls.
+    ``asks`` names what the document is asked (genres.yaml's ``reading``;
+    None or an ask the file lacks: a paper's questions), ``part`` that it
+    is one part of a reading in full, asked only what its text states.
     """
     if output not in ("json", "lines"):
         raise ValueError(f"unknown output format {output!r}")
     ent = "\n".join(
         f"- {name}: {_desc(onto, name)}" for name in sorted(onto.entity_types)
     )
+    ask = (ontology.genres().ask(asks) if asks else None) or PAPER_ASK
     named = standard_names()
     rel = "\n".join(
         f"- {r.name} ({', '.join(sorted(r.domain)) or 'any'} -> "
@@ -435,10 +478,7 @@ def system_prompt(
         _self_rule(onto),
         (
             f"Emit at most {max_triples} triples. Prefer the few that a reader"
-            " searching this library would want: what the paper is about (2-6"
-            " concepts), what it proposes, what methods, tools and datasets it uses,"
-            " its listed authors and venue, its central claims (at most 3), and"
-            " other papers it names by title."
+            f" searching this library would want: {ask}."
         ),
         (
             "Entity names are canonical: full author names as printed; concepts and"
@@ -462,12 +502,16 @@ def system_prompt(
             " puts the common ones into its own language afterwards and keeps"
             " the word you wrote beside them."
         ),
+        *([_PART_RULE] if part else []),
         (
-            "confidence: EXTRACTED when the text states it, INFERRED when it clearly"
-            " follows, AMBIGUOUS when you are unsure. evidence: a short verbatim quote"
-            " (under 200 characters) from the text that supports the triple; for"
-            " authored_by and published_in quote the header line."
-        ),
+            _PART_CONFIDENCE
+            if part
+            else "confidence: EXTRACTED when the text states it, INFERRED when it"
+            " clearly follows, AMBIGUOUS when you are unsure."
+        )
+        + " evidence: a short verbatim quote (under 200 characters) from the text"
+        " that supports the triple; for authored_by and published_in quote the"
+        " header line.",
         (
             # Without this the container becomes a `paper` and then a hub:
             # one proceedings volume reached degree 1,951 in this library,
@@ -528,6 +572,26 @@ def system_prompt(
 
         parts += ["", lineformat.prompt_section(max_triples=max_triples)]
     return "\n".join(parts)
+
+
+# a part of a reading in full (``prax.graph.parts``): the first reading
+# holds the document's authors and venue, and a part is read for what its
+# own text says. In the pilot's parts a quarter of the triples were
+# INFERRED and 8% AMBIGUOUS, against 13% and 3% of first readings; of
+# 136 graded, EXTRACTED were 2% wrong, INFERRED 18%, AMBIGUOUS 44%
+# (trumpeters given saxophones, docs/log.md 2026-11-26)
+_PART_RULE = (
+    "The text is one part of a longer document; its header names the part."
+    " The document's authors and venue were read already: do not give them"
+    " again. A heading or a title alone states no relation: quote the"
+    " sentence that does."
+)
+_PART_CONFIDENCE = (
+    "State only what this text states, never what you know of the things"
+    " it names (an instrument a player is not said to play here)."
+    " confidence: EXTRACTED when the text states it, AMBIGUOUS when you"
+    " are unsure, which a person then decides."
+)
 
 
 def _desc(onto: ontology.Ontology, name: str) -> str:
@@ -605,9 +669,13 @@ class ClaudeExtractor:
 
     def _prompt(self, doc: DocumentInput) -> tuple[str, dict[str, Any]]:
         onto = doc.ontology()
-        if onto.version not in self._prompts:
-            self._prompts[onto.version] = (system_prompt(onto), output_schema(onto))
-        return self._prompts[onto.version]
+        key = f"{onto.version}|{doc.asks}|{doc.part}"
+        if key not in self._prompts:
+            self._prompts[key] = (
+                system_prompt(onto, asks=doc.asks, part=doc.part),
+                output_schema(onto),
+            )
+        return self._prompts[key]
 
     def params(self, doc: DocumentInput) -> dict[str, Any]:
         """The request parameters (shared by the sync and the batch path):
@@ -729,12 +797,19 @@ class LocalExtractor:
         from prax.graph import lineformat
 
         onto = doc.ontology()
-        if onto.version not in self._prompts:
-            self._prompts[onto.version] = (
-                system_prompt(onto, output="lines", max_triples=self.max_triples),
+        key = f"{onto.version}|{doc.asks}|{doc.part}"
+        if key not in self._prompts:
+            self._prompts[key] = (
+                system_prompt(
+                    onto,
+                    output="lines",
+                    max_triples=self.max_triples,
+                    asks=doc.asks,
+                    part=doc.part,
+                ),
                 lineformat.grammar(onto, max_triples=self.max_triples),
             )
-        system, grammar = self._prompts[onto.version]
+        system, grammar = self._prompts[key]
         return onto, system, grammar
 
     def extract(self, doc: DocumentInput) -> Extraction:
@@ -756,6 +831,8 @@ class LocalExtractor:
                 doc.header,
                 doc.text[: max(500, int(len(doc.text) * fit))],
                 doc.domains,
+                asks=doc.asks,
+                part=doc.part,
             )
             cut = 1
             text, usage = self._chat(system, doc, grammar)
@@ -1118,8 +1195,9 @@ def _write(
     """The triples of one reading into the graph: the fitting ones as
     edges (once for this reader and document), the misfits and the
     unmapped into the review queue, counted in ``report``. ``settled``:
-    the document's own type is the one its node has (a part of a reading
-    in full), not the one this reading names it by most."""
+    a part of a reading in full, whose document's own type is the one
+    its node has, not the one this reading names it by most, and whose
+    triples its model was unsure of go to the review queue."""
     cues = ontology.evidence_cues()
     page_titles = store.page_titles(con)
     # where each quote stands in the text it was read from (migration 48)
@@ -1166,6 +1244,10 @@ def _write(
                 for f in evidence.flags(t.evidence, t.src, t.rel, t.dst, cues)
                 if f in evidence.REFUSED
             ]
+            # a part's triple its model was unsure of: a person decides
+            # (44% of them wrong in the pilot, `_PART_CONFIDENCE`)
+            if settled and t.confidence == "AMBIGUOUS":
+                doubts.append("unsure")
             if doubts:
                 raise ValueError(f"{evidence.REASON}: {', '.join(doubts)}")
         except ValueError as exc:

@@ -19,7 +19,7 @@ E = store.Edge
 # one-module ontology, both output formats, the optional rules off. A change
 # to what the prompt says fails here; bump ``extraction.PROMPT_VERSION`` and
 # add its fingerprint (the failure prints it).
-PROMPTS = {1: "2953e69f602c"}
+PROMPTS = {1: "2953e69f602c", 2: "fd47f7b8f7d0"}
 
 _FIXED = """
 module: main
@@ -37,8 +37,17 @@ def _fingerprint(monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setenv("PRAX_EXTRACT_DATES", "0")
     monkeypatch.setenv("PRAX_GRAPH_LANGUAGE", "en")
     onto = ontology.compose([ontology.parse_module(_FIXED)])
+    # from version 2 also what a document is asked by its genre (genres.yaml's
+    # reading) and a part of a reading in full; version 1 had neither
+    later = extraction.PROMPT_VERSION >= 2
+    asks: list[str | None] = [None]
+    if later:
+        asks += [name for name, _ in ontology.genres().asks]
     text = "\n\n".join(
-        extraction.system_prompt(onto, output=o) for o in ("json", "lines")
+        extraction.system_prompt(onto, output=o, asks=a, part=part)
+        for o in ("json", "lines")
+        for a in asks
+        for part in ((False, True) if later else (False,))
     )
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
