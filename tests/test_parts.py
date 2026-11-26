@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from prax import config, store, work
 from prax.graph import extraction, parts
 from prax.steps import leases
+from prax.text import evidence
 
 
 def _chunk(text: str, start: int, heading: list[str], kind: str = "text") -> Any:
@@ -359,3 +360,32 @@ def test_an_index_at_the_back_is_left_out_and_the_body_kept() -> None:
     assert "pentatonic" in text and "term 3" not in text
     assert got[-1].end <= chunks[-3]["locator"]["char_end"]
     assert sum(1 for p in got if p.label.startswith("Chapter 2")) == 1
+
+
+def test_an_index_runs_on_over_its_thinner_and_shorter_chunks() -> None:
+    """An index chunk with longer entries holds fewer page numbers than
+    ``INDEX_SHARE``, and its last letter's chunk is too short to judge
+    alone: beside one that is clearly index, both go with it, and the
+    prose after it (the author's note) is read."""
+    dense = " ".join(f"term {i}, {i * 3}–{i * 3 + 2}," for i in range(20))
+    thin = " ".join(f"entry on topic {chr(97 + i)}, {i * 3 + 10}," for i in range(8))
+    short = "zither, 141 zone, 77–78"
+    chunks, at = [], 0
+    for text, heading in (
+        *(("w " * 499, ["Chapter 1"]) for _ in range(12)),
+        (thin, ["Chapter 2", "I"]),
+        (dense, ["Chapter 2", "I"]),
+        (short, ["Chapter 2", "Z"]),
+        ("The author teaches arranging and plays the trombone. " * 4, ["About"]),
+    ):
+        chunks.append(_chunk(text, at, heading))
+        at += len(text) + 2
+    assert evidence.contents_share(thin) < parts.INDEX_SHARE
+    got = parts.plan(chunks, window=12_000, min_chars=3_000)
+    text = "".join(
+        parts.part_text(chunks, *parts.span({"parts": ranges}, i), window=12_000)
+        for ranges in [[[p.start, p.end, p.label] for p in got]]
+        for i in range(len(got))
+    )
+    assert "topic" not in text and "term" not in text and "zither" not in text
+    assert "trombone" in text

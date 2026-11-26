@@ -477,7 +477,15 @@ evidence:
   # 2026-11-17, all but 11 of them not in their text): "(Note: Title
   # inferred from context)", "the text only says". Matched anywhere in the
   # quote, any case; a phrase of several words with any space between
-  commentary: ["(note:", "[note:", "-> note:", "note: title", "the text says", "the text does not", "the text doesn't", "the text only", "the text mentions", "the text states", "the text refers", "the text implies", "text does not name", "text does not mention", "the prompt", "not explicitly", "explicitly stated", "explicitly mentioned", "explicitly given", "explicitly printed", "common knowledge", "inferred from", "is not in this text", "is not in the text", "rule says", "strict rule", "i cannot", "cannot confirm", "cannot be determined"]
+  commentary: ["(note:", "[note:", "-> note:", "note: title", "the text says", "the text does not", "the text doesn't", "the text only", "the text mentions", "the text states", "the text refers", "the text implies", "text does not name", "text does not mention", "the prompt", "not explicitly", "explicitly stated", "explicitly mentioned", "explicitly given", "explicitly printed", "common knowledge", "inferred from", "(implied by", "[implied by", "implied by context", "implied by the context", "is not in this text", "is not in the text", "rule says", "strict rule", "i cannot", "cannot confirm", "cannot be determined"]
+  # relations whose quote must name the target, by a word of it: a model
+  # fills them in from what it knows. Of the reading-in-full pilot's 20
+  # `plays` (2026-11-26) the quote named the instrument in 2 ("Parker uses
+  # diminution" for a saxophone), and 7 were wrong (a trumpeter's
+  # saxophone); over the library's live edges 88% of `plays` named no
+  # instrument, the next relation 62% (`typical_of`, whose target a
+  # quote paraphrases)
+  named: [plays]
 # one word in two spellings (AV, the BWS survey of 2026-11-17): the
 # British form and the American one it is keyed as, so "equalisation" and
 # "equalization" are one name to entity resolution (`names.variant`). Only

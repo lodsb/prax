@@ -670,7 +670,10 @@ after it. The reference list, figure captions, code and the front and
 back matter are left out. The matter is known by its heading: the
 lexicon's `matter` section (contents, index, acknowledgements, in six
 languages) and the reference-list headings the chunker knows, matched
-whole, so a "Literature review" chapter is read. Each part is sent with the
+whole, so a "Literature review" chapter is read. In the first and last
+15% of a book an index or a contents page is also known by its page
+numbers, when its heading was lost: a chunk whose words are 30% page
+numbers, and the chunks beside it at 15% or more. Each part is sent with the
 document's header and a line naming the part (`Part: 4 of 25
 (Chapter 3 > Voicings)`).
 

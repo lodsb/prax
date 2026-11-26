@@ -1290,12 +1290,14 @@ def lexicon() -> Lexicon:
 def evidence_cues() -> evidence.Cues:
     """The lexicon's ``evidence`` section as ``prax.text.evidence`` takes
     it: what negates, which relations are topical, what a model's note
-    says (AV, 2026-11-17)."""
+    says (AV, 2026-11-17), which relations' quotes must name their target
+    (2026-11-26)."""
     s = lexicon().section("evidence") or {}
     return evidence.Cues(
         negations=tuple(str(w) for w in s.get("negations") or ()),
         topical=frozenset(str(r) for r in s.get("topical") or ()),
         commentary=tuple(str(w) for w in s.get("commentary") or ()),
+        named=frozenset(str(r) for r in s.get("named") or ()),
     )
 
 

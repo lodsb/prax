@@ -16,6 +16,10 @@ quote alone, without a model.
 - ``commentary``: the model's own note where the quote belongs ("Note:
   Title inferred from context", "the text only says ..."). It is never
   the document's words, for any relation.
+- ``unnamed``: a quote that does not name the target of a relation a
+  model fills in from what it knows ("Parker uses diminution" as the
+  evidence of ``Charlie Parker plays saxophone``). Only the relations
+  the lexicon lists as ``named``.
 - ``noise``: OCR that came out as no language. Weak: code, formulas and
   file names look like noise to it too, so it is reported and never
   refuses.
@@ -60,12 +64,14 @@ _ADDING = ("only", "just", "merely", "least")
 
 @dataclass(frozen=True)
 class Cues:
-    """The lexicon's words: what negates, and the relations a negation or
-    a contents line does not speak against."""
+    """The lexicon's words: what negates, the relations a negation or a
+    contents line does not speak against, and those whose quote must name
+    their target."""
 
     negations: tuple[str, ...] = ()
     topical: frozenset[str] = field(default_factory=frozenset)
     commentary: tuple[str, ...] = ()
+    named: frozenset[str] = field(default_factory=frozenset)
 
     def commented(self) -> re.Pattern[str] | None:
         if not self.commentary:
@@ -94,12 +100,12 @@ _PAGE_NUMBER = re.compile(r"^\(?\d{1,4}(?:\s*[-–]\s*\d{1,4})?[,;.)]?$")
 CONTENTS_MIN_WORDS = 30  # a shorter block is too short to judge
 
 
-def contents_share(text: str) -> float:
+def contents_share(text: str, *, min_words: int = CONTENTS_MIN_WORDS) -> float:
     """The share of a block's words that are page numbers ("106–10,",
     "43", "(12)"): an index or a contents page is a third or more of them,
-    prose a tenth or less. A block under ``CONTENTS_MIN_WORDS`` words is 0."""
+    prose a tenth or less. A block under ``min_words`` words is 0."""
     words = text.split()
-    if len(words) < CONTENTS_MIN_WORDS:
+    if not words or len(words) < min_words:
         return 0.0
     return sum(bool(_PAGE_NUMBER.match(w)) for w in words) / len(words)
 
@@ -168,10 +174,29 @@ def negated(quote: str, src: str, dst: str, cues: Cues) -> bool:
     return False
 
 
+def _stem(word: str) -> str:
+    """A word without the ending an inflection or a derivation adds:
+    "saxophone" is "saxoph", which "saxophonist" begins with too."""
+    return word if len(word) <= 4 else word[: max(4, len(word) - 3)]
+
+
+def names(quote: str, name: str) -> bool:
+    """Whether the quote names the thing: a word of the quote begins with
+    the stem of a word of the name ("bass line by Jaco Pastorius" names
+    the electric bass). A name with no word of three letters is taken as
+    named, since nothing in it can be looked for."""
+    stems = [_stem(w) for w in _WORD.findall(name.lower()) if len(w) >= 3]
+    if not stems:
+        return True
+    words = _WORD.findall(quote.lower())
+    return any(w.startswith(s) for s in stems for w in words)
+
+
 # what an extraction sends to the review queue rather than writing: the
-# three that are rarely wrong (measured 2026-11-17, docs/log.md); noise
-# is reported only
-REFUSED = ("commentary", "contents", "negated")
+# three that are rarely wrong (measured 2026-11-17, docs/log.md), and a
+# target the quote does not name behind a relation that needs it named
+# (2026-11-26); noise is reported only
+REFUSED = ("commentary", "contents", "negated", "unnamed")
 # how such a review item's reason opens: the typing rules leave it to a
 # person, since a rule that settles a type would write the fact anyway
 REASON = "the quote is no evidence"
@@ -180,8 +205,9 @@ REASON = "the quote is no evidence"
 def flags(quote: str | None, src: str, rel: str, dst: str, cues: Cues) -> list[str]:
     """What is wrong with a quote as the evidence of ``src rel dst``, as
     the words heal counts by: ``contents`` and ``negated`` for a relation
-    that asserts something, ``commentary`` and ``noise`` for any; empty
-    when nothing is."""
+    that asserts something, ``commentary`` and ``noise`` for any,
+    ``unnamed`` for a relation of the cues' ``named``; empty when nothing
+    is."""
     if not quote or not quote.strip():
         return []
     out = []
@@ -193,6 +219,8 @@ def flags(quote: str | None, src: str, rel: str, dst: str, cues: Cues) -> list[s
         out.append("contents")
     if asserts and negated(quote, src, dst, cues):
         out.append("negated")
+    if rel in cues.named and not names(quote, dst):
+        out.append("unnamed")
     if noise(quote):
         out.append("noise")
     return out

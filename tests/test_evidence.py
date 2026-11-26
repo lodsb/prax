@@ -52,6 +52,25 @@ def test_a_models_note_is_no_quote_for_any_relation() -> None:
     ):
         assert "commentary" in _flags(q, rel="cites"), q
     assert _flags("A note on the sampling theorem, as the paper calls it") == []
+    q = "252. Lee Morgan: (implied by context of jazz saxophonist)"
+    assert "commentary" in _flags(q, rel="plays", dst="saxophone")
+    assert _flags("the moods implied by the two versions differ", rel="about") == []
+
+
+def test_who_plays_what_is_what_the_quote_names() -> None:
+    """A model fills an instrument in from what it knows: the quote is
+    the document's word for the player and none for the instrument (the
+    pilot's trumpeters given saxophones, 2026-11-26). Made-up names."""
+    q = "Anna Lind uses diminution of part of the outline."
+    assert _flags(q, "Anna Lind", "plays", "saxophone") == ["unnamed"]
+    for q, dst in (
+        ("the bass line by Anna Lind, from her second record", "electric bass"),
+        ("Master of Music in jazz piano performance", "jazz piano"),
+        ("Lind, the saxophonist of the quartet", "saxophone"),
+    ):
+        assert _flags(q, "Anna Lind", "plays", dst) == [], q
+    # another relation is not asked to name its target
+    assert _flags(q, "Anna Lind", "exemplifies", "outline") == []
 
 
 def test_noise_is_a_quote_of_no_words() -> None:

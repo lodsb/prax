@@ -53,6 +53,11 @@ OUTER = 0.15
 # copyright pages) and the rest in the body, among them pitch-class sets
 # and worked examples: hence the outer stretches only (2026-11-26)
 INDEX_SHARE = 0.3
+# an index runs on over its neighbours at this share, counted in a chunk of
+# any length: the jazz counterpoint book's index lay in chunks of 0.24 to
+# 0.40, and those under 0.3 and the short ones were read as a part with
+# the back cover; the prose beside an index held 0.0 to 0.06 (2026-11-26)
+INDEX_RUN_SHARE = 0.15
 
 
 def part_chars() -> int:
@@ -110,13 +115,55 @@ class _Matter:
     left-out kinds, empty text, matter by its heading, and in the book's
     outer stretches (``OUTER`` of its length at either end) a contents
     page or an index by its page numbers (``evidence.contents_share`` at
-    ``INDEX_SHARE`` or more). Not in the body: a music paper's pitch-class
+    ``INDEX_SHARE`` or more, and the run of chunks on either side at
+    ``INDEX_RUN_SHARE``). Not in the body: a music paper's pitch-class
     sets and a worked example are as dense in numbers there."""
 
     def __init__(self, chunks: list[dict[str, Any]]) -> None:
         self.words = matter_headings()
         ends = [int((c.get("locator") or {}).get("char_end") or 0) for c in chunks]
         self.length = max(ends, default=0) or 1
+        self.index = self._index_runs(chunks)
+
+    def _outer(self, c: dict[str, Any]) -> bool:
+        at = int(c["locator"]["char_start"]) / self.length
+        return at < OUTER or at >= 1 - OUTER
+
+    def _index_runs(self, chunks: list[dict[str, Any]]) -> frozenset[int]:
+        """The starts of the chunks of an index or a contents page: one at
+        ``INDEX_SHARE`` in an outer stretch, and its neighbours there at
+        ``INDEX_RUN_SHARE`` or more, short ones too. A left-out kind is
+        passed over, prose ends the run."""
+        seq = sorted(
+            (
+                c
+                for c in chunks
+                if c.get("kind") not in SKIPPED_KINDS
+                and c["text"].strip()
+                and "char_start" in (c.get("locator") or {})
+            ),
+            key=lambda c: int(c["locator"]["char_start"]),
+        )
+        outer = [self._outer(c) for c in seq]
+        seeds = [
+            i
+            for i, c in enumerate(seq)
+            if outer[i] and evidence.contents_share(c["text"]) >= INDEX_SHARE
+        ]
+        marked = set(seeds)
+        for i in seeds:
+            for step in (-1, 1):
+                j = i + step
+                while (
+                    0 <= j < len(seq)
+                    and j not in marked
+                    and outer[j]
+                    and evidence.contents_share(seq[j]["text"], min_words=1)
+                    >= INDEX_RUN_SHARE
+                ):
+                    marked.add(j)
+                    j += step
+        return frozenset(int(seq[i]["locator"]["char_start"]) for i in marked)
 
     def left_out(self, c: dict[str, Any]) -> bool:
         loc = c.get("locator") or {}
@@ -124,11 +171,9 @@ class _Matter:
             return True
         if "char_start" not in loc:
             return True
-        at = int(loc["char_start"]) / self.length
-        outer = at < OUTER or at >= 1 - OUTER
-        if _matter(list(c.get("heading") or []), self.words, outer=outer):
+        if _matter(list(c.get("heading") or []), self.words, outer=self._outer(c)):
             return True
-        return outer and evidence.contents_share(c["text"]) >= INDEX_SHARE
+        return int(loc["char_start"]) in self.index
 
 
 def _size(text: str) -> int:
