@@ -197,10 +197,14 @@ def is_prose(paragraph: str) -> bool:
     return len(p) > _PROSE_MIN and p.count(". ") >= 2 and len(_YEAR.findall(p)) <= 1
 
 
-def is_bibliography_heading(title: str) -> bool:
+def is_bibliography_heading(title: str, *, whole: bool = False) -> bool:
     """Does a heading open a reference list ("References", "7. References",
-    "Bibliography", "Literaturverzeichnis", "Works Cited")?"""
+    "Bibliography", "Literaturverzeichnis", "Works Cited")? With ``whole``
+    only the word itself, numbered or not: "Literature review" is a
+    chapter to read (``prax.graph.parts``), though it opens like a list."""
     h = re.sub(r"^[\d.\s]+", "", (title or "").strip().lower())
+    if whole:
+        return h.strip(" .:#*_") in _BIBLIOGRAPHY
     return any(h.startswith(x) or h.endswith(x) for x in _BIBLIOGRAPHY)
 
 

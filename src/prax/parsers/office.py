@@ -64,6 +64,21 @@ def _docx_heading(paragraph: Any) -> int:
     return min(int(found.group(2)), 6) if found else 0
 
 
+def _markdown_table(rows: list[list[str]]) -> str | None:
+    """Rows of cells as a Markdown table, the first row its head, short
+    rows padded; None when no row holds a word. A cell's ``|`` is the
+    caller's to escape."""
+    rows = [r for r in rows if any(r)]
+    if not rows:
+        return None
+    width = max(len(r) for r in rows)
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    head, *rest = rows
+    lines = ["| " + " | ".join(head) + " |", "|" + "|".join(["---"] * width) + "|"]
+    lines += ["| " + " | ".join(r) + " |" for r in rest]
+    return "\n".join(lines)
+
+
 def _docx_table(table: Any) -> str:
     """A table as Markdown, which is what the chunker reads as a table."""
     rows: list[list[str]] = []
@@ -72,16 +87,8 @@ def _docx_table(table: Any) -> str:
         for cell in row.findall(f"{W}tc"):
             texts = [t for t in (_docx_runs(p) for p in cell.findall(f"{W}p")) if t]
             cells.append(" ".join(texts).replace("|", r"\|"))
-        if any(cells):
-            rows.append(cells)
-    if not rows:
-        return ""
-    width = max(len(r) for r in rows)
-    rows = [r + [""] * (width - len(r)) for r in rows]
-    head, *rest = rows
-    lines = ["| " + " | ".join(head) + " |", "|" + "|".join(["---"] * width) + "|"]
-    lines += ["| " + " | ".join(r) + " |" for r in rest]
-    return "\n".join(lines)
+        rows.append(cells)
+    return _markdown_table(rows) or ""
 
 
 def _docx_blocks(parent: Any) -> list[tuple[str, str]]:
@@ -224,18 +231,10 @@ def _odt_blocks(parent: Any) -> list[tuple[str, str]]:
                     )
                     for cell in row.findall(f"{_ODT_TABLE}table-cell")
                 ]
-                if any(cells):
-                    rows.append(cells)
-            if rows:
-                width = max(len(r) for r in rows)
-                rows = [r + [""] * (width - len(r)) for r in rows]
-                head, *rest = rows
-                table = [
-                    "| " + " | ".join(head) + " |",
-                    "|" + "|".join(["---"] * width) + "|",
-                ]
-                table += ["| " + " | ".join(r) + " |" for r in rest]
-                blocks.append(("table", "\n".join(table)))
+                rows.append(cells)
+            table = _markdown_table(rows)
+            if table:
+                blocks.append(("table", table))
         elif tag in (f"{_ODT_TEXT}section", f"{_ODT_OFFICE}text"):
             blocks.extend(_odt_blocks(child))
     return blocks

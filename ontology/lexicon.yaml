@@ -486,3 +486,10 @@ evidence:
 spelling:
   words: {colour: color, colours: colors, flavour: flavor, flavours: flavors, behaviour: behavior, behaviours: behaviors, harbour: harbor, labour: labor, neighbour: neighbor, honour: honor, humour: humor, favour: favor, vapour: vapor, rumour: rumor, odour: odor, armour: armor, licence: license, licences: licenses, defence: defense, offence: offense, grey: gray, aluminium: aluminum, programme: program, programmes: programs, mould: mold, plough: plow, tyre: tire, tyres: tires, sulphur: sulfur, artefact: artifact, artefacts: artifacts, catalogue: catalog, dialogue: dialog, analogue: analog, centre: center, centres: centers, metre: meter, metres: meters, litre: liter, fibre: fiber, fibres: fibers, theatre: theater, spectre: specter}
   endings: [[isation, ization], [isations, izations], [ise, ize], [ised, ized], [ises, izes], [ising, izing], [iser, izer], [isers, izers], [yse, yze], [ysed, yzed], [yses, yzes], [ysing, yzing], [yser, yzer], [elling, eling], [elled, eled], [eller, eler], [ellers, elers]]
+
+# the headings of a book's front and back matter: what a reading in full
+# (`prax.graph.parts`) never starts a part in. Whole headings, lower case,
+# a number before one ignored; a reference list's are the chunker's
+# (`references.is_bibliography_heading`) and are not repeated here
+matter:
+  headings: ["table of contents", contents, index, "subject index", "name index", "general index", acknowledgements, acknowledgments, acknowledgement, copyright, dedication, "further reading", "about the author", "about the authors", "about this book", inhalt, inhaltsverzeichnis, stichwortverzeichnis, sachregister, personenregister, namensregister, danksagung, "table des matières", sommaire, sommario, remerciements, "index des noms", indice, "indice analitico", ringraziamenti, "índice", "índice analítico", agradecimientos, inhoud, inhoudsopgave, dankwoord]

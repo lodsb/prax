@@ -581,21 +581,29 @@ def unask_parts(con: sqlite3.Connection, doc_id: int) -> bool:
 def parts_asked(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """The documents asked to be read in full, oldest request first, with
     how far each is: ``done`` of ``parts`` (None before its plan is made),
-    and what its parts wrote."""
+    what its parts wrote, and ``first_read``: whether its first reading
+    is there under the version it is read with now, which its parts wait
+    for (they say the title and authors are known). Served by
+    ``idx_documents_parts`` (migration 74)."""
+    onto = ontology.current()
     out = []
     for r in con.execute(
         "SELECT id, meta FROM documents"
         " WHERE json_extract(meta, '$.parts.asked') IS NOT NULL"
         " ORDER BY json_extract(meta, '$.parts.asked.at'), id"
     ):
-        record = meta_of(r["meta"]).get("parts") or {}
+        meta = meta_of(r["meta"])
+        record = meta.get("parts") or {}
         plan = record.get("plan") or {}
+        stamp = (meta.get("extraction") or {}).get("ontology_version")
         out.append(
             {
                 "doc_id": r["id"],
                 "asked": record["asked"],
                 "parts": len(plan["parts"]) if plan else None,
                 "done": len(record.get("done") or []),
+                "first_read": stamp is not None
+                and stamp == expected_version(meta, onto),
                 **{k: record.get(k, 0) for k in PART_COUNTS},
             }
         )
@@ -603,6 +611,14 @@ def parts_asked(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 PART_COUNTS = ("linked", "existing", "queued", "input_tokens", "output_tokens")
+
+
+def _planned_part(record: dict[str, Any], doc_id: int, part: int) -> None:
+    """Refuse a part the kept plan does not have: one counted as done
+    would end the reading before the last part (``done`` is a count)."""
+    count = len((record.get("plan") or {}).get("parts") or [])
+    if not 0 <= part < count:
+        raise ValueError(f"part {part} of document {doc_id}: its plan has {count}")
 
 
 @_serialized
@@ -636,6 +652,7 @@ def part_done(
     it wrote to the record's counts."""
     meta = get_meta(con, doc_id)
     record = dict(meta.get("parts") or {})
+    _planned_part(record, doc_id, part)
     done = set(record.get("done") or [])
     if part not in done:
         done.add(part)
@@ -658,6 +675,7 @@ def part_failed(
     again); the document's first reading is not touched."""
     meta = get_meta(con, doc_id)
     record = dict(meta.get("parts") or {})
+    _planned_part(record, doc_id, part)
     failed = dict(record.get("failed") or {})
     failed[str(part)] = error[:300]
     record["failed"] = failed

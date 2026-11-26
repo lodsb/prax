@@ -661,11 +661,16 @@ book. `prax parts --ids 33767 33771` (or `POST /doc/{id}/parts`) asks
 for more: after the first reading, the extract step reads the document
 again part by part, with the same model and prompt, whatever the
 worker's scope. A part is a run of chunks of at most 12,000 characters
-(`graph.parts.PART_CHARS`). A new top-level heading starts a new part
-once the current one holds 3,000 characters, so a chapter is one part
-or several and short chapters share one. The reference list, figure
-captions, code and the front and back matter (contents, index,
-acknowledgements, by heading) are left out. Each part is sent with the
+(`extraction.part_chars` in `prax.yaml`, `PRAX_PART_CHARS` for one
+run). A new top-level heading starts a new part once the current one
+holds 3,000 characters (`extraction.min_part_chars`), so a chapter is
+one part or several and short chapters share one. A plan keeps the
+window it was made with; a new window applies to documents planned
+after it. The reference list, figure captions, code and the front and
+back matter are left out. The matter is known by its heading: the
+lexicon's `matter` section (contents, index, acknowledgements, in six
+languages) and the reference-list headings the chunker knows, matched
+whole, so a "Literature review" chapter is read. Each part is sent with the
 document's header and a line naming the part (`Part: 4 of 25
 (Chapter 3 > Voicings)`).
 
@@ -680,7 +685,11 @@ model cannot read is recorded in `meta.parts.failed` and passed over.
 parts planned, edges written, review items, output tokens.
 `prax parts --ids … --stop` stops one; the edges it wrote stay. The
 first readings of the backlog go first, so parts wait while documents
-wait for their first reading.
+wait for their first reading. A document's own parts wait for its first
+reading under the current version too, even when the worker's scope
+does not hand that reading out (an imported paper in the daytime
+`captures` scope); `prax parts` shows it as "waits for its first
+reading".
 
 ### Provenance and upgrading a producer's work
 

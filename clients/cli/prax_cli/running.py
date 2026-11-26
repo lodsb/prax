@@ -1150,10 +1150,16 @@ def parts(door: Door, a: Any) -> int:
     if not docs:
         out.say("No document is asked to be read in full.")
         return 0
+
+    def progress(d: dict[str, Any]) -> str:
+        if d.get("first_read") is False:  # a door from before says nothing
+            return "waits for its first reading"
+        return f"{d['done']}/{d['parts'] if d['parts'] is not None else '?'}"
+
     rows = [
         [
             str(d["doc_id"]),
-            f"{d['done']}/{d['parts'] if d['parts'] is not None else '?'}",
+            progress(d),
             out.num(d.get("linked", 0)),
             out.num(d.get("queued", 0)),
             out.num(d.get("output_tokens", 0)),

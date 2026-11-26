@@ -74,14 +74,17 @@ class Extract(Step):
 
     def parts_due(self, h: HandOut, due: list[int]) -> list[tuple[int, str]]:
         """The documents asked to be read in full (``prax.graph.parts``),
-        oldest request first, after the first readings: one whose first
-        reading is due waits for it. A request is explicit, so the scope
-        does not apply."""
+        oldest request first, after the first readings. A document's parts
+        wait for its first reading under the current version, whether or
+        not this scope hands that reading out: a part's header says the
+        title and authors are known. A request is explicit, so the scope
+        does not apply to the parts."""
         first = set(due)
         return [
             (r["doc_id"], "part")
             for r in store.parts_asked(h.con)
-            if r["doc_id"] not in first
+            if r["first_read"]
+            and r["doc_id"] not in first
             and (r["parts"] is None or r["done"] < r["parts"])
         ]
 
@@ -96,7 +99,8 @@ class Extract(Step):
         if index is None:
             return None
         plan = record["plan"]
-        start, end, label = plan["parts"][index]
+        label = plan["parts"][index][2]
+        start, end = parts.span(plan, index)
         doc = extraction.document_header(row)
         part = {
             "index": index,
@@ -109,7 +113,7 @@ class Extract(Step):
             "doc_id": doc_id,
             "title": doc.title,
             "header": parts.part_header(doc.header, index, part["of"], label),
-            "text": parts.part_text(chunks, start, end),
+            "text": parts.part_text(chunks, start, end, window=plan.get("window")),
             "domains": doc.domains,
             "ontology_version": plan["version"],
             "part": part,
@@ -142,12 +146,11 @@ class Extract(Step):
         for r in t.results:
             doc_id = int(r["doc_id"])
             t.release([doc_id])
-            # a part of a document read in full: as the worker echoes it,
-            # or as this door handed it out (a worker that predates parts
-            # echoes nothing, and its result must not be taken for the
-            # document's first reading)
-            part = r.get("part") or self._parts_out.pop(doc_id, None)
-            self._parts_out.pop(doc_id, None)
+            # a part of a document read in full: as this door handed it
+            # out, or as the worker echoes it when the door has restarted
+            # since (a worker that predates parts echoes nothing, and its
+            # result must not be taken for the document's first reading)
+            part = self._parts_out.pop(doc_id, None) or r.get("part")
             if part is not None and r.get("error"):
                 t.out["errors"].append({"doc_id": doc_id, "error": r["error"]})
                 with contextlib.suppress(Exception):  # the record is a nicety

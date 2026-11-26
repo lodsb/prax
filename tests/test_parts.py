@@ -7,9 +7,10 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, work
+from prax import config, store, work
 from prax.graph import extraction, parts
 from prax.steps import leases
 
@@ -189,3 +190,110 @@ def test_the_door_asks_stops_and_lists(client: TestClient) -> None:
     assert client.delete(f"/doc/{doc}/parts").json() == {"stopped": True}
     assert client.get("/parts").json()["documents"] == []
     assert client.post("/doc/999999/parts", json={}).status_code == 404
+
+
+# The engineering review of 2026-11-26 (768ca91..7d8b8a6)
+
+
+def test_a_part_waits_for_a_first_reading_its_scope_does_not_hand_out(
+    con: sqlite3.Connection,
+) -> None:
+    """A document of a source the daytime scope leaves out (an import) is
+    not on that scope's list of first readings due, and its parts wait for
+    that reading all the same: their header says the title is known."""
+    doc = int(store.ingest_text(con, BOOK, title="Echoes")["doc_id"])
+    store.update_meta(con, doc, keys={"source": "zotero"})
+    store.ask_parts(con, doc)
+    assert work.hand_out(con, "extract", limit=5, scope="captures")["items"] == []
+    (row,) = store.parts_asked(con)
+    assert row["first_read"] is False
+    first = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    assert [i.get("part") for i in first] == [None]
+    _take(con, [_result(doc, first[0], "tape echo")])
+    (item,) = work.hand_out(con, "extract", limit=5, scope="captures")["items"]
+    assert item["part"]["index"] == 0
+    leases.release("extract", [doc])
+
+
+def test_a_part_the_plan_does_not_have_is_refused(con: sqlite3.Connection) -> None:
+    doc = int(store.ingest_text(con, BOOK, title="Echoes")["doc_id"])
+    first = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    _take(con, [_result(doc, first[0], "tape echo")])
+    store.ask_parts(con, doc)
+    (item,) = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    leases.release("extract", [doc])
+    plan = store.get_meta(con, doc)["parts"]["plan"]
+    with pytest.raises(ValueError, match="its plan has"):
+        extraction.apply_part(
+            con, doc, 99, extraction.Extraction(), plan=plan, extractor="m"
+        )
+    with pytest.raises(ValueError, match="its plan has"):
+        store.part_failed(con, doc, -1, "x")
+    assert store.get_meta(con, doc)["parts"]["done"] == []
+    # the door's note of what it handed out wins over what a worker echoes
+    echoed = _result(doc, item, "loop 1")
+    (_again,) = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    echoed["part"] = {**echoed["part"], "index": len(plan["parts"]) - 1}
+    _take(con, [echoed])
+    assert store.get_meta(con, doc)["parts"]["done"] == [0]
+
+
+def test_a_rechunk_loses_no_chunk_between_two_parts() -> None:
+    """After a rechunk the plan holds (the text's hash is the same) and the
+    chunks' boundaries have moved: a chunk that straddles two parts goes
+    to the part it begins in, not to neither."""
+    plan = {"parts": [[0, 4998, "One"], [5000, 9998, "Two"]]}
+    rechunked = [
+        _chunk("a" * 3998, 0, ["One"]),
+        _chunk("b" * 2998, 4000, ["One"]),  # over the first part's end
+        _chunk("c" * 2998, 7000, ["Two"]),
+    ]
+    one = parts.part_text(rechunked, *parts.span(plan, 0), window=12_000)
+    two = parts.part_text(rechunked, *parts.span(plan, 1), window=12_000)
+    assert "b" * 100 in one and "b" not in two
+    assert "c" * 100 in two and "a" not in two
+
+
+def test_front_and_back_matter_are_known_by_the_lexicon_in_other_languages() -> None:
+    words = parts.matter_headings()
+    assert parts._matter(["Indice"], words)  # Italian contents
+    assert parts._matter(["7. References"], words)  # the chunker's words
+    assert parts._matter(["Agradecimientos"], words)
+    # a chapter that opens like a reference list is read
+    assert not parts._matter(["Literature review"], words)
+    assert not parts._matter(["Register"], words)  # an orchestration chapter
+
+
+def test_the_window_is_the_hosts_setting_and_the_plan_keeps_its_own(
+    con: sqlite3.Connection,
+) -> None:
+    chunks = [_chunk("w" * 998, i * 1000, ["Chapter 1"]) for i in range(30)]
+    with config.overriding("PRAX_PART_CHARS", "6000"):
+        assert all(p.end - p.start <= 6000 for p in parts.plan(chunks))
+        assert len(parts.plan(chunks)) > len(parts.plan(chunks, window=12_000))
+    with config.overriding("PRAX_PART_CHARS", "10"), pytest.raises(config.ConfigError):
+        parts.part_chars()
+    doc = int(store.ingest_text(con, BOOK, title="Echoes")["doc_id"])
+    first = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    _take(con, [_result(doc, first[0], "tape echo")])
+    store.ask_parts(con, doc)
+    with config.overriding("PRAX_PART_CHARS", "4000"):
+        (item,) = work.hand_out(con, "extract", limit=5, scope="all")["items"]
+    assert store.get_meta(con, doc)["parts"]["plan"]["window"] == 4000
+    assert len(item["text"]) <= 4000
+    leases.release("extract", [doc])
+
+
+def test_the_asked_documents_are_read_through_their_index(
+    con: sqlite3.Connection,
+) -> None:
+    """``parts_asked`` runs on every extract hand-out, an empty one too: a
+    scan of every document's meta took 200 ms on the live store of
+    2026-11-26 (33,811 documents); migration 74 serves it."""
+    seen: list[str] = []
+    con.set_trace_callback(seen.append)
+    store.parts_asked(con)
+    con.set_trace_callback(None)
+    sql = next(s for s in seen if "$.parts.asked" in s)
+    plan = " ".join(str(r[-1]) for r in con.execute("EXPLAIN QUERY PLAN " + sql))
+    assert "idx_documents_parts" in plan, plan

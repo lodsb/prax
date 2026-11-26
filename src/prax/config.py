@@ -49,7 +49,8 @@ SECTIONS = (
     # max_upload_mb
     "ontology",  # dir
     "graph",  # language: which of a thing's names this host shows
-    "extraction",  # standard_names, world_dates: what the extract prompt asks
+    "extraction",  # standard_names, world_dates: what the extract prompt asks;
+    # part_chars, min_part_chars: the parts of a document read in full
     "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token
     "run",  # what `prax up` keeps alive on this host (prax.host.up)
@@ -282,7 +283,7 @@ KEYS: dict[str, frozenset[str]] = {
             "neighbours",
             "per_type",
         ),
-        "extraction": ("standard_names", "world_dates"),
+        "extraction": ("min_part_chars", "part_chars", "standard_names", "world_dates"),
         "paths": ("backup", "llama_server", "models"),
         "sources": ("github.token", "github.user"),
         "host": ("commit_reserve_mb",),

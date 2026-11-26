@@ -227,12 +227,16 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core8+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
+   (`core8+computing2+craft1+electronics1+kitchen2+music1+research9+society1+sound1+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. The plain
    numbers of the single file before the modules ("0" to "5") were restated
-   as the research module's (migration 72). A document
+   as the research module's (migration 72). A module may be `opt_in`:
+   read only where a document's domain set names it (the music pack's
+   `music.yaml` and `sound.yaml`). A document
    carries its domain set in `meta.domains`, the modules it is read
-   against; none means every module. It is extracted against that
+   against; none means every module that is not `opt_in` nor built on
+   one (`Ontology.for_domains(None)`, the version without `music1` and
+   `sound1`). It is extracted against that
    subset and stamped with the subset's version (`core1+family1`).
    A relation says what follows from it (`transitive`, `symmetric`,
    `functional`, `inverse_of`, `kind`, and `chain`, two relations it
@@ -533,8 +537,10 @@ reference `docs/ask.md`.
 - Which documents a step reads again is said once: the step names its
   record in `store.STAMPS` (the record's text hash, its version, an
   exact string version, the original's hash, or a `_tried` mark), and
-  every due query is built from it (`_due`, `docs/meta.md`); extraction's
-  per-subset version is the one exception.
+  every due query is built from it (`_due`, `docs/meta.md`). Two
+  exceptions: extraction's per-subset version, and a document read in
+  full (`meta.parts.plan`: the text's hash and that version, checked by
+  `graph.parts.prepared` when its next part is handed out).
 - A reading is a row of the `readings` queue, not a field on the
   document. A document may wait for several at once: the crops of its
   vector figures, the readings of its pictures, the formulas of a marker

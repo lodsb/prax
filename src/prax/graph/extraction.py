@@ -1036,12 +1036,18 @@ def apply_part(
     summary and the ``meta.extraction`` stamp left as they are, and the
     part marked done in ``meta.parts``. ``plan`` is the plan the part was
     handed out under (its text hash and version); a result for a plan
-    that is no longer the document's is not written (None)."""
+    that is no longer the document's is not written (None), and one for
+    a part the plan does not have is refused."""
     meta = store.get_meta(con, doc_id)
     held = (meta.get("parts") or {}).get("plan") or {}
     keys = ("text_hash", "version")
     if not held or any(held.get(k) != plan.get(k) for k in keys):
         return None
+    if not 0 <= part < len(held.get("parts") or []):
+        raise ValueError(
+            f"part {part} of document {doc_id}: its plan has"
+            f" {len(held.get('parts') or [])} parts"
+        )
     onto = ontology.current().for_domains(store.document_domains(con, doc_id))
     if onto.version != held.get("version"):
         return None

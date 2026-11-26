@@ -166,6 +166,11 @@ steps:
 #                              #   its standard name too (schema:author); measured first
 #   world_dates: false         # [PRAX_EXTRACT_DATES] the prompt asks when a fact holds
 #                              #   where the text says so; the worlddates step does it now
+#   part_chars: 12000          # [PRAX_PART_CHARS] the most characters of one part of a
+#                              #   document read in full (prax parts); what the model's
+#                              #   context holds beside the prompt
+#   min_part_chars: 3000       # [PRAX_MIN_PART_CHARS] what a part holds before a new
+#                              #   chapter starts the next one
 
 # sources:
 #   github:

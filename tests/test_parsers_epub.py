@@ -146,3 +146,18 @@ def test_what_is_not_an_epub_says_so() -> None:
         z.writestr("readme.txt", "a zip, no package")
     with pytest.raises(ValueError, match="no package file"):
         parsers.by_name("epub")(buf.getvalue())
+
+
+def test_a_book_is_refused_past_the_bound_on_its_whole_xhtml(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each member is capped where it is inflated; a spine that names one
+    member many times is capped as a whole (the review of 2026-11-26)."""
+    from prax.parsers import epub
+
+    many = EPUB2_OPF.replace('<itemref idref="a"/>', '<itemref idref="a"/>' * 50)
+    data = _epub(many, {"a.html": _page("<p>" + "word " * 100 + "</p>")})
+    assert parsers.by_name("epub")(data).count("word") == 50 * 100
+    monkeypatch.setattr(epub, "ZIPPED_XML_MAX", 10_000)
+    with pytest.raises(ValueError, match="inflates to"):
+        parsers.by_name("epub")(data)

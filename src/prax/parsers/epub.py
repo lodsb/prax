@@ -33,7 +33,7 @@ from typing import Any
 from urllib.parse import unquote
 from xml.etree import ElementTree
 
-from .office import _join_blocks, _zipped_xml
+from .office import ZIPPED_XML_MAX, _join_blocks, _markdown_table, _zipped_xml
 
 EPUB_MIME = "application/epub+zip"
 _CONTAINER = "META-INF/container.xml"
@@ -201,16 +201,10 @@ class _Reader(HTMLParser):
         self._buf.append(data)
 
     def _end_table(self) -> None:
-        rows = [r for r in self._rows if any(r)]
+        table = _markdown_table(self._rows)
         self._rows = []
-        if not rows:
-            return
-        width = max(len(r) for r in rows)
-        rows = [r + [""] * (width - len(r)) for r in rows]
-        head, *rest = rows
-        lines = ["| " + " | ".join(head) + " |", "|" + "|".join(["---"] * width) + "|"]
-        lines += ["| " + " | ".join(r) + " |" for r in rest]
-        self.blocks.append(_Block("table", "\n".join(lines)))
+        if table:
+            self.blocks.append(_Block("table", table))
 
     def close(self) -> None:
         super().close()
@@ -449,10 +443,17 @@ def _epub(data: bytes) -> str:
     with archive:
         pkg = _package(archive)
         names = set(archive.namelist())
+        spine = [m for m in pkg.spine if m != pkg.nav and m in names]
+        # each member is capped by _zipped_xml, and the book as a whole
+        # by the same bound: a spine may name a member many times
+        total = sum(archive.getinfo(m).file_size for m in spine)
+        if total > ZIPPED_XML_MAX:
+            raise ValueError(
+                f"the book's XHTML inflates to {total >> 20} MB, over the"
+                f" {ZIPPED_XML_MAX >> 20} MB the parser reads"
+            )
         blocks: list[_Block] = []
-        for member in pkg.spine:
-            if member == pkg.nav or member not in names:
-                continue
+        for member in spine:
             reader = _Reader()
             reader.feed(_decode(_zipped_xml(archive, member)))
             reader.close()
