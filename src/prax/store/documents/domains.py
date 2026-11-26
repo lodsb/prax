@@ -537,6 +537,137 @@ def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
     return True
 
 
+# A document read in full (``prax.graph.parts``): ``meta.parts`` holds who
+# asked (``asked``), the plan of its parts for one text and ontology version
+# (``plan``), the parts taken in (``done``) and what they wrote.
+@_serialized
+def ask_parts(
+    con: sqlite3.Connection, doc_id: int, *, by: str = "human"
+) -> dict[str, Any]:
+    """Ask for a document to be read in full, part by part, after its
+    first reading. A document asked already keeps its first request and
+    what it has read; one asked again after ``unask_parts`` goes on where
+    it stopped. Returns the record."""
+    missing = (
+        con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        is None
+    )
+    if missing or document_hidden(con, doc_id):  # hidden: as if absent
+        raise NotFound(f"no such document: {doc_id}")
+    meta = get_meta(con, doc_id)
+    record = dict(meta.get("parts") or {})
+    if not record.get("asked"):
+        record["asked"] = {"by": by, "at": now()}
+        meta["parts"] = record
+        _put_meta(con, doc_id, meta)
+        con.commit()
+    return record
+
+
+@_serialized
+def unask_parts(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Stop reading a document in full: no part is handed out any more;
+    the edges its parts wrote stay, and so does the record of them."""
+    meta = get_meta(con, doc_id)
+    record = meta.get("parts") or {}
+    if not record.pop("asked", None):
+        return False
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return True
+
+
+@_reading
+def parts_asked(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The documents asked to be read in full, oldest request first, with
+    how far each is: ``done`` of ``parts`` (None before its plan is made),
+    and what its parts wrote."""
+    out = []
+    for r in con.execute(
+        "SELECT id, meta FROM documents"
+        " WHERE json_extract(meta, '$.parts.asked') IS NOT NULL"
+        " ORDER BY json_extract(meta, '$.parts.asked.at'), id"
+    ):
+        record = meta_of(r["meta"]).get("parts") or {}
+        plan = record.get("plan") or {}
+        out.append(
+            {
+                "doc_id": r["id"],
+                "asked": record["asked"],
+                "parts": len(plan["parts"]) if plan else None,
+                "done": len(record.get("done") or []),
+                **{k: record.get(k, 0) for k in PART_COUNTS},
+            }
+        )
+    return out
+
+
+PART_COUNTS = ("linked", "existing", "queued", "input_tokens", "output_tokens")
+
+
+@_serialized
+def set_parts_plan(
+    con: sqlite3.Connection, doc_id: int, plan: dict[str, Any]
+) -> dict[str, Any]:
+    """Keep a new plan of a document's parts: every part due again, the
+    counts of what earlier parts wrote kept. Returns the record."""
+    meta = get_meta(con, doc_id)
+    record = dict(meta.get("parts") or {})
+    record["plan"] = plan
+    record["done"] = []
+    record.pop("failed", None)
+    meta["parts"] = record
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return record
+
+
+@_serialized
+def part_done(
+    con: sqlite3.Connection,
+    doc_id: int,
+    part: int,
+    *,
+    counts: dict[str, int],
+    run: str | None,
+    extractor: str,
+) -> dict[str, Any]:
+    """Mark one part of a document read in full as taken in, and add what
+    it wrote to the record's counts."""
+    meta = get_meta(con, doc_id)
+    record = dict(meta.get("parts") or {})
+    done = set(record.get("done") or [])
+    if part not in done:
+        done.add(part)
+        for k in PART_COUNTS:
+            record[k] = int(record.get(k) or 0) + int(counts.get(k) or 0)
+    record["done"] = sorted(done)
+    record.update({"run": run, "extractor": extractor, "at": now()})
+    meta["parts"] = record
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return record
+
+
+@_serialized
+def part_failed(
+    con: sqlite3.Connection, doc_id: int, part: int, error: str
+) -> dict[str, Any]:
+    """A part the model could not read: kept in ``meta.parts.failed`` and
+    counted as done, so the reading goes on past it (a new plan reads it
+    again); the document's first reading is not touched."""
+    meta = get_meta(con, doc_id)
+    record = dict(meta.get("parts") or {})
+    failed = dict(record.get("failed") or {})
+    failed[str(part)] = error[:300]
+    record["failed"] = failed
+    record["done"] = sorted({*(record.get("done") or []), part})
+    meta["parts"] = record
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return record
+
+
 def expected_version(
     meta: dict[str, Any], onto: ontology.Ontology | None = None
 ) -> str:

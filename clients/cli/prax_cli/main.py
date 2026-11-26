@@ -661,6 +661,31 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=running.reread, needs_door=True)
 
     s = sub.add_parser(
+        "parts",
+        parents=[door_opts, as_json],
+        help="read documents in full, part by part; with no ids, how far each is",
+        description=(
+            "The extract step reads a document's head and its closing"
+            " sections. A document asked here is read again after that, part"
+            " by part (a chapter, or windows of 12,000 characters of one),"
+            " whatever the worker's scope. With no ids: the documents asked"
+            " and how many of their parts are read."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax parts --ids 33767 33771     read these two in full\n"
+            "  prax parts                       how far each one is\n"
+            "  prax parts --ids 33767 --stop    no more parts of it"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("--ids", nargs="+", type=int, metavar="ID")
+    s.add_argument(
+        "--stop", action="store_true", help="stop reading these; their edges stay"
+    )
+    s.set_defaults(func=running.parts, needs_door=True)
+
+    s = sub.add_parser(
         "readings",
         parents=[door_opts, as_json],
         help="the reading queue: what waits, per extractor; --wait blocks",

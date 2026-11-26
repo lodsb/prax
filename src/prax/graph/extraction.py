@@ -45,6 +45,9 @@ _TAIL_HEADING = re.compile(
     r"conclu|discussion|summary|future work|outlook|limitations", re.IGNORECASE
 )
 TAIL_MARK = "\n\n[...]\n\n"
+# the chunks a reading leaves out: figure captions and code, and what a
+# capture holds that is not the document (its advertising, its comments)
+SKIPPED_KINDS = ("figure", "code", "ad", "comment", "figure-text")
 MAX_TRIPLES = 20  # the models rarely need more; halves output tokens (docs/eval)
 # The version of the instructions a model is given (``system_prompt`` and
 # the line format): an extraction edge's producer names it after the model
@@ -163,11 +166,10 @@ def build_input(
     # sections that fell past it, up to the tail. Figure captions and code
     # are skipped, and so are the regions of a capture that are not the
     # document: its advertising and what its readers wrote under it
-    skip = ("figure", "code", "ad", "comment", "figure-text")
     chunks = [
         c
         for c in store.list_chunks(con, doc_id)
-        if c["kind"] not in skip and c["text"].strip()
+        if c["kind"] not in SKIPPED_KINDS and c["text"].strip()
     ]
     parts, cut = _head_parts(chunks, max_chars, max_bytes)
     tail = _tail_parts(chunks[cut:], tail_chars)
@@ -177,6 +179,17 @@ def build_input(
     header = _header_lines(doc["title"], meta, domains)
     return DocumentInput(
         doc_id, doc["title"] or "", "\n".join(header), text, domains=domains
+    )
+
+
+def document_header(doc: dict[str, Any]) -> DocumentInput:
+    """A document's title, header lines and domains without its text (a
+    ``store.get_document`` row): what a part of it is read under."""
+    meta = doc.get("meta") or {}
+    domains = list(meta["domains"]) if meta.get("domains") else None
+    header = _header_lines(doc.get("title"), meta, domains)
+    return DocumentInput(
+        int(doc["id"]), doc.get("title") or "", "\n".join(header), "", domains=domains
     )
 
 
@@ -944,7 +957,6 @@ def apply(
     names it after the model (``store.prompted``), and the stamp keeps it.
     A re-reading supersedes the model's earlier one under any prompt."""
     onto = ontology.current().for_domains(store.document_domains(con, doc_id))
-    cues = ontology.evidence_cues()
     report = ApplyReport()
     # the same producer read this document before under another subset
     # or module version: that reading is superseded by this one
@@ -952,6 +964,7 @@ def apply(
         con, doc_id, producer=extractor, except_version=onto.version
     )
     stale = store.get_meta(con, doc_id).get("extraction_stale")
+    whole = False  # the producer's whole earlier reading retired
     if stale and (stale.get("extractor") == extractor or stale.get("requested")):
         # the text this producer read has been replaced since (a parser
         # that reads the mathematics, OCR over a scan), or a person asked
@@ -961,6 +974,121 @@ def apply(
         report.retired += store.retire_reading(
             con, doc_id, producer=extractor, except_version=""
         )
+        whole = True
+    _write(
+        con,
+        doc_id,
+        extraction,
+        onto,
+        report,
+        extractor=extractor,
+        run=run,
+        prompt=prompt,
+    )
+    stamp = {
+        "extractor": extractor,
+        "ontology_version": onto.version,
+        **({"prompt": prompt} if prompt is not None else {}),
+        "run": run,
+        "at": store.now(),
+        "linked": report.linked,
+        "existing": report.existing,
+        "queued": report.queued,
+        "rejected": report.rejected,
+        **({"drops": report.drops} if report.drops else {}),
+        **extraction.usage,
+    }
+
+    def took(meta: store.DocumentMeta) -> None:
+        meta.pop("extraction_error", None)  # a reading that worked
+        stale_now = meta.get("extraction_stale") or {}
+        if stale_now.get("extractor") == extractor or stale_now.get("requested"):
+            meta.pop("extraction_stale")
+        if extraction.summary:
+            store.keep_summary(meta, extraction.summary)
+        if meta.get("extraction"):  # every model that has read the document
+            meta.setdefault("extraction_history", []).append(meta["extraction"])
+        meta["extraction"] = stamp
+        held = meta.get("parts")
+        if held and (whole or report.retired):
+            # the parts were read into the reading just retired: read again
+            held.pop("plan", None)
+            held.pop("done", None)
+
+    store.update_meta(con, doc_id, took)
+    _settle(con, doc_id, onto, report, run=run, extractor=extractor)
+    return report
+
+
+def apply_part(
+    con: sqlite3.Connection,
+    doc_id: int,
+    part: int,
+    extraction: Extraction,
+    *,
+    plan: dict[str, Any],
+    extractor: str,
+    run: str | None = None,
+    prompt: int | None = None,
+) -> ApplyReport | None:
+    """Write the extraction of one part of a document read in full
+    (``prax.graph.parts``): its triples as ``apply`` writes them, the
+    summary and the ``meta.extraction`` stamp left as they are, and the
+    part marked done in ``meta.parts``. ``plan`` is the plan the part was
+    handed out under (its text hash and version); a result for a plan
+    that is no longer the document's is not written (None)."""
+    meta = store.get_meta(con, doc_id)
+    held = (meta.get("parts") or {}).get("plan") or {}
+    keys = ("text_hash", "version")
+    if not held or any(held.get(k) != plan.get(k) for k in keys):
+        return None
+    onto = ontology.current().for_domains(store.document_domains(con, doc_id))
+    if onto.version != held.get("version"):
+        return None
+    report = ApplyReport()
+    _write(
+        con,
+        doc_id,
+        extraction,
+        onto,
+        report,
+        extractor=extractor,
+        run=run,
+        prompt=prompt,
+    )
+    _settle(con, doc_id, onto, report, run=run, extractor=extractor)
+    store.part_done(
+        con,
+        doc_id,
+        part,
+        counts={
+            "linked": report.linked,
+            "existing": report.existing,
+            "queued": report.queued,
+            "input_tokens": int(extraction.usage.get("input_tokens") or 0),
+            "output_tokens": int(extraction.usage.get("output_tokens") or 0),
+        },
+        run=run,
+        extractor=store.prompted(extractor, prompt),
+    )
+    return report
+
+
+def _write(
+    con: sqlite3.Connection,
+    doc_id: int,
+    extraction: Extraction,
+    onto: ontology.Ontology,
+    report: ApplyReport,
+    *,
+    extractor: str,
+    run: str | None,
+    prompt: int | None,
+) -> None:
+    """The triples of one reading into the graph: the fitting ones as
+    edges (once for this reader and document), the misfits and the
+    unmapped into the review queue, counted in ``report``."""
+    cues = ontology.evidence_cues()
     page_titles = store.page_titles(con)
     # where each quote stands in the text it was read from (migration 48)
     read = store.get_document(con, doc_id)
@@ -1080,32 +1208,17 @@ def apply(
             source_doc=doc_id,
         )
         report.queued += 1
-    stamp = {
-        "extractor": extractor,
-        "ontology_version": onto.version,
-        **({"prompt": prompt} if prompt is not None else {}),
-        "run": run,
-        "at": store.now(),
-        "linked": report.linked,
-        "existing": report.existing,
-        "queued": report.queued,
-        "rejected": report.rejected,
-        **({"drops": report.drops} if report.drops else {}),
-        **extraction.usage,
-    }
 
-    def took(meta: store.DocumentMeta) -> None:
-        meta.pop("extraction_error", None)  # a reading that worked
-        stale_now = meta.get("extraction_stale") or {}
-        if stale_now.get("extractor") == extractor or stale_now.get("requested"):
-            meta.pop("extraction_stale")
-        if extraction.summary:
-            store.keep_summary(meta, extraction.summary)
-        if meta.get("extraction"):  # every model that has read the document
-            meta.setdefault("extraction_history", []).append(meta["extraction"])
-        meta["extraction"] = stamp
 
-    store.update_meta(con, doc_id, took)
+def _settle(
+    con: sqlite3.Connection,
+    doc_id: int,
+    onto: ontology.Ontology,
+    report: ApplyReport,
+    *,
+    run: str | None,
+    extractor: str,
+) -> None:
     if report.queued:
         # the rules never invent; what they can settle from the names and
         # the document's title need not wait in the queue for a pass
@@ -1116,4 +1229,3 @@ def apply(
         )
         report.queued -= rules.linked + rules.existing + rules.dropped
         report.linked += rules.linked
-    return report

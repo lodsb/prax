@@ -12,7 +12,7 @@ from typing import Any
 
 from prax import models, store
 from prax.client import Door
-from prax.graph import extraction, ontology
+from prax.graph import extraction, ontology, parts
 from prax.text import mimes
 
 from . import base, leases
@@ -46,6 +46,10 @@ def extraction_from(data: dict[str, Any]) -> extraction.Extraction:
 class Extract(Step):
     name = "extract"
 
+    def __init__(self) -> None:
+        # the parts handed out and not yet taken in, by document
+        self._parts_out: dict[int, dict[str, Any]] = {}
+
     def due(self, h: HandOut) -> list[int]:
         onto = ontology.current()
         return store.select_for_extraction(
@@ -68,12 +72,64 @@ class Extract(Step):
             "ontology_version": doc.ontology().version,
         }
 
+    def parts_due(self, h: HandOut, due: list[int]) -> list[tuple[int, str]]:
+        """The documents asked to be read in full (``prax.graph.parts``),
+        oldest request first, after the first readings: one whose first
+        reading is due waits for it. A request is explicit, so the scope
+        does not apply."""
+        first = set(due)
+        return [
+            (r["doc_id"], "part")
+            for r in store.parts_asked(h.con)
+            if r["doc_id"] not in first
+            and (r["parts"] is None or r["done"] < r["parts"])
+        ]
+
+    def part_item(self, h: HandOut, doc_id: int) -> dict[str, Any] | None:
+        """The next part of a document read in full as an item, or None
+        when every part is read (or it has no text)."""
+        got = parts.prepared(h.con, doc_id)
+        if got is None:
+            return None
+        row, record, chunks = got
+        index = parts.next_part(record)
+        if index is None:
+            return None
+        plan = record["plan"]
+        start, end, label = plan["parts"][index]
+        doc = extraction.document_header(row)
+        part = {
+            "index": index,
+            "of": len(plan["parts"]),
+            "text_hash": plan["text_hash"],
+            "version": plan["version"],
+        }
+        self._parts_out[doc_id] = part
+        return {
+            "doc_id": doc_id,
+            "title": doc.title,
+            "header": parts.part_header(doc.header, index, part["of"], label),
+            "text": parts.part_text(chunks, start, end),
+            "domains": doc.domains,
+            "ontology_version": plan["version"],
+            "part": part,
+        }
+
     def hand_out(self, h: HandOut) -> dict[str, Any]:
         due = self.due(h)
         if due is None:
             return h.nothing()
+
+        def build(c: int | tuple[int, str]) -> dict[str, Any] | None:
+            if isinstance(c, tuple):
+                return self.part_item(h, c[0])
+            # the first reading goes out: a part noted before is not out
+            self._parts_out.pop(c, None)
+            return self.item(h, c)
+
         # the scope is in what is due already; a flag is explicit
-        return h.documents(due, lambda d: self.item(h, d), scoped=False)
+        candidates: list[int | tuple[int, str]] = [*due, *self.parts_due(h, due)]
+        return h.documents(candidates, build, scoped=False)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         extractor = str(t.payload.get("extractor") or t.worker)
@@ -86,6 +142,19 @@ class Extract(Step):
         for r in t.results:
             doc_id = int(r["doc_id"])
             t.release([doc_id])
+            # a part of a document read in full: as the worker echoes it,
+            # or as this door handed it out (a worker that predates parts
+            # echoes nothing, and its result must not be taken for the
+            # document's first reading)
+            part = r.get("part") or self._parts_out.pop(doc_id, None)
+            self._parts_out.pop(doc_id, None)
+            if part is not None and r.get("error"):
+                t.out["errors"].append({"doc_id": doc_id, "error": r["error"]})
+                with contextlib.suppress(Exception):  # the record is a nicety
+                    store.part_failed(
+                        t.con, doc_id, int(part["index"]), str(r["error"])
+                    )
+                continue
             if r.get("error"):
                 t.out["errors"].append({"doc_id": doc_id, "error": r["error"]})
                 with contextlib.suppress(Exception):  # the note is a nicety
@@ -96,9 +165,27 @@ class Extract(Step):
             try:
                 ex = extraction_from(r["extraction"])
                 leases.note_spend(t.con, self.name, ex.usage, doc_id=doc_id, run=run)
-                rep = extraction.apply(
-                    t.con, doc_id, ex, extractor=extractor, run=run, prompt=prompt
-                )
+                if part is not None:
+                    got = extraction.apply_part(
+                        t.con,
+                        doc_id,
+                        int(part["index"]),
+                        ex,
+                        plan=part,
+                        extractor=extractor,
+                        # a part's edges under a run of their own, so the
+                        # reading in full can be told apart and undone
+                        run="parts-" + run.split("-", 1)[-1],
+                        prompt=prompt,
+                    )
+                    if got is None:  # the plan moved since: read again later
+                        t.out.setdefault("stale_parts", []).append(doc_id)
+                        continue
+                    rep = got
+                else:
+                    rep = extraction.apply(
+                        t.con, doc_id, ex, extractor=extractor, run=run, prompt=prompt
+                    )
             except Exception as exc:  # noqa: BLE001 - one result must not stop the rest
                 t.out["errors"].append(
                     {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
@@ -157,6 +244,9 @@ class Promote(Extract):
 
     name = "promote"
     spend_allowed = True
+
+    def parts_due(self, h: HandOut, due: list[int]) -> list[tuple[int, str]]:
+        return []  # a document read in full is read by the extract step
 
     def due(self, h: HandOut) -> list[int] | None:  # type: ignore[override]
         try:
@@ -314,10 +404,15 @@ def do_extract(
             result = ext.extract(doc)
             if not result.triples and result.usage.get("dropped_lines"):
                 result = ext.extract(doc)
-            say(log_, f"extract doc {it['doc_id']}: {len(result.triples)} triples")
+            part = it.get("part")
+            what = f" part {part['index'] + 1}/{part['of']}" if part else ""
+            say(
+                log_, f"extract doc {it['doc_id']}{what}: {len(result.triples)} triples"
+            )
             return {
                 "doc_id": it["doc_id"],
                 "extraction": extraction_to_dict(result),
+                **({"part": it["part"]} if it.get("part") else {}),
             }
         except models.ServerNotReady as exc:
             # the model server is loading or down: not the document's

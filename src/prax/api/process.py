@@ -270,6 +270,27 @@ def request_extraction(
     return store.request_extraction(con, doc_id, by=req.by)
 
 
+@router.post("/doc/{doc_id}/parts")
+def ask_parts(doc_id: int, req: ExtractReq, request: Request) -> dict[str, Any]:
+    """Ask for the document to be read in full: after its first reading,
+    the extract step reads it again part by part (``prax.graph.parts``),
+    whatever the worker's scope. Asked again, it keeps its first request
+    and goes on where it stopped."""
+    return store.ask_parts(_con(request), doc_id, by=req.by)
+
+
+@router.delete("/doc/{doc_id}/parts")
+def unask_parts(doc_id: int, request: Request) -> dict[str, Any]:
+    """Stop reading the document in full; what its parts wrote stays."""
+    return {"stopped": store.unask_parts(_con(request), doc_id)}
+
+
+@router.get("/parts")
+def parts_asked(request: Request) -> dict[str, Any]:
+    """The documents asked to be read in full, and how far each is."""
+    return {"documents": store.parts_asked(_con(request))}
+
+
 @router.post("/doc/{doc_id}/rechunk")
 def rechunk_doc(doc_id: int, request: Request) -> dict[str, Any]:
     """Chunk this document's text again, with the chunker as it stands.

@@ -655,6 +655,33 @@ Bumping the ontology version re-selects every document. Review the
 queue in the UI's Review tab (section 3g) or with `store.list_review`
 and `resolve_review`.
 
+A document can be read in full. The first reading takes the head and
+the closing sections, which is most of a short paper and about 2% of a
+book. `prax parts --ids 33767 33771` (or `POST /doc/{id}/parts`) asks
+for more: after the first reading, the extract step reads the document
+again part by part, with the same model and prompt, whatever the
+worker's scope. A part is a run of chunks of at most 12,000 characters
+(`graph.parts.PART_CHARS`). A new top-level heading starts a new part
+once the current one holds 3,000 characters, so a chapter is one part
+or several and short chapters share one. The reference list, figure
+captions, code and the front and back matter (contents, index,
+acknowledgements, by heading) are left out. Each part is sent with the
+document's header and a line naming the part (`Part: 4 of 25
+(Chapter 3 > Voicings)`).
+
+The plan is kept in `meta.parts` with the text's hash and the ontology
+version. A new text or version makes a new plan, and every part is due
+again. A new first reading that retires the reader's edges clears the
+plan too, because the parts' edges were retired with them. A part's
+facts are edges of the document like any other, with a `parts-` run;
+the first reading's summary and stamp stay as they were. A part the
+model cannot read is recorded in `meta.parts.failed` and passed over.
+`prax parts` with no ids lists each document's progress: parts read of
+parts planned, edges written, review items, output tokens.
+`prax parts --ids … --stop` stops one; the edges it wrote stay. The
+first readings of the backlog go first, so parts wait while documents
+wait for their first reading.
+
 ### Provenance and upgrading a producer's work
 
 Every edge records its `producer` (a model name, `zotero`, `crossref`,

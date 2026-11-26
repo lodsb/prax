@@ -1128,3 +1128,37 @@ def backup(door: Door, a: Any) -> int:
         return 0
     out.fail(f"the backup {row['status']}: {note}")
     return 1
+
+
+def parts(door: Door, a: Any) -> int:
+    """Documents read in full: ask for them (``--ids``), stop them
+    (``--stop``), or, with neither, how far each one is."""
+    for doc_id in a.ids or []:
+        if a.stop:
+            got = door.delete_json(f"/doc/{doc_id}/parts")
+            out.say(f"  {doc_id}: {'stopped' if got.get('stopped') else 'not asked'}")
+        else:
+            door.post_json(f"/doc/{doc_id}/parts", {"by": "human"})
+            out.say(f"  {doc_id}: asked to be read in full")
+    if a.ids:
+        return 0
+    view = door.get_json("/parts")
+    if a.json:
+        print(json.dumps(view, indent=2))
+        return 0
+    docs = view.get("documents") or []
+    if not docs:
+        out.say("No document is asked to be read in full.")
+        return 0
+    rows = [
+        [
+            str(d["doc_id"]),
+            f"{d['done']}/{d['parts'] if d['parts'] is not None else '?'}",
+            out.num(d.get("linked", 0)),
+            out.num(d.get("queued", 0)),
+            out.num(d.get("output_tokens", 0)),
+        ]
+        for d in docs
+    ]
+    out.table(rows, ["doc", "parts", "linked", "queued", "tokens out"])
+    return 0

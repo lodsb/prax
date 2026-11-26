@@ -154,6 +154,7 @@ writer, and add its row here.
 | `extraction_stale` | `dict[str, Any]` | the text read is replaced, or asked again |
 | `extraction_error` | `dict[str, Any]` | the last reading failed: who, under what |
 | `promote` | `dict[str, Any]` | flagged for the expensive pass |
+| `parts` | `dict[str, Any]` | read in full (`prax.graph.parts`): asked, plan (ranges, text_hash, version), done, failed, counts |
 | `world_dates` | `dict[str, Any]` | the worlddates step's stamp |
 
 ## Its life: retired, superseded, stale

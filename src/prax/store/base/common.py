@@ -209,6 +209,7 @@ class DocumentMeta(TypedDict, total=False):
     extraction_stale: dict[str, Any]  # the text read is replaced, or asked again
     extraction_error: dict[str, Any]  # the last reading failed: who, under what
     promote: dict[str, Any]  # flagged for the expensive pass
+    parts: dict[str, Any]  # read in full: asked, plan, done, counts
     world_dates: dict[str, Any]  # the worlddates step's stamp
     # its life: retired, superseded, stale
     retired: dict[str, Any]  # at, reason, of, by, run

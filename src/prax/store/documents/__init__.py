@@ -28,6 +28,7 @@ ORDER = (
 )
 
 from .domains import (  # noqa: F401
+    PART_COUNTS,
     PROMOTE_WEIGHTS,
     RULE_FACTS_MIN,
     RULE_FACTS_SHARE,
@@ -42,6 +43,7 @@ from .domains import (  # noqa: F401
     _set_promote,
     _set_sensitivity,
     add_domain,
+    ask_parts,
     assign_domains,
     document_domains,
     documents_in_domain,
@@ -51,6 +53,9 @@ from .domains import (  # noqa: F401
     expected_version,
     extracted_by,
     fact_modules,
+    part_done,
+    part_failed,
+    parts_asked,
     promote,
     promoted_documents,
     promotion_candidates,
@@ -58,8 +63,10 @@ from .domains import (  # noqa: F401
     request_extraction,
     sensitivity_counts,
     set_domains,
+    set_parts_plan,
     set_sensitivity,
     suspected_page,
+    unask_parts,
     unpromote,
     unstamp_extraction,
 )
