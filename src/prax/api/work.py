@@ -156,9 +156,19 @@ def work_out(
 
 
 class WorkIn(BaseModel):
+    """What a worker posts. A key a step reads from the payload must be a
+    field here: pydantic drops any other, silently (``spent`` was lost
+    so from 2026-11-07, ``prompt`` from 2026-11-19, to 2026-11-27)."""
+
     results: list[dict[str, Any]] | None = None
     extractor: str | None = None
     run: str | None = None
+    # extract, promote: the version of the prompt the worker built
+    # (extraction.PROMPT_VERSION), named after the model in an edge's producer
+    prompt: int | None = None
+    # what the paid calls behind the results used, {model: {input_tokens: …}}
+    # (Pass.post, prax.ml.usage), written to the ledger by work.take_in
+    spent: dict[str, dict[str, Any]] | None = None
     model: str | None = None
     chunks: list[list[Any]] | None = None
     fields: list[list[Any]] | None = None

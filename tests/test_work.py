@@ -88,6 +88,51 @@ def test_hand_out_and_take_in_extract(client: TestClient) -> None:
     assert client.get("/work/nope").status_code == 400
 
 
+def test_what_a_worker_posts_beside_its_results_reaches_the_step(
+    client: TestClient,
+) -> None:
+    """The prompt's version and the paid calls' spending go through the
+    door's request model, which drops a key it does not name: until
+    2026-11-27 both were dropped, no producer named its prompt and no
+    ``Pass.post`` spending reached the ledger."""
+    con = client.app.state.con
+    doc = client.post(
+        "/ingest", json={"text": "feedback delay networks " * 40, "title": "FDN"}
+    ).json()["doc_id"]
+    (item,) = client.get("/work/extract", params={"scope": "all"}).json()["items"]
+    assert item["doc_id"] == doc
+    triple = {
+        "src": "FDN",
+        "src_type": "paper",
+        "rel": "uses",
+        "dst": "a delay line",
+        "dst_type": "method",
+        "confidence": "EXTRACTED",
+        "evidence": "feedback delay networks",
+    }
+    result = {"doc_id": doc, "extraction": {"summary": "s", "triples": [triple]}}
+    spent = {"claude-haiku-5-5": {"input_tokens": 1000, "output_tokens": 10}}
+    body = {
+        "results": [result],
+        "extractor": "local@h",
+        "prompt": 7,
+        "spent": spent,
+        "run": "work-test",
+    }
+    assert client.post("/work/extract", json=body).json()["applied"] == 1
+    producers = {
+        r[0]
+        for r in con.execute(
+            "SELECT producer FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+            (doc,),
+        )
+    }
+    assert producers == {"local@h/prompt7"}
+    assert store.get_meta(con, doc)["extraction"]["prompt"] == 7
+    ledger = store.spending(con)
+    assert [m["model"] for m in ledger["by_model"]] == ["claude-haiku-5-5"]
+
+
 def test_parse_and_titles_through_the_door(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
