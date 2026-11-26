@@ -27,6 +27,8 @@ time, so the serving path never loads them):
 |                 |                 | polish step's model, the fillers dropped      |
 | docx            | .docx           | Word: zip of XML read here, headings, lists,  |
 |                 |                 | tables; no dependency                         |
+| epub            | .epub           | the spine's XHTML in reading order, chapters  |
+|                 |                 | placed by its table of contents; no pictures  |
 | office          | .doc .rtf .odt  | LibreOffice converts to .docx, then as above; |
 |                 |                 | needs LibreOffice installed                   |
 | plain           | text/* but HTML | decode as UTF-8; a source file (by extension, |
@@ -49,7 +51,7 @@ time, so the serving path never loads them):
 | claude-vision   | image/*         | the same, pinned to Claude (the earlier name) |
 
 The extractors live in parts by what they read (``base``, ``code``,
-``pdf``, ``marker``, ``web``, ``readings``, ``office``, ``djvu``), each
+``pdf``, ``marker``, ``web``, ``readings``, ``office``, ``djvu``, ``epub``), each
 importing only the ones before it; this module holds the registry and
 re-exports every name, so a caller writes ``parsers.<name>``. Adding one:
 write a function ``bytes -> str`` in its part, wrap it in ``Extractor``
@@ -86,9 +88,10 @@ ORDER = (
     "readings",
     "office",
     "djvu",
+    "epub",
 )
 
-from . import djvu, office
+from . import djvu, epub, office
 from .base import (  # noqa: F401
     EMPTY_PAGE,
     ExtractionError,
@@ -350,6 +353,7 @@ REGISTRY: list[Extractor] = [
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
+    Extractor("epub", (epub.EPUB_MIME,), epub._epub),
     Extractor(
         "rtf",
         ("application/rtf", "text/rtf"),

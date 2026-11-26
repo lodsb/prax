@@ -379,6 +379,17 @@ and the `office` extractor appears. Without it those documents stay
 pending and say why. Python's MIME table misses `.docx` on some
 machines, so `prax.parsers.guess_mime` names the office types itself.
 
+EPUB books (`.epub`) need nothing installed either. The `epub`
+extractor reads the XHTML files in the order the book's package file
+lists them (the spine) and writes Markdown: headings, paragraphs, lists,
+tables and preformatted text. The book's table of contents (EPUB 3's
+`nav` document, else EPUB 2's `toc.ncx`) sets the chapters. Where an
+entry points, the heading or the styled paragraph found there takes the
+entry's level, and an entry that points at plain text adds its title as
+a heading. A heading the table does not list sits one level under the
+entry before it. Pictures are left out. An EPUB of page images holds
+next to no text and ends `empty`, like a scan.
+
 DjVu files (`.djvu`, `.djv`, usually scanned books) need DjVuLibre,
 a program rather than a package: `winget install DjVuLibre.DjView` on
 Windows, `apt install djvulibre-bin` on the board, `brew install
