@@ -12,8 +12,8 @@ from prax.errors import NotFound
 from prax.graph import extraction
 
 EVERY_MODULE = (
-    "core9+computing2+craft2+electronics1+kitchen2+music2+research9"
-    "+society2+sound2+studio5+workshop2"
+    "core9+computing2+craft2+electronics1+kitchen2+music2+research10"
+    "+society2+sound2+studio6+workshop2"
 )
 
 

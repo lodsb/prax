@@ -40,8 +40,12 @@
 # `contrasts`, `supports`, `uses`, `proposes`, `funded_by`, and the far
 # end of `annotates` and `synthesizes`. `advised_by` between persons, not
 # authors only. Only widened: every v8 reading is valid under v9.
+# v10 (2026-11-27): `defines` a method too (the DFT, edit distance, a
+# Schroeder allpass section). Of the 360 open review items refused only
+# for that on 2026-11-27, a sample of 20 was 15 right, 4 weak, 1 wrong.
+# Only widened: every v9 reading is valid under v10.
 module: research
-version: 9
+version: 10
 requires: [core]
 self_types: [paper]
 
@@ -133,8 +137,8 @@ relation_types:
   defines:
     strength: strong
     domain: [document, claim]
-    range: [concept]
-    description: the document gives the concept its definition
+    range: [concept, method]
+    description: the document gives the concept or the method its definition
   implements:
     strength: strong
     domain: [tool, method]

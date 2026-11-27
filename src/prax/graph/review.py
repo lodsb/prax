@@ -846,6 +846,70 @@ def _same_sort(
     )
 
 
+def _rewritten(
+    onto: ontology.Ontology,
+    item: dict[str, Any],
+    title: str,
+    own: str,
+    src: str,
+    st: str,
+    rel: str,
+    dst: str,
+    dt: str,
+) -> Decision | None:
+    """A fact a relation refused for a type, said by the relation the
+    ontology has for it. Graded on the open queue of 2026-11-27, 20 items
+    of each from open documents (docs/log.md):
+
+    - ``covers`` a method is research's ``about``; studio's ``covers`` and
+      research's ``about`` are one relation in two modules (studio aliases
+      one to the other). 221 items, 15 right, 4 weak, 1 wrong.
+    - a claim ``supports`` the document that states it is the document
+      supporting its claim. 244 items with a document as the target, 16
+      right, 1 weak, 3 wrong. The wrong three were a conjecture the paper
+      cites, typed as a paper, so the target must name the document.
+    - a claim ``supports`` a concept or a method is ``about`` it. 441
+      items, 14 right, 6 weak.
+    - a document ``advocates`` what is not a theory, or is
+      ``influenced_by`` anything, mostly names it: an essay that warns of
+      AI surveillance, a review citing Spengler. Where the quote names the
+      target it ``mentions`` it. 756 and 642 items, graded 2/6/6 and 3/6/6
+      as written in the sample of 200; nearly all right as mentions. Only
+      where the document is read with research, which has ``mentions``:
+      on 2026-11-27 every one of those items came from a document read
+      against society alone, so they wait."""
+    why = str(item.get("reason") or "")
+    if "does not accept" not in why:
+        return None
+    if (
+        rel == "covers"
+        and "about" in onto.relations
+        and onto.is_a(st, "document")
+        and onto.is_a(dt, "method")
+    ):
+        return _link("covers->about", store.Edge(src, st, "about", dst, dt))
+    if rel == "supports" and st == "claim" and "dst type" in why:
+        if onto.is_a(dt, "document"):
+            if not _names_document(dst, title):
+                return None
+            own_type = _self_document_type(onto, rel, own)
+            return _link(
+                "flip-supports-own-claim",
+                store.Edge(dst, own_type, "supports", src, st),
+            )
+        if "about" in onto.relations:
+            return _link("supports->about", store.Edge(src, st, "about", dst, dt))
+        return None
+    if (
+        rel in ("advocates", "influenced_by")
+        and "mentions" in onto.relations
+        and onto.is_a(st, "document")
+        and evidence.names(str(item.get("evidence") or ""), dst)
+    ):
+        return _link(f"{rel}->mentions", store.Edge(src, st, "mentions", dst, dt))
+    return None
+
+
 def decide(
     item: dict[str, Any],
     doc: tuple[str, str, str | None] | None,
@@ -888,6 +952,8 @@ def decide(
     if (d := _by_table(src, st, rel, dst, dt)) is not None:
         return d
     if (d := _same_sort(onto, src, st, rel, dst, dt)) is not None:
+        return d
+    if (d := _rewritten(onto, item, title, own, src, st, rel, dst, dt)) is not None:
         return d
     if rule == "self-name":
         return _link(rule, store.Edge(src, st, rel, dst, dt))

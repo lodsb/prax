@@ -6,7 +6,7 @@ from __future__ import annotations
 import sqlite3
 
 from prax import store
-from prax.graph import review
+from prax.graph import ontology, review
 
 
 def _queue(
@@ -699,11 +699,13 @@ def test_a_document_covering_a_technique_teaches_it() -> None:
             st,
             dt,
         )
-    # a method is no technique: left for a person
-    a, _, _ = review.decide(
-        item("A Guide to Mixing", "document", "covers", "FM", "synthesis_method"), doc
+    # a method is no technique: research's about, not craft's applies
+    a, edges, rule = review.decide(
+        item("A Guide to Mixing", "document", "covers", "FM", "synthesis_method")
+        | {"reason": "'covers' does not accept dst type 'synthesis_method'"},
+        doc,
     )
-    assert a == "open"
+    assert (a, rule, edges[0].rel) == ("link", "covers->about", "about")
 
 
 def test_a_broader_kind_typed_as_a_concept_takes_the_sources_type() -> None:
@@ -729,6 +731,92 @@ def test_a_broader_kind_typed_as_a_concept_takes_the_sources_type() -> None:
     ):
         a, _, _ = review.decide(item("x", st, "y", dt), doc)
         assert a == "open", (st, dt)
+
+
+def test_a_refused_fact_is_said_by_the_relation_that_holds_it() -> None:
+    """A fact refused for a type, said by the relation the ontology has for
+    it: covers a method is about it; a claim supports the paper stating it
+    the other way round, and a concept it is about; a document advocating
+    what is no theory, or influenced by anything, mentions what its quote
+    names. Only for a refusal of a type."""
+
+    def item(
+        src: str, st: str, rel: str, dst: str, dt: str, quote: str = ""
+    ) -> dict[str, object]:
+        end = "dst" if rel in ("covers", "supports", "advocates") else "src"
+        refused = dt if end == "dst" else st
+        return {
+            "src": src,
+            "src_type": st,
+            "rel": rel,
+            "dst": dst,
+            "dst_type": dt,
+            "evidence": quote,
+            "reason": f"'{rel}' does not accept {end} type '{refused}'",
+        }
+
+    paper = ("The Bartlett Window", "paper")
+
+    def decided(it: dict[str, object]) -> tuple[str, str | None, tuple[str, ...]]:
+        a, edges, rule = review.decide(it, paper)
+        e = edges[0] if edges else None
+        return a, rule, (e.src, e.src_type, e.rel, e.dst, e.dst_type) if e else ()
+
+    assert decided(
+        item("Filters", "page", "covers", "bilinear transform", "method")
+    ) == (
+        "link",
+        "covers->about",
+        ("Filters", "page", "about", "bilinear transform", "method"),
+    )
+    claim = "its first side lobe is at -26 dB"
+    assert decided(
+        item(claim, "claim", "supports", "The Bartlett Window", "paper")
+    ) == (
+        "link",
+        "flip-supports-own-claim",
+        ("The Bartlett Window", "paper", "supports", claim, "claim"),
+    )
+    # a conjecture the paper cites, typed as a paper: left for a person
+    a, _, _ = decided(item(claim, "claim", "supports", "Conjecture 4", "paper"))
+    assert a == "open"
+    assert decided(item(claim, "claim", "supports", "side lobe", "concept")) == (
+        "link",
+        "supports->about",
+        (claim, "claim", "about", "side lobe", "concept"),
+    )
+    essay = "On Collapse"
+    for rel, dst, dt, quote in (
+        ("advocates", "AI surveillance", "concept", "a fascism of AI surveillance"),
+        ("influenced_by", "Oswald Spengler", "person", "Spengler's Decline"),
+    ):
+        assert decided(item(essay, "essay", rel, dst, dt, quote)) == (
+            "link",
+            f"{rel}->mentions",
+            (essay, "essay", "mentions", dst, dt),
+        )
+    # a quote that does not name the target says nothing of it
+    a, _, _ = decided(
+        item(essay, "essay", "advocates", "free will", "concept", "my one point")
+    )
+    assert a == "open"
+    # not refused for a type: not these rules'
+    it = item(essay, "essay", "advocates", "AI surveillance", "concept", "AI")
+    it["reason"] = "made up"
+    assert decided(it)[0] == "open"
+
+
+def test_a_build_states_its_figures_and_a_paper_defines_a_method() -> None:
+    """studio 6 and research 10: what the grades of 2026-11-27 found the
+    modules refused that was right."""
+    onto = ontology.current()
+    for st, rel, dt in (
+        ("build", "has_spec", "spec"),
+        ("paper", "has_spec", "spec"),
+        ("tool", "has_spec", "spec"),
+        ("paper", "defines", "method"),
+    ):
+        onto.check_edge(st, rel, dt)
 
 
 def test_computings_misfits_become_its_relations() -> None:

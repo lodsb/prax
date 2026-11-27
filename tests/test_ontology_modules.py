@@ -11,13 +11,14 @@ from prax.graph import ontology
 from tests.conftest import copy_ontology
 
 EVERY_MODULE = (
-    "core9+computing2+craft2+electronics1+kitchen2+music2+research9"
-    "+society2+sound2+studio5+workshop2"
+    "core9+computing2+craft2+electronics1+kitchen2+music2+research10"
+    "+society2+sound2+studio6+workshop2"
 )
 # what a document with no domain set is read against: music and sound
 # are opt_in
 UNDOMAINED = (
-    "core9+computing2+craft2+electronics1+kitchen2+research9+society2+studio5+workshop2"
+    "core9+computing2+craft2+electronics1+kitchen2+research10"
+    "+society2+studio6+workshop2"
 )
 
 CORE = """
@@ -179,12 +180,12 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert ontology.current().version == EVERY_MODULE
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
-        text.replace("version: 9", "version: 99", 1), encoding="utf-8"
+        text.replace("version: 10", "version: 99", 1), encoding="utf-8"
     )
     assert (
         ontology.current().version
         == "core9+computing2+craft2+electronics1+kitchen2+music2+research99"
-        "+society2+sound2+studio5+workshop2"
+        "+society2+sound2+studio6+workshop2"
     )
 
 
@@ -208,7 +209,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 
     workshop = o.for_domains(["workshop"])
     assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
-    assert workshop.version == "core9+craft2+studio5+workshop2"
+    assert workshop.version == "core9+craft2+studio6+workshop2"
     workshop.check_edge("build", "made_with", "component")  # studio's component
     workshop.check_edge("build", "made_with", "material")  # craft's material
     workshop.check_edge("build", "follows", "design")
@@ -224,13 +225,13 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     # reads the word as its own method
     assert o.canonical_type("technique") == "technique"
     assert o.for_domains(["research"]).canonical_type("technique") == "method"
-    assert o.for_domains(["research"]).version == "core9+research9"
+    assert o.for_domains(["research"]).version == "core9+research10"
 
 
 def test_studio_module() -> None:
     o = ontology.current()
     s = o.for_domains(["studio"])
-    assert set(s.modules) == {"core", "studio"} and s.version == "core9+studio5"
+    assert set(s.modules) == {"core", "studio"} and s.version == "core9+studio6"
     assert s.self_types == ("manual", "datasheet", "schematic", "article")
     assert "paper" not in s.types and "cites" not in s.relations
     assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")
@@ -324,7 +325,7 @@ def test_electronics_module() -> None:
     o = ontology.current()
     e = o.for_domains(["electronics"])
     assert set(e.modules) == {"core", "studio", "electronics"}
-    assert e.version == "core9+electronics1+studio5"
+    assert e.version == "core9+electronics1+studio6"
     e.check_edge("schematic", "shows_part", "component")
     e.check_edge("datasheet", "shows_part", "device")
     e.check_edge("component", "serves_as", "part_kind")

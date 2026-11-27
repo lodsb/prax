@@ -227,7 +227,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core9+computing2+craft2+electronics1+kitchen2+music2+research9+society2+sound2+studio5+workshop2`) is what
+   (`core9+computing2+craft2+electronics1+kitchen2+music2+research10+society2+sound2+studio6+workshop2`) is what
    `store.link` validates against and stamps on every edge. The plain
    numbers of the single file before the modules ("0" to "5") were restated
    as the research module's (migration 72). A module may be `opt_in`:

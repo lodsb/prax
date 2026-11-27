@@ -513,7 +513,7 @@ def test_review_filters_bulk_and_replay(
 
     onto_dir = copy_ontology(tmp_path / "onto")
     research = (onto_dir / "research.yaml").read_text(encoding="utf-8")
-    research = research.replace("version: 9", "version: 99", 1).replace(
+    research = research.replace("version: 10", "version: 99", 1).replace(
         "    domain: [document]\n    range: [document]\n",
         "    domain: [document]\n    range: [document, tool]\n",
         1,

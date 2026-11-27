@@ -27,8 +27,14 @@
 # v5 (2026-09-27, docs/ontology-electronics.md): `has_part` from a
 # component too (a system on module holds its processor, a chip its die
 # blocks), as the schematics asked. The electronics module builds on this.
+# v6 (2026-11-27): `has_spec` from any tool and from a document too: a
+# build's measured value, a paper's or a tool's reported figure. Of the
+# 711 open review items refused only for that on 2026-11-27 (496 from a
+# build), a sample of 20 was 11 right, 9 weak (a cell of a session's
+# table) and none wrong. A manual's or a datasheet's figures stay with
+# the device it describes (review's self-as-device).
 module: studio
-version: 5
+version: 6
 requires: [core]
 self_types: [manual, datasheet, schematic, article]
 
@@ -135,9 +141,13 @@ relation_types:
     range: [standard]
     description: the device speaks, connects via or complies with the standard
   has_spec:
-    domain: [device, component]
+    domain: [device, component, tool, document]
     range: [spec]
-    description: a rated or measured value the text states for the device
+    description: >-
+      a rated or measured value the text states for the device, or one a
+      build, a paper or a tool reports of itself (a measured torque, a
+      benchmark score). A manual's or a datasheet's figures are the
+      device's it describes
   compatible_with:
     symmetric: true
     kind: state

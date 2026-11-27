@@ -143,7 +143,7 @@ def test_extraction_uses_the_documents_subset(
     assert "paper entity" in system2 and "parent_of" not in system2
     assert {k.split("|")[0] for k in ext._prompts} == {
         "core9+family1",
-        "core9+research9",
+        "core9+research10",
     }
     # apply validates against the subset and stamps its version
     ex = extraction.Extraction(

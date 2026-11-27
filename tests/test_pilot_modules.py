@@ -158,3 +158,21 @@ def test_the_stamps_move_to_the_new_modules(con: sqlite3.Connection) -> None:
     meta = store.get_meta(con, doc)
     assert meta["extraction"]["ontology_version"] == "core9+craft2+music2"
     assert meta["parts"]["plan"]["version"] == "core9+craft2+music2+research9+sound2"
+
+
+def test_the_stamps_move_to_studio_six_and_research_ten(
+    con: sqlite3.Connection,
+) -> None:
+    doc = store.ingest_text(con, "a build read under studio five " * 20)["doc_id"]
+    meta = store.get_meta(con, doc)
+    meta["extraction"] = {"ontology_version": "core9+craft2+studio5+workshop2"}
+    meta["parts"] = {"plan": {"version": "core9+research9"}}
+    store.set_meta(con, doc, meta)
+    con.executescript(
+        resources.files("prax.migrations")
+        .joinpath("0076_spec_and_definition_modules.sql")
+        .read_text(encoding="utf-8")
+    )
+    meta = store.get_meta(con, doc)
+    assert meta["extraction"]["ontology_version"] == "core9+craft2+studio6+workshop2"
+    assert meta["parts"]["plan"]["version"] == "core9+research10"
