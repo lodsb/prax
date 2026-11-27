@@ -60,6 +60,10 @@ _MARKUP = "*_|`#~"
 _PUNCT = ".,;:!?()[]{}\"'«»„“”‚‘’…"
 # what a negation followed by these adds rather than denies: "not only"
 _ADDING = ("only", "just", "merely", "least")
+# where a sentence ends: a negation before it is another sentence's. Not
+# an ellipsis, which in a model's quote joins two pieces it kept ("requires
+# no identification... with natural parametrization")
+_SENTENCE_END = re.compile(r"(?<![.…])[.!?;](?=\s)")
 
 
 @dataclass(frozen=True)
@@ -78,7 +82,12 @@ class Cues:
     def commented(self) -> re.Pattern[str] | None:
         if not self.commentary:
             return None
-        words = [re.escape(w).replace(r"\ ", r"\s+") for w in self.commentary]
+        # a cue that begins with a letter begins a word: "i cannot" is not
+        # in "a GUI cannot"
+        words = [
+            (r"\b" if w[0].isalpha() else "") + re.escape(w).replace(r"\ ", r"\s+")
+            for w in self.commentary
+        ]
         return re.compile("|".join(words), re.IGNORECASE)
 
     def negation(self) -> re.Pattern[str] | None:
@@ -93,8 +102,12 @@ class Cues:
         if inside:
             parts.append(r"(?:" + "|".join(inside) + r")\b")
         adding = "|".join(_ADDING)
+        # not a negation: one that adds ("not only"), a number's
+        # abbreviation ("No. 27. Sadko"), a word's prefix ("nicht-
+        # unterbrechbaren Round-Robin", non-interruptible)
         return re.compile(
-            "(?:" + "|".join(parts) + rf")(?!\s+(?:{adding})\b)", re.IGNORECASE
+            "(?:" + "|".join(parts) + rf")(?!\s+(?:{adding})\b)(?!\.\s*\d)(?!-\w)",
+            re.IGNORECASE,
         )
 
 
@@ -157,8 +170,10 @@ def noise(quote: str) -> bool:
 
 def negated(quote: str, src: str, dst: str, cues: Cues) -> bool:
     """A negation within ``NEGATION_REACH`` words before the place the
-    quote names an end of the edge ("unrelated to wavetable synthesis").
-    An end the quote does not name is not looked for."""
+    quote names an end of the edge ("unrelated to wavetable synthesis"),
+    in the same sentence: "someone who is no longer with us; John Cage"
+    negates nothing of Cage. An end the quote does not name is not looked
+    for."""
     pattern = cues.negation()
     if pattern is None:
         return False
@@ -169,7 +184,11 @@ def negated(quote: str, src: str, dst: str, cues: Cues) -> bool:
             continue
         at = low.find(key)
         while at >= 0:
-            before = _TOKEN.findall(low[:at])[-NEGATION_REACH:]
+            head = low[:at]
+            ends = list(_SENTENCE_END.finditer(head))
+            if ends:
+                head = head[ends[-1].end() :]
+            before = _TOKEN.findall(head)[-NEGATION_REACH:]
             if pattern.search(" ".join(before)):
                 return True
             at = low.find(key, at + 1)
@@ -213,17 +232,29 @@ REFUSED = ("commentary", "contents", "negated", "unnamed")
 REASON = "the quote is no evidence"
 
 
-def flags(quote: str | None, src: str, rel: str, dst: str, cues: Cues) -> list[str]:
+def flags(
+    quote: str | None,
+    src: str,
+    rel: str,
+    dst: str,
+    cues: Cues,
+    *,
+    in_text: bool = False,
+) -> list[str]:
     """What is wrong with a quote as the evidence of ``src rel dst``, as
     the words heal counts by: ``contents`` and ``negated`` for a relation
     that asserts something, ``commentary`` and ``noise`` for any,
     ``unnamed`` for a relation of the cues' ``named``; empty when nothing
-    is."""
+    is. ``in_text``: the quote stands in its document's text
+    (``prax.text.quotes``), so its words are the document's and not a
+    model's note, whatever they say ("had so far only been inferred from
+    certain analogies": all 13 such among the 133 reopened review items
+    the cue flagged on 2026-11-27)."""
     if not quote or not quote.strip():
         return []
     out = []
     note = cues.commented()
-    if note is not None and note.search(quote):
+    if not in_text and note is not None and note.search(quote):
         out.append("commentary")
     asserts = rel not in cues.topical
     if asserts and contents_line(quote):

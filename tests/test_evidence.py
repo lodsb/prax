@@ -44,6 +44,21 @@ def test_a_negation_before_an_end_speaks_against_an_assertion() -> None:
     assert _flags(q, "x", "uses", "granular synthesis") == []
 
 
+def test_a_number_a_prefix_and_another_sentence_negate_nothing() -> None:
+    """What the reopened review items of 2026-11-27 were flagged for and
+    were right: a numbered example, a negation that is a word's prefix, a
+    negation that ends before the name's sentence begins."""
+    assert _flags("No. 302. Sadko.", "Sadko", "scored_for", "organ") == []
+    assert _flags("outline no.1 used over G dorian", "x", "uses", "G dorian") == []
+    q = "Der Kernel-Scheduler arbeitet nach dem nicht-unterbrechbaren Round-Robin"
+    assert _flags(q, "Blatt 3", "uses", "Round-Robin") == []
+    q = "someone who is no longer with us; Ada Lind, whose encouragement"
+    assert _flags(q, "x", "influenced_by", "Ada Lind") == []
+    # a model's ellipsis joins two pieces of one sentence
+    q = "Our argument requires no identification... with natural parametrization"
+    assert _flags(q, "x", "uses", "natural parametrization") == ["negated"]
+
+
 def test_a_models_note_is_no_quote_for_any_relation() -> None:
     for q in (
         "[Cox, 1946] (Note: Title inferred from standard citation)",
@@ -55,6 +70,30 @@ def test_a_models_note_is_no_quote_for_any_relation() -> None:
     q = "252. Lee Morgan: (implied by context of jazz saxophonist)"
     assert "commentary" in _flags(q, rel="plays", dst="saxophone")
     assert _flags("the moods implied by the two versions differ", rel="about") == []
+    # a cue is a whole word: "i cannot" is not in "a GUI cannot"
+    assert _flags("a delay occurs when a GUI cannot process events") == []
+
+
+def test_a_quote_its_text_holds_is_the_texts_words(con: sqlite3.Connection) -> None:
+    """A cue for a model's note said in the text itself ("had so far only
+    been inferred from certain analogies") is the author's: all 13 such
+    among the 133 reopened items the cue flagged on 2026-11-27."""
+    q = "Its stability had so far only been inferred from certain analogies."
+    cues = ontology.evidence_cues()
+    assert evidence.flags(q, "filter", "uses", "analogies", cues) == ["commentary"]
+    assert evidence.flags(q, "filter", "uses", "analogies", cues, in_text=True) == []
+    doc_id = _doc(con, "Wave digital filters are old. " + q)
+    note = "uses analogies (Note: inferred from context)"
+    triples = [
+        extraction.Triple("filter", "method", "uses", d, "concept", "EXTRACTED", e)
+        for d, e in (("analogies", q), ("unit elements", note))
+    ]
+    report = extraction.apply(
+        con, doc_id, extraction.Extraction(triples=triples), extractor="test"
+    )
+    assert (report.linked, report.queued) == (1, 1)
+    queued = con.execute("SELECT dst FROM review_queue").fetchall()
+    assert [r[0] for r in queued] == ["unit elements"]
 
 
 def test_who_plays_what_is_what_the_quote_names() -> None:

@@ -25,7 +25,7 @@ The ones added for browsing, each a thin wrapper over a store function:
 | `GET /entities?q&limit` | entities whose name contains `q`: id, name, type, degree |
 | `GET /ontology` | the current ontology: version, entity types, relations with domain and range |
 | `GET /review?limit&offset&open&rel&unmapped` | review-queue items with the total, filtered by relation and by unmapped (untyped) versus typed |
-| `POST /review/{id}`, `POST /review/bulk`, `POST /review/replay` | close one item as `dropped`, `ontology`, or `linked` (with optional type and relation overrides; `linked` writes the edge with the item's evidence and source); close every open item matching a filter; link the typed items the current ontology accepts |
+| `POST /review/{id}`, `POST /review/bulk`, `POST /review/replay` | close one item as `dropped`, `ontology`, or `linked` (with optional type and relation overrides; `linked` writes the edge with the item's evidence and source, as producer `manual` unless the request names a `producer` and `run`, as a model that graded the queue does); close every open item matching a filter; link the typed items the current ontology accepts |
 | `GET /pages?kind`, `GET /page/{slug}`, `GET /page/{slug}/revision/{n}` | pages (notes, projects, topics) with their revisions |
 | `PUT /page/{slug}`, `POST /page/{slug}/append`, `POST /project/{slug}/members` | create or revise a page (409 when an agent would overwrite a person); add a section; add a document to a project |
 | `GET /graph/overview?limit&min_shared` | the most connected concepts, methods, tools and datasets, the edges among them, and co-occurrence links between hubs sharing source documents |

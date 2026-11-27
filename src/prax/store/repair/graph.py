@@ -426,17 +426,26 @@ def _doubtful_evidence(con: sqlite3.Connection) -> list[dict[str, Any]]:
     the lexicon's ``evidence`` cues): the model's own note for a quote, a
     contents line or a negation behind a relation that asserts something,
     OCR noise. Each with its flags; at most ``CAP``. A note of where a fact
-    came from (``graph.edges.NOTED``) is no quote and is not read."""
+    came from (``graph.edges.NOTED``) is no quote and is not read; a quote
+    placed in its text (``evidence_start``) is the text's words, no note."""
     cues = ontology.evidence_cues()
     out: list[dict[str, Any]] = []
     rows = con.execute(
-        "SELECT e.id, e.rel, e.evidence, e.source_doc, s.name AS src, d.name AS dst"
+        "SELECT e.id, e.rel, e.evidence, e.source_doc, e.evidence_start,"
+        " s.name AS src, d.name AS dst"
         " FROM edges e JOIN entities s ON s.id = e.src JOIN entities d ON d.id = e.dst"
         " WHERE e.valid_to IS NULL AND e.evidence IS NOT NULL AND e.evidence != ''"
         f" AND NOT {_noted_sql('e.producer')}"
     )
     for r in rows:
-        found = evidence.flags(r["evidence"], r["src"], r["rel"], r["dst"], cues)
+        found = evidence.flags(
+            r["evidence"],
+            r["src"],
+            r["rel"],
+            r["dst"],
+            cues,
+            in_text=r["evidence_start"] is not None,
+        )
         if not found:
             continue
         out.append(

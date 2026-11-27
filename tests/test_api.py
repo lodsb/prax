@@ -396,6 +396,32 @@ def test_review_queue_endpoints(client: TestClient) -> None:
         "q",
         doc,
     )
+    assert tuple(
+        con.execute(
+            "SELECT producer, run FROM edges WHERE id = ?", (r.json()["edge_id"],)
+        ).fetchone()
+    ) == ("manual", f"review-{a}")
+    # a model that graded the queue names itself and its run
+    d = store.queue_review(
+        con,
+        src="P",
+        src_type="paper",
+        rel="uses",
+        dst="MFCC",
+        dst_type="method",
+        reason="the quote is no evidence: unsure",
+        source_doc=doc,
+        evidence="we use MFCC",
+    )
+    r = client.post(
+        f"/review/{d}",
+        json={"resolution": "linked", "producer": "grader/m1", "run": "grade:1"},
+    )
+    assert tuple(
+        con.execute(
+            "SELECT producer, run FROM edges WHERE id = ?", (r.json()["edge_id"],)
+        ).fetchone()
+    ) == ("grader/m1", "grade:1")
     # an invalid link leaves the item open
     r = client.post(
         f"/review/{b}",
@@ -409,7 +435,7 @@ def test_review_queue_endpoints(client: TestClient) -> None:
         client.post(f"/review/{c}", json={"resolution": "dropped"}).status_code == 200
     )
     assert client.get("/review").json()["total"] == 0
-    assert client.get("/review", params={"open": False}).json()["total"] == 3
+    assert client.get("/review", params={"open": False}).json()["total"] == 4
     assert client.post(f"/review/{c}", json={"resolution": "bogus"}).status_code == 400
     assert client.post("/review/999", json={"resolution": "dropped"}).status_code == 404
 

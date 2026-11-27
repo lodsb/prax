@@ -257,6 +257,10 @@ class ReviewReq(BaseModel):
     rel: str | None = None
     dst_type: str | None = None
     confidence: str = "EXTRACTED"
+    # who decided, for "linked": a person by default; a model that graded
+    # the queue names itself, and its run is what retire_run takes back
+    producer: str = "manual"
+    run: str | None = None
 
 
 class BulkReq(BaseModel):
@@ -351,8 +355,8 @@ def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str
             confidence=req.confidence,
             source_doc=item["source_doc"],
             evidence=item["evidence"],
-            producer="manual",
-            run=f"review-{review_id}",
+            producer=req.producer,
+            run=req.run or f"review-{review_id}",
         )
     store.resolve_review(con, review_id, req.resolution)
     return out

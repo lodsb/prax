@@ -1236,12 +1236,16 @@ def _write(
         try:
             onto.check_edge(t.src_type, t.rel, t.dst_type)
             onto.check_names(t.src, t.src_type, t.rel, t.dst, t.dst_type)
-            # a quote that cannot carry the fact: the model's own note, a
-            # contents line or a negation behind a relation that asserts
-            # something (AV, measured 2026-11-17); a person decides
+            # a quote that cannot carry the fact: the model's own note (a
+            # quote its text holds is not one), a contents line or a
+            # negation behind a relation that asserts something (AV,
+            # measured 2026-11-17); a person decides
+            place = _place_of(text, text_hash, t.evidence)
             doubts = [
                 f
-                for f in evidence.flags(t.evidence, t.src, t.rel, t.dst, cues)
+                for f in evidence.flags(
+                    t.evidence, t.src, t.rel, t.dst, cues, in_text=place is not None
+                )
                 if f in evidence.REFUSED
             ]
             # a part's triple its model was unsure of: a person decides
@@ -1286,7 +1290,7 @@ def _write(
                     run=run,
                     world_from=checked_date(t.world_from, t.evidence),
                     world_to=checked_date(t.world_to, t.evidence, end=True),
-                    place=_place_of(text, text_hash, t.evidence),
+                    place=place,
                 )
             except store.SelfLoop:
                 report.drop("an edge to itself", f"{t.src} {t.rel} {t.dst}")
