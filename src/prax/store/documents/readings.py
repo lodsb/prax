@@ -43,6 +43,7 @@ READINGS = (
     "figures",
     "figure-refs",
     "figure-crops",
+    "outline",  # the headings set by a PDF's bookmarks
     "formulas",
     "polish",
     "pymupdf4llm-ocr",

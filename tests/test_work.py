@@ -157,7 +157,10 @@ def test_parse_and_titles_through_the_door(
     out = worker.run_once(d, steps=("parse",), log_=lambda t: None)
     assert out["parse"].startswith("1 parsed")
     assert store.get_document(con, cap.doc_id, max_chars=0)["text_len"] > 0
-    assert client.get("/work/parse").json()["items"] == []
+    # nothing to parse again; the paper's outline is a reading the door asks
+    # for after a layout read (pipeline.follow_ups), its headings and no more
+    after = client.get("/work/parse").json()["items"]
+    assert [i.get("extractor") for i in after] in ([], ["outline"])
     # the worker counted the pages on the way and the door kept the count
     assert store.get_meta(con, cap.doc_id)["pages"] >= 1
     # titles: the file name is not a title; a worker with no titles model

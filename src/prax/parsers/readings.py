@@ -75,6 +75,38 @@ def _figure_refs(
     return figures.add_refs(data, previous)
 
 
+def _outline(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
+    """The current text's headings set by the PDF's outline (its
+    bookmarks), nothing else read again: ``prax.parsers.outline``. A PDF
+    without an outline, or with one its text does not match, gives the
+    text back as it was."""
+    from prax.parsers import outline
+    from prax.parsers.pdf import _pymupdf_open
+
+    if not previous:
+        raise ExtractionError(
+            "no text to set the headings of: parse the document first"
+        )
+    with _pymupdf_open(data) as doc:
+        toc = outline.entries(doc)
+    return outline.apply(previous, toc)
+
+
+def has_outline(data: bytes) -> bool:
+    """Whether a PDF carries an outline of ``outline.MIN_ENTRIES`` or more,
+    which the door reads before it asks for the reading."""
+    from prax.parsers import outline
+    from prax.parsers.pdf import _pymupdf_open
+
+    try:
+        with _pymupdf_open(data) as doc:
+            return len(outline.entries(doc)) >= outline.MIN_ENTRIES
+    except Exception:  # noqa: BLE001 - MuPDF's errors: no outline to read
+        return False
+
+
 def _figure_crops(
     data: bytes, *, filename: str | None = None, previous: str | None = None
 ) -> str:

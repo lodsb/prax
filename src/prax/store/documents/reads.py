@@ -233,7 +233,12 @@ def brief_hit(hit: SearchHit) -> dict[str, Any]:
     }
 
 
-ANNOTATORS = ("figures", "figure-refs", "formulas")  # readers that add to the text
+ANNOTATORS = (
+    "figures",
+    "figure-refs",
+    "formulas",
+    "outline",
+)  # readers that add to the text
 
 
 HEADING_PART_CHARS = 120  # one level of a heading path, at most

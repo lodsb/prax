@@ -334,6 +334,16 @@ def follow_ups(
     )
     if crops:
         store.request_reading(con, doc_id, "figure-crops", by="door")
+    # a layout reader ranks headings by font size a window at a time; the
+    # PDF's own outline says what the chapters are. Asked beside the rest,
+    # no model, a second a book (prax.parsers.outline)
+    outline = (
+        stamp.startswith(OUTLINE_AFTER)
+        and "outline" not in pending
+        and _has_outline(con, doc_id)
+    )
+    if outline:
+        store.request_reading(con, doc_id, "outline", by="door")
     if (
         quality.writes_latex(stamp)
         and free("formulas")
@@ -356,4 +366,24 @@ def follow_ups(
             if "figures" not in pending:
                 store.request_reading(con, doc_id, "figures", by="door")
             return "figures"
-    return None
+    return "outline" if outline else None
+
+
+# the texts whose headings the outline sets: the layout readers', the OCR's
+# over a scan among them. A LaTeX source and marker set their own
+# (measured 2026-11-27: the outline changed nothing in 330 LaTeX-read books)
+OUTLINE_AFTER = ("pymupdf4llm/", "pymupdf4llm-ocr/")
+
+
+def _has_outline(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Whether the document is a PDF with an outline worth reading."""
+    from prax.parsers import readings
+
+    doc = store.get_document(con, doc_id, max_chars=0)
+    if not doc or doc.get("mime") != "application/pdf":
+        return False
+    try:
+        data = store.original_file(con, doc["hash"]).read_bytes()
+    except OSError:
+        return False
+    return readings.has_outline(data)

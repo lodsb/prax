@@ -388,7 +388,25 @@ entry points, the heading or the styled paragraph found there takes the
 entry's level, and an entry that points at plain text adds its title as
 a heading. A heading the table does not list sits one level under the
 entry before it. Pictures are left out. An EPUB of page images holds
-next to no text and ends `empty`, like a scan.
+next to no text and ends `empty`, like a scan. The `epub-ocr` reading
+reads it as one: MuPDF lays the book out as a PDF, and the scanned
+PDF's OCR reads its pages, a window at a time (`prax reread --ids N
+--extractor epub-ocr`, or "OCR the page images" in the process dialog).
+
+A PDF's outline does the same for a PDF. The layout reader ranks a
+heading by its font size among the headings of its 100-page window, so
+a book's chapters drift between levels. The `outline` reading sets the
+current text's headings by the PDF's bookmarks and reads nothing again
+(`prax.parsers.outline`): each entry's line on its page takes the
+entry's level, a title printed over two lines or printed as part of the
+outline's longer title counts as found, an entry not found is written
+in at the top of its page, and a heading the outline does not list sits
+under the entry before it. An outline of fewer than 5 entries, or one
+whose titles are found on their pages for fewer than half of them (a
+slide deck's, an index's page labels), changes nothing. The door asks
+for it after a `pymupdf4llm` read of a PDF with an outline; a LaTeX
+source and marker set their own headings. On 2026-11-27, 561 layout-read
+books carried an outline of 5 or more, and 413 of them passed half.
 
 DjVu files (`.djvu`, `.djv`, usually scanned books) need DjVuLibre,
 a program rather than a package: `winget install DjVuLibre.DjView` on

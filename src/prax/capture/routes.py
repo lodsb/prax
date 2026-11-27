@@ -352,6 +352,15 @@ def _text_routes(
             {"kind": "reading", "extractor": "pymupdf4llm", "mode": None},
         )
         add(
+            "outline",
+            "text",
+            "Set the headings by the PDF's outline",
+            "its bookmarks' chapters and sections as the text's headings, at"
+            " the outline's levels: no model, nothing read again. A PDF whose"
+            " outline its text does not match keeps the text as it is",
+            {"kind": "reading", "extractor": "outline", "mode": None},
+        )
+        add(
             "docling",
             "text",
             "Read with Docling",

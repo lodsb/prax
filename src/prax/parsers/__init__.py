@@ -42,6 +42,9 @@ time, so the serving path never loads them):
 | figure-refs     | .pdf .html      | the original's figures referenced in the      |
 |                 |                 | current text, nothing else touched (the       |
 |                 |                 | retroactive pass; the parsers find them now)  |
+| outline         | .pdf            | the current text's headings set by the PDF's  |
+|                 |                 | bookmarks: chapters at the outline's levels,  |
+|                 |                 | nothing read again (parsers.outline)          |
 | vision-pages    | .pdf            | scanned pages read by the vision step's model |
 |                 |                 | (handwriting, scores, what OCR cannot read);  |
 |                 |                 | pages with a text layer keep it; explicit     |
@@ -211,6 +214,7 @@ from .readings import (
     _figures_model,
     _formulas,
     _formulas_model,
+    _outline,
     _polish,
     _polish_model,
     _vision,
@@ -354,6 +358,15 @@ REGISTRY: list[Extractor] = [
         previous=True,
         annotates=True,
         covers=(("pymupdf4llm", 2), ("trafilatura", 3)),  # the figure references
+    ),
+    Extractor(
+        "outline",
+        ("application/pdf",),
+        _outline,
+        explicit_only=True,
+        hints=True,
+        previous=True,
+        annotates=True,  # the headings only: the source stamp stays
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
