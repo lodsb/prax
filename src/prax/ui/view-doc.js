@@ -479,7 +479,7 @@ function processRoute(r) {
   const model = r.model ? `<span class="route-model ${r.paid ? "route-paid" : ""}" title="${r.paid ? "a paid model: the run costs money" : "a local model"}">${esc(r.model)}${r.paid ? " · paid" : ""}</span>` : "";
   const field = r.id === "ocr" ? `<input class="route-mode" name="mode" type="text" placeholder="language (host's default)" size="18" aria-label="OCR language">` : "";
   const button = r.pending
-    ? `<button type="button" class="route-go" disabled>${esc(r.label)}</button><span class="route-requested">requested${r.action.kind === "reading" ? ` · <a href="#" class="route-cancel">cancel</a>` : ""}</span>`
+    ? `<button type="button" class="route-go" disabled>${esc(r.label)}</button><span class="route-requested">requested${r.action.kind === "reading" || r.action.kind === "parts" ? ` · <a href="#" class="route-cancel" data-kind="${esc(r.action.kind)}">${r.action.kind === "parts" ? "stop" : "cancel"}</a>` : ""}</span>`
     : `<button type="button" class="route-go" data-route="${esc(r.id)}"${r.available ? "" : " disabled"}>${esc(r.label)}</button>`;
   return `<div class="${cls}" data-route="${esc(r.id)}">
     <div class="route-act">${button}${field}</div>
@@ -496,7 +496,7 @@ function processHtml(doc, view) {
   <p class="muted process-state">${processState(view.state)}</p>
   ${waiting.length ? `<p class="muted process-waiting">waiting for a worker: ${waiting.map((w) => `${esc(w.extractor)}${w.mode ? ` (${esc(w.mode)})` : ""}`).join(", ")}. Asking for another queues it beside these.</p>` : ""}
   ${groups.length ? groups.map(([g, title]) => `<section class="route-group"><h3>${title}</h3>${routes.filter((r) => r.group === g).map(processRoute).join("")}</section>`).join("") : `<p class="muted">Nothing to ask for on this document.</p>`}
-  <p class="muted process-foot">A worker takes each request on its next pass, oldest first (Jobs shows what waits). A reading replaces the text; a figure's or an image's readings add up. The graph is read again on the worker's next extract pass; the promote flag runs only with <code>--spend</code>.</p>
+  <p class="muted process-foot">A worker takes each request on its next pass, oldest first (Jobs shows what waits). A reading replaces the text; a figure's or an image's readings add up. The graph is read again on the worker's next extract pass, and a document read in full part by part on the passes after; the promote flag runs only with <code>--spend</code>.</p>
   <div class="dialog-actions"><button type="button" class="secondary process-close">Close</button></div>`;
 }
 async function openProcess(doc) {
@@ -522,7 +522,9 @@ PROCESS.addEventListener("click", async (e) => {
   const cancel = e.target.closest(".route-cancel");
   if (cancel && processDoc) {
     e.preventDefault();
-    try { await send("DELETE", `/doc/${processDoc.id}/reading`); } catch (err) { setStatus(err.message); return; }
+    // a reading waits in the queue; a reading in full stops after the part in hand, what its parts wrote kept
+    const what = cancel.dataset.kind === "parts" ? "parts" : "reading";
+    try { await send("DELETE", `/doc/${processDoc.id}/${what}`); } catch (err) { setStatus(err.message); return; }
     processTouched = true;
     refreshProcess();
     return;
@@ -542,6 +544,9 @@ PROCESS.addEventListener("click", async (e) => {
       const out = await post(`/doc/${processDoc.id}/rechunk`, {});
       setStatus(`chunked again: ${out.chunks} chunks`);
       processTouched = true;
+    } else if (act.kind === "parts") {
+      await post(`/doc/${processDoc.id}/parts`, {});
+      setStatus("read in full: the parts follow the first reading on the worker's extract passes");
     } else if (act.kind === "extract") {
       await post(`/doc/${processDoc.id}/extract`, {});
       setStatus("the graph is read again on the worker's next extract pass");

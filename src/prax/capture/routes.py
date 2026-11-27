@@ -33,7 +33,12 @@ from prax.text import mimes
 _STEPS = ("vision", "formulas", "polish", "extract", "promote")
 # which step of the worker takes a route's kind of request, for the
 # "nobody is asking for this" line under a route already requested
-_ASKED_BY = {"reading": "parse", "extract": "extract", "promote": "promote"}
+_ASKED_BY = {
+    "reading": "parse",
+    "extract": "extract",
+    "parts": "extract",
+    "promote": "promote",
+}
 
 
 def _model(step: str) -> dict[str, Any] | None:
@@ -91,6 +96,12 @@ def _promote_done(meta: dict[str, Any]) -> bool:
     )
 
 
+def _read_in_full(record: dict[str, Any]) -> bool:
+    """Whether every part of the kept plan is read (``meta.parts``)."""
+    count = len((record.get("plan") or {}).get("parts") or [])
+    return bool(count) and len(record.get("done") or []) >= count
+
+
 class _RouteList:
     """The routes from one document as they are listed: each with its
     model, whether it can run on this host, and whether it is waiting
@@ -132,6 +143,9 @@ class _RouteList:
             return bool(self.stale and self.stale.get("requested"))
         if action["kind"] == "promote":
             return bool(self.promote) and not _promote_done(self.meta)
+        if action["kind"] == "parts":
+            record = self.meta.get("parts") or {}
+            return bool(record.get("asked")) and not _read_in_full(record)
         return False
 
     def add(
@@ -172,8 +186,9 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """The document's state and the routes from it. Each route is
     ``{id, group, label, detail, action, model, paid, available, note,
     pending}``; ``action`` is what a button sends: ``{"kind": "reading",
-    "extractor", "mode"}``, ``{"kind": "extract"}`` or
-    ``{"kind": "promote"}``. Raises ``KeyError`` for no such document."""
+    "extractor", "mode"}``, ``{"kind": "extract"}``,
+    ``{"kind": "promote"}`` or ``{"kind": "parts"}`` (read in full).
+    Raises ``KeyError`` for no such document."""
     row = store.document_state(con, doc_id)
     if row is None:
         raise NotFound(f"no such document: {doc_id}")
@@ -256,6 +271,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         _formula_routes(listed, counts, is_pdf=is_pdf)
     if row["text_hash"] is not None:
         _graph_routes(listed, extraction)
+        _parts_route(listed, text_len)
     return {"doc_id": doc_id, "state": state, "routes": routes}
 
 
@@ -361,6 +377,19 @@ def _text_routes(
                 {"kind": "reading", "extractor": "polish", "mode": None},
                 step="polish",
             )
+    elif mime == "application/epub+zip":
+        add(
+            "ocr",
+            "text",
+            "OCR the page images",
+            "a book of page images and no text: MuPDF lays it out as a PDF and"
+            " RapidOCR reads the pages, a window at a time; the text replaces"
+            " what is there"
+            + (" (this looks like one: no text at all)" if no_text else ""),
+            {"kind": "reading", "extractor": "epub-ocr", "mode": None},
+            note="another language than the host's: mode=<language>"
+            " (ch, en, latin, arabic, cyrillic…)",
+        )
     elif is_image:
         add(
             "vision",
@@ -490,4 +519,53 @@ def _graph_routes(listed: _RouteList, extraction: dict[str, Any] | None) -> None
         " pass only with --spend",
         {"kind": "promote"},
         step="promote",
+    )
+
+
+def _parts_route(listed: _RouteList, text_len: int) -> None:
+    """Read the document in full, part by part (``prax.graph.parts``):
+    how many parts it would be or how far it is, and what its genre has
+    it asked (``extraction.asks_of``). The parts follow the first
+    reading, on the extract step's model."""
+    from prax.graph import extraction, parts
+
+    record = listed.meta.get("parts") or {}
+    count = len((record.get("plan") or {}).get("parts") or [])
+    done = len(record.get("done") or [])
+    asks = extraction.asks_of(listed.meta)
+    asked = (
+        f"each part is asked the {asks!r} questions its genre gets"
+        if asks
+        else "each part is asked a paper's questions"
+    )
+    label, available, note = "Read in full", True, ""
+    if count and done >= count:
+        available = False
+        note = (
+            f"read in full: {count} parts, {record.get('linked', 0)} facts linked,"
+            f" {record.get('queued', 0)} to review"
+        )
+        detail = f"every part of the text as it stands is read; {asked}"
+    elif count:
+        if not record.get("asked"):
+            label = "Go on reading in full"
+        detail = f"{done} of {count} parts read; {asked}"
+    else:
+        size = parts.part_chars()
+        about = max(1, round(text_len / size))
+        detail = (
+            f"about {about} part{'s' if about != 1 else ''} of up to {size:,}"
+            f" characters, each read by the extract step's model after the"
+            f" first reading, its front and back matter left out; {asked}."
+            " The first reading's edges stay; the parts' are a run of their own"
+        )
+    listed.add(
+        "parts",
+        "graph",
+        label,
+        detail,
+        {"kind": "parts"},
+        step="extract",
+        available=available,
+        note=note,
     )

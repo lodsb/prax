@@ -701,7 +701,8 @@ def request_reading(
     doc_id: int, extractor: str, mode: str | None = None
 ) -> dict[str, Any]:
     """Ask for a reading of a document the readers found nothing in, or
-    read badly: ``pymupdf4llm-ocr`` (OCR over a scan), ``vision-pages``
+    read badly: ``pymupdf4llm-ocr`` (OCR over a scan), ``epub-ocr`` (an
+    EPUB of page images), ``vision-pages``
     (the vision model over scanned pages, ``mode`` scans or all),
     ``marker`` (maths as LaTeX), ``docling``, ``vision`` (an image). A
     worker takes it; ``status([doc_id])`` says when it is done."""

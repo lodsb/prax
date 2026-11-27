@@ -29,6 +29,9 @@ time, so the serving path never loads them):
 |                 |                 | tables; no dependency                         |
 | epub            | .epub           | the spine's XHTML in reading order, chapters  |
 |                 |                 | placed by its table of contents; no pictures  |
+| epub-ocr        | .epub           | a book of page images: MuPDF lays it out as a |
+|                 |                 | PDF and its pages go to the OCR above;        |
+|                 |                 | explicit only, in windows like a long scan    |
 | office          | .doc .rtf .odt  | LibreOffice converts to .docx, then as above; |
 |                 |                 | needs LibreOffice installed                   |
 | plain           | text/* but HTML | decode as UTF-8; a source file (by extension, |
@@ -183,6 +186,7 @@ from .pdf import (  # noqa: F401
     PROBE_PAGES,
     PROBE_SPREAD,
     _docling,
+    _epub_ocr,
     _has_text_layer,
     _ocr_engine,
     _ocr_gpu,
@@ -354,6 +358,15 @@ REGISTRY: list[Extractor] = [
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
     Extractor("epub", (epub.EPUB_MIME,), epub._epub),
+    Extractor(
+        "epub-ocr",
+        (epub.EPUB_MIME,),
+        _epub_ocr,
+        "pymupdf4llm",
+        explicit_only=True,  # a book of page images, asked for
+        variant=_ocr_variant,
+        previous=True,  # in windows, as a long scan
+    ),
     Extractor(
         "rtf",
         ("application/rtf", "text/rtf"),

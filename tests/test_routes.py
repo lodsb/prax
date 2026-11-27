@@ -160,6 +160,18 @@ def test_routes_of_other_kinds(
     by = _by_id(routes.routes_for(con, img))
     assert by["vision"]["action"]["extractor"] == "vision"
     assert "figures" not in by and "formulas" not in by
+    # an EPUB of page images: OCR, the request a reading like any
+    book = store.register(con, b"PK fake", mime="application/epub+zip", title="Book")[
+        "doc_id"
+    ]
+    by = _by_id(routes.routes_for(con, book))
+    assert by["ocr"]["action"] == {
+        "kind": "reading",
+        "extractor": "epub-ocr",
+        "mode": None,
+    }
+    store.request_reading(con, book, "epub-ocr", mode="latin")
+    assert _by_id(routes.routes_for(con, book))["ocr"]["pending"]
     with pytest.raises(NotFound):
         routes.routes_for(con, 999)
 
@@ -260,6 +272,37 @@ def test_api_routes_and_extract(client: TestClient) -> None:
     assert by["figures-again"]["pending"] is True
     assert by["figures"]["pending"] is False
     assert view["state"]["models"]["extract"] == {"name": "stub", "paid": False}
+
+
+def test_a_document_is_read_in_full_from_its_page(client: TestClient) -> None:
+    """The process dialog's "Read in full": what it would be, the ask its
+    genre gets, asked and stopped through the door, how far it is."""
+    con = client.app.state.con
+    doc = _pdf(con)
+
+    def route() -> dict:
+        return _by_id(client.get(f"/doc/{doc}/routes").json())["parts"]
+
+    first = route()
+    assert first["label"] == "Read in full" and not first["pending"]
+    assert (
+        "about 1 part " in first["detail"] and "a paper's questions" in first["detail"]
+    )
+    assert first["action"] == {"kind": "parts"} and first["model"] == "stub"
+    store.set_genres(con, doc, ["book"], by="labeller", p={"book": 0.99})
+    assert "'teaching' questions" in route()["detail"]
+    assert client.post(f"/doc/{doc}/parts", json={}).status_code == 200
+    assert route()["pending"]
+    assert client.delete(f"/doc/{doc}/parts").json() == {"stopped": True}
+    assert not route()["pending"]
+    # stopped halfway: it goes on; read to the end: nothing more to ask
+    parts = {"plan": {"parts": [{"index": 0}, {"index": 1}]}, "done": [0]}
+    store.update_meta(con, doc, keys={"parts": parts})
+    half = route()
+    assert half["label"] == "Go on reading in full" and "1 of 2 parts" in half["detail"]
+    store.update_meta(con, doc, keys={"parts": {**parts, "done": [0, 1], "linked": 7}})
+    end = route()
+    assert not end["available"] and "2 parts, 7 facts linked" in end["note"]
 
 
 def test_one_document_chunked_again(client: TestClient) -> None:

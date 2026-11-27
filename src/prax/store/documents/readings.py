@@ -46,6 +46,7 @@ READINGS = (
     "formulas",
     "polish",
     "pymupdf4llm-ocr",
+    "epub-ocr",  # a book of page images, as a scan
     "djvu",  # the next window of a long scan (stage Y)
     "docling",
     "marker",
@@ -64,6 +65,7 @@ MODES: dict[str, tuple[str, ...] | None] = {
     "figures": ("captioned", "all", "again", "all-again"),
     "formulas": ("new", "again"),  # the unread ones, or every one read again
     "pymupdf4llm-ocr": None,  # the recognizer's script: ch, en, latin, arabic…
+    "epub-ocr": None,  # the same
     "latex-source": None,  # the paper's arXiv id: 2501.13484, math.GT/0309136
 }
 # the free-form modes that are not a language word: an arXiv id as

@@ -558,6 +558,7 @@ _MODE_SETTINGS = {
     "vision-pages": "PRAX_VISION_PAGES",
     "figures": "PRAX_FIGURES",
     "pymupdf4llm-ocr": "PRAX_OCR_LANGUAGE",
+    "epub-ocr": "PRAX_OCR_LANGUAGE",
     "marker": "PRAX_MARKER_MODE",
     "latex-source": "PRAX_ARXIV_ID",
     "formulas": "PRAX_FORMULA_READINGS",

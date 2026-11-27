@@ -385,6 +385,21 @@ def _pymupdf4llm_ocr(data: bytes, *, previous: str | None = None) -> str:
     return Partial(text, pages_left=left, pages=count) if left else text
 
 
+def _epub_ocr(data: bytes, *, previous: str | None = None) -> str:
+    """An EPUB of page images, read as a scanned PDF: MuPDF lays the book
+    out and writes it as a PDF, whose pages without text go to the OCR
+    above, in windows. Two of the library's 26 EPUBs were such books
+    (2026-11-27: 51 and 379 layout pages, 0 characters of text); a layout
+    page an image overflowed onto comes out blank and is passed over."""
+    pymupdf = importlib.import_module("pymupdf")
+    try:
+        with pymupdf.open(stream=data, filetype="epub") as doc:
+            as_pdf = doc.convert_to_pdf()
+    except Exception as exc:
+        raise ExtractionError(f"MuPDF could not lay the EPUB out: {exc}") from exc
+    return _pymupdf4llm_ocr(as_pdf, previous=previous)
+
+
 def _vision_pages_mode() -> str:
     mode = str(config.setting("parse.vision_pages", "PRAX_VISION_PAGES", "scans"))
     if mode not in ("scans", "all"):

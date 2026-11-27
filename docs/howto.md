@@ -702,6 +702,13 @@ does not hand that reading out (an imported paper in the daytime
 `captures` scope); `prax parts` shows it as "waits for its first
 reading".
 
+On a document's page, the "process…" dialog has the same request under
+"The graph": "Read in full" says about how many parts the text makes and
+which questions its genre gets. Once asked, it shows how many parts are
+read, and "stop" ends it like `--stop`. A document stopped halfway offers
+"Go on reading in full", and one read to the end says what its parts
+linked and sent to review (`capture.routes`, the route `parts`).
+
 ### Provenance and upgrading a producer's work
 
 Every edge records its `producer` (a model name, `zotero`, `crossref`,

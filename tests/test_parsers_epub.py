@@ -138,6 +138,32 @@ def test_an_epub_of_page_images_has_next_to_no_text() -> None:
     assert parsers.by_name("epub")(data) == ""
 
 
+def test_an_epub_of_page_images_is_read_by_ocr_as_a_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``epub-ocr``: MuPDF lays the book out as a PDF, and the scanned
+    PDF's OCR reads it (in windows, with the text before as ``previous``).
+    The OCR engine itself is the PDF reader's, tested there."""
+    pytest.importorskip("pymupdf")
+    from prax.parsers import pdf
+
+    seen: dict[str, object] = {}
+
+    def ocr(data: bytes, *, previous: str | None = None) -> str:
+        seen.update(pdf=data[:5], previous=previous)
+        return "read"
+
+    monkeypatch.setattr(pdf, "_pymupdf4llm_ocr", ocr)
+    files = {"nav.xhtml": NAV, "text/one.xhtml": ONE, "text/two.xhtml": TWO}
+    data = _epub(EPUB3_OPF, files)
+    reader = parsers.by_name("epub-ocr")
+    assert reader.explicit_only and reader.accepts("application/epub+zip")
+    assert reader(data, previous="before") == "read"
+    assert seen == {"pdf": b"%PDF-", "previous": "before"}
+    with pytest.raises(parsers.ExtractionError, match="could not lay"):
+        reader(b"PK not a book")
+
+
 def test_what_is_not_an_epub_says_so() -> None:
     with pytest.raises(ValueError, match="not an EPUB"):
         parsers.by_name("epub")(b"plain bytes")
