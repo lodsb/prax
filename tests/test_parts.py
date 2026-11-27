@@ -409,14 +409,23 @@ def test_a_book_is_asked_what_it_teaches_and_a_part_only_what_it_states(
     unsure = extraction.Triple(
         "Echoes", "paper", "uses", "a guess", "method", "AMBIGUOUS", "the tape loop"
     )
+    # a citation its quote names stands though the model was unsure of it
+    cited = extraction.Triple(
+        "Echoes", "paper", "cites", "Lind (2001)", "paper", "AMBIGUOUS",
+        "Lind (2001) showed that a loop drifts",
+    )  # fmt: skip
     result = _result(doc, item, "loop 1")
-    result["extraction"]["triples"].append(unsure.__dict__)
+    result["extraction"]["triples"] += [unsure.__dict__, cited.__dict__]
     _take(con, [result])
     assert store.find_edges(
         con, store.Edge("Echoes", "paper", "uses", "loop 1", "method"), source_doc=doc
     )
     (queued,) = [r for r in store.list_review(con) if r["dst"] == "a guess"]
     assert queued["reason"].startswith(evidence.REASON)
+    assert store.find_edges(
+        con, store.Edge("Echoes", "paper", "cites", "Lind (2001)", "paper"),
+        source_doc=doc,
+    )  # fmt: skip
     # the prompt the worker builds from the item: the book's ask, the part's rules
     doc_in = extraction.DocumentInput(doc, "Echoes", "", "", asks="teaching", part=True)
     onto = doc_in.ontology()

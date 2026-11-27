@@ -65,13 +65,15 @@ _ADDING = ("only", "just", "merely", "least")
 @dataclass(frozen=True)
 class Cues:
     """The lexicon's words: what negates, the relations a negation or a
-    contents line does not speak against, and those whose quote must name
-    their target."""
+    contents line does not speak against, those whose quote must name
+    their target, and those a model's doubt does not speak against while
+    their quote names the target (``stands_unsure``)."""
 
     negations: tuple[str, ...] = ()
     topical: frozenset[str] = field(default_factory=frozenset)
     commentary: tuple[str, ...] = ()
     named: frozenset[str] = field(default_factory=frozenset)
+    sure_when_named: frozenset[str] = field(default_factory=frozenset)
 
     def commented(self) -> re.Pattern[str] | None:
         if not self.commentary:
@@ -190,6 +192,15 @@ def names(quote: str, name: str) -> bool:
         return True
     words = _WORD.findall(quote.lower())
     return any(w.startswith(s) for s in stems for w in words)
+
+
+def stands_unsure(quote: str | None, rel: str, dst: str, cues: Cues) -> bool:
+    """Whether a triple its model called AMBIGUOUS stands all the same: a
+    relation of ``cues.sure_when_named`` whose quote names the target. A
+    paper's in-text citation is the case ("Huron (1989a) showed that…"):
+    the model doubts what kind of thing the cited work is, not that the
+    text cites it."""
+    return rel in cues.sure_when_named and names(quote or "", dst)
 
 
 # what an extraction sends to the review queue rather than writing: the

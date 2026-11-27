@@ -486,6 +486,13 @@ evidence:
   # instrument, the next relation 62% (`typical_of`, whose target a
   # quote paraphrases)
   named: [plays]
+  # relations whose triple a part's model marked AMBIGUOUS stands all the
+  # same when the quote names the target: the model doubts what kind of
+  # thing a cited work is, not that the text cites it. In the pilot's third
+  # reading (2026-11-27) 51 of 174 unsure items were `cites` ("Huron
+  # (1989a) showed that…"), and the 7 of a blind sample of 20 all right;
+  # the other 13 were 3 right, 3 weak and 7 wrong
+  sure_when_named: [cites]
 # one word in two spellings (AV, the BWS survey of 2026-11-17): the
 # British form and the American one it is keyed as, so "equalisation" and
 # "equalization" are one name to entity resolution (`names.variant`). Only

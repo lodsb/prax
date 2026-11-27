@@ -36,11 +36,13 @@ from ..graph import (
     end_edges,
     entities_with_degree,
     entity_named_in,
+    find_edges,
     functional_breaches,
     merge_entities,
     part_of_ancestry,
     part_of_suspects,
     rename_entity,
+    reopen_reviews,
     set_aside_label,
     traverse_map,
 )
@@ -449,6 +451,61 @@ def _doubtful_evidence(con: sqlite3.Connection) -> list[dict[str, Any]]:
         if len(out) >= CAP:
             break
     return out
+
+
+REPLAYED_PRODUCER = "heal:replayed-refusals"
+
+
+def _replayed_refusals(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The live edges the nightly replay wrote from review items an
+    extraction sent there for their quote (``evidence.REASON``): until
+    2026-11-27 ``review.replay`` linked every item that fit the ontology,
+    and those fit. One row an item, with the replay's edges of its fact
+    from its document; an item whose only doubt was the model's and that
+    ``evidence.stands_unsure`` now lets stand is left. At most ``CAP``."""
+    cues = ontology.evidence_cues()
+    out: list[dict[str, Any]] = []
+    rows = con.execute(
+        "SELECT id, source_doc, src, src_type, rel, dst, dst_type, evidence, reason"
+        " FROM review_queue WHERE resolution = 'linked' AND reason LIKE ?"
+        " AND src_type IS NOT NULL AND dst_type IS NOT NULL ORDER BY id",
+        (evidence.REASON + "%",),
+    ).fetchall()
+    for r in rows:
+        said = str(r["reason"])[len(evidence.REASON) :].lstrip(": ")
+        flags = [f.strip() for f in said.split(",")]
+        if flags == ["unsure"] and evidence.stands_unsure(
+            r["evidence"], r["rel"], r["dst"], cues
+        ):
+            continue
+        edge = Edge(r["src"], r["src_type"], r["rel"], r["dst"], r["dst_type"])
+        ids = find_edges(con, edge, source_doc=r["source_doc"], producer="replay")
+        if not ids:
+            continue
+        out.append(
+            {
+                "id": ids[0],
+                "edges": ids,
+                "review": int(r["id"]),
+                "fact": f"{r['src']} {r['rel']} {r['dst']}"[:160],
+                "flags": flags,
+                "source_doc": r["source_doc"],
+            }
+        )
+        if len(out) >= CAP:
+            break
+    return out
+
+
+def _repair_replayed_refusals(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """End the replay's edges under a run of their own (``restore_run``
+    undoes it) and open the items again, for a person."""
+    run = run_name(REPLAYED_PRODUCER, sep=":")
+    ended = set(end_edges(con, sorted({e for r in rows for e in r["edges"]}), run=run))
+    reopen_reviews(con, [r["review"] for r in rows], resolution="linked")
+    return sum(1 for r in rows if ended & set(r["edges"]))
 
 
 # The graph's threshold (CLAUDE.md, "Decision thresholds"): a walk from

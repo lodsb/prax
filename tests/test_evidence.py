@@ -141,6 +141,52 @@ def test_heal_names_the_edges_and_extraction_sends_them_to_review(
     assert reason == "the quote is no evidence: negated"
 
 
+def test_a_cited_work_the_quote_names_stands_though_the_model_was_unsure() -> None:
+    cues = ontology.evidence_cues()
+    q = "Lind (2001) showed that a loop drifts"
+    assert evidence.stands_unsure(q, "cites", "Lind (2001)", cues)
+    assert not evidence.stands_unsure("a loop drifts", "cites", "Lind (2001)", cues)
+    assert not evidence.stands_unsure(q, "uses", "Lind (2001)", cues)
+
+
+def test_the_replay_leaves_a_refused_quote_to_a_person_and_heal_undoes_its_links(
+    con: sqlite3.Connection,
+) -> None:
+    """Until 2026-11-27 the nightly replay linked every open item that fit
+    the ontology, the ones refused for their quote too (415 of 434). Now
+    it leaves them, and heal ends what it wrote and opens them again."""
+    from prax.graph import review
+
+    doc_id = _doc(con, "This technique is unrelated to wavetable synthesis. " * 3)
+    quote = "This technique is unrelated to wavetable synthesis."
+    triple = extraction.Triple(
+        "polygon oscillator", "method", "extends", "wavetable synthesis",
+        "method", "EXTRACTED", quote,
+    )  # fmt: skip
+    extraction.apply(
+        con, doc_id, extraction.Extraction(triples=[triple]), extractor="test"
+    )
+    (item,) = store.list_review(con)
+    assert review.replay(con).linked == 0
+    assert store.list_review(con)[0]["id"] == item["id"]
+    # what the replay did before: the item linked as it stood
+    edge = store.Edge(
+        "polygon oscillator", "method", "extends", "wavetable synthesis", "method"
+    )
+    store.link(
+        con, edge, source_doc=doc_id, evidence=quote, producer="replay", run="r1"
+    )
+    store.resolve_review(con, item["id"], "linked")
+    found = store.health(con, only=["replayed-refusals"])["ailments"][0]
+    assert found["count"] == 1 and found["repairable"]
+    assert found["examples"][0]["flags"] == ["negated"]
+    out = store.heal(con, only=["replayed-refusals"])
+    assert out["replayed-refusals"]["repaired"] == 1
+    assert not store.find_edges(con, edge, source_doc=doc_id)
+    assert [r["id"] for r in store.list_review(con)] == [item["id"]]
+    assert store.health(con, only=["replayed-refusals"])["ailments"][0]["count"] == 0
+
+
 def test_an_importers_note_is_no_quote_and_is_not_looked_for(
     con: sqlite3.Connection,
 ) -> None:

@@ -72,12 +72,14 @@ from .graph import (
     _repair_not_venues,
     _repair_page_node_twins,
     _repair_part_of,
+    _repair_replayed_refusals,
     _repair_spacing_twins,
     _repair_stale_document_nodes,
     _repair_stray_versions,
     _repair_unlinked_document_nodes,
     _repair_wire_labels,
     _repair_wire_names,
+    _replayed_refusals,
     _self_edges,
     _slow_walks,
     _spacing_twins,
@@ -387,6 +389,21 @@ AILMENTS: tuple[Ailment, ...] = (
             " formulas trip it"
         ),
         find=_doubtful_evidence,
+    ),
+    Ailment(
+        name="replayed-refusals",
+        what=(
+            "live edges the nightly replay wrote from review items an"
+            " extraction sent there for their quote (a note, a contents line,"
+            " a negation, an unnamed target, a part's unsure triple): until"
+            " 2026-11-27 review.replay linked every item that fit the ontology"
+        ),
+        fix=(
+            "end them under a heal run (restore_run undoes it) and open the"
+            " items again for a person; a cited work the quote names stays"
+        ),
+        find=_replayed_refusals,
+        repair=_repair_replayed_refusals,
     ),
     Ailment(
         name="self-edges",

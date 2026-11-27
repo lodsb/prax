@@ -1245,8 +1245,13 @@ def _write(
                 if f in evidence.REFUSED
             ]
             # a part's triple its model was unsure of: a person decides
-            # (44% of them wrong in the pilot, `_PART_CONFIDENCE`)
-            if settled and t.confidence == "AMBIGUOUS":
+            # (44% of them wrong in the pilot, `_PART_CONFIDENCE`), but for a
+            # citation its quote names (`evidence.stands_unsure`)
+            if (
+                settled
+                and t.confidence == "AMBIGUOUS"
+                and not evidence.stands_unsure(t.evidence, t.rel, t.dst, cues)
+            ):
                 doubts.append("unsure")
             if doubts:
                 raise ValueError(f"{evidence.REASON}: {', '.join(doubts)}")

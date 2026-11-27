@@ -678,7 +678,9 @@ document's header and a line naming the part (`Part: 4 of 25
 (Chapter 3 > Voicings)`). A part is asked only what its own text states:
 the model is told not to repeat the authors and venue and not to add what
 it knows of the things the text names. A triple it marks AMBIGUOUS goes
-to the review queue instead of the graph. What any reading asks follows
+to the review queue instead of the graph, except a relation of the
+lexicon's `evidence.sure_when_named` whose quote names its target: a
+citation such as "Huron (1989a) showed that" stands. What any reading asks follows
 the document's genre (the `reading` section of `ontology/genres.yaml`): a
 book or a lecture is asked what it teaches and the examples it gives, any
 other document what a paper is asked. A 60-page paper is still a paper.
@@ -2548,7 +2550,8 @@ entities you still want to look at, stays alone.
 | `twin-documents` | two live documents with one title and the same text: a PDF downloaded twice, a book kept in two prints. Different bytes, so the hash did not fold them (236 pairs in the library on 2026-09-18) | retires the twin into the keeper (more live edges, then the older one). What it holds and the keeper lacks moves over first (`retire_document` with `duplicate_of`) |
 | `unnamed-entities` | no name at all, or a whole citation as one. A claim is a sentence and is left alone | ends their edges |
 | `self-edges` | an edge from a thing to itself, left after two names were merged | ends them |
-| `doubtful-evidence` | an edge whose quote cannot carry it (`prax.text.evidence`, the lexicon's `evidence` section): the model's own note where the quote belongs ("Note: title inferred…"), a contents line or a negation behind a relation that asserts something ("unlike X" for `extends X`), or OCR noise. 69 negated, 97 contents lines, 498 notes and 1,159 noise on 2026-11-17 | a report only: a person decides. An extraction sends such a triple to the review queue, and the typing rules leave the item to a person |
+| `doubtful-evidence` | an edge whose quote cannot carry it (`prax.text.evidence`, the lexicon's `evidence` section): the model's own note where the quote belongs ("Note: title inferred…"), a contents line or a negation behind a relation that asserts something ("unlike X" for `extends X`), or OCR noise. 69 negated, 97 contents lines, 498 notes and 1,159 noise on 2026-11-17 | a report only: a person decides. An extraction sends such a triple to the review queue, and the typing rules and the replay leave the item to a person |
+| `replayed-refusals` | an edge the nightly replay wrote from a review item an extraction sent there for its quote: until 2026-11-27 `review.replay` linked every open item that fit the ontology, and these fit (415 of 434 since 2026-11-17) | end the edges under a heal run, which `restore_run` undoes, and open the items again; a cited work the quote names, which the model was only unsure of, stays |
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
 | `unpolished-transcripts` | videos whose transcript is the automatic one as it came, the polish not written yet (captured before the step existed, or while its model was away) | a report with an offer: polish all of them (`prax reread --extractor polish --unpolished`) |
 | `stale-extractions` | documents whose extraction was made from a text a later read has replaced (marker over a pymupdf4llm text, OCR over a scan). The graph speaks of a text that is gone | moves the stamp aside so the extract step selects them again. The old reading's edges are retired when the new one is applied. A replacing read does this on the way in now; these are from before |

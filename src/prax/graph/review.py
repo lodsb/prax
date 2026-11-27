@@ -63,7 +63,11 @@ def replay(
     con: sqlite3.Connection, *, onto: ontology.Ontology | None = None
 ) -> ReplayReport:
     """Link the open items that fit now, each under its document's own
-    subset of the ontology (``onto`` for all of them when given)."""
+    subset of the ontology (``onto`` for all of them when given). An item
+    sent here for its quote (``evidence.REASON``) is a person's: it fits
+    the ontology, which is not why it is here. Until 2026-11-27 the
+    nightly replay linked every one of them (415 of 434 since 11-17; heal's
+    ``replayed-refusals``)."""
     subsets = _Subsets(con, onto)
     rep = ReplayReport(ontology_version=(onto or subsets.full).version)
     offset = 0
@@ -74,6 +78,10 @@ def replay(
         offset += len(items)
         for it in items:
             if not (it["src_type"] and it["dst_type"] and it["rel"]):
+                continue
+            if str(it.get("reason") or "").startswith(evidence.REASON):
+                rep.checked += 1
+                rep.still_open += 1
                 continue
             rep.checked += 1
             onto = subsets.of(it["source_doc"])
