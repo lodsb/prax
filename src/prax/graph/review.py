@@ -724,6 +724,18 @@ def _written_backwards(
         and onto.is_a(st, "document")
     ):
         return _link("covers->describes", store.Edge(src, st, "describes", dst, dt))
+    # a document "covering" a way of doing something teaches it (craft's
+    # applies; covers' own description sends a technique there): of the 50
+    # such open items on 2026-11-27, 45 right, 4 weak and 1 wrong, the
+    # wrong one "production technique" itself
+    if (
+        rel == "covers"
+        and "applies" in onto.relations
+        and "technique" in onto.types
+        and onto.is_a(dt, "technique")
+        and onto.is_a(st, "document")
+    ):
+        return _link("covers->applies", store.Edge(src, st, "applies", dst, dt))
     # a symbol "provides" the library it belongs to: said the other way round
     if (
         rel == "provides"
@@ -807,6 +819,33 @@ def _by_table(src: str, st: str, rel: str, dst: str, dt: str) -> Decision | None
     return None
 
 
+# the kinds of thing whose broader kind a model types as a bare concept
+# ("minor second specializes prime dissonance", "contrary motion
+# specializes contrapuntal motion"): specializes joins two of one sort, so
+# the target takes the source's type. Of the 33 open items with a concept
+# as the target on 2026-11-27, these sources' 24 were 23 right and 1 weak;
+# a compositional technique's 8 were 3/3/2 ("Roman numeral analysis
+# specializes harmonic function") and an instrument's one wrong (a sonic
+# boom), so those wait for a person
+SAME_SORT = frozenset(
+    {"musical_interval", "voice_leading", "rhythm", "chord", "harmonic_function"}
+)
+
+
+def _same_sort(
+    onto: ontology.Ontology, src: str, st: str, rel: str, dst: str, dt: str
+) -> Decision | None:
+    """``specializes`` to a bare concept from one of ``SAME_SORT``: the
+    target is a broader kind of the same sort, typed as the source."""
+    if rel != "specializes" or dt != "concept" or st not in SAME_SORT:
+        return None
+    if st not in onto.types:
+        return None
+    return _link(
+        f"specializes-same-sort-{st}", store.Edge(src, st, "specializes", dst, st)
+    )
+
+
 def decide(
     item: dict[str, Any],
     doc: tuple[str, str, str | None] | None,
@@ -847,6 +886,8 @@ def decide(
     if " ".join(src.lower().split()) == " ".join(dst.lower().split()):
         return "drop", [], "self-edge"  # after the authored_by rules
     if (d := _by_table(src, st, rel, dst, dt)) is not None:
+        return d
+    if (d := _same_sort(onto, src, st, rel, dst, dt)) is not None:
         return d
     if rule == "self-name":
         return _link(rule, store.Edge(src, st, rel, dst, dt))

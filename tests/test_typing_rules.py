@@ -678,6 +678,59 @@ def test_a_relation_is_read_by_one_rule() -> None:
     assert review.UNMAPPED_RULES["references"] is review.UNMAPPED_RULES["cites"]
 
 
+def test_a_document_covering_a_technique_teaches_it() -> None:
+    """covers is for a concept or a standard; a way of doing something is
+    craft's applies, for any kind of document and any kind of technique."""
+    item = lambda src, st, rel, dst, dt: {
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    doc = ("A Guide to Mixing", "document")
+    for st, dt in (("article", "production_technique"), ("build", "technique")):
+        a, edges, rule = review.decide(
+            item("A Guide to Mixing", st, "covers", "panning", dt), doc
+        )
+        assert (a, rule) == ("link", "covers->applies")
+        assert (edges[0].rel, edges[0].src_type, edges[0].dst_type) == (
+            "applies",
+            st,
+            dt,
+        )
+    # a method is no technique: left for a person
+    a, _, _ = review.decide(
+        item("A Guide to Mixing", "document", "covers", "FM", "synthesis_method"), doc
+    )
+    assert a == "open"
+
+
+def test_a_broader_kind_typed_as_a_concept_takes_the_sources_type() -> None:
+    """specializes joins two of one sort: the bare concept a model gave an
+    interval's broader kind is that kind of interval. Only for the sources
+    measured; a compositional technique waits for a person."""
+    item = lambda src, st, dst, dt: {
+        "src": src,
+        "src_type": st,
+        "rel": "specializes",
+        "dst": dst,
+        "dst_type": dt,
+    }
+    doc = ("A Harmony Book", "document")
+    a, edges, rule = review.decide(
+        item("minor second", "musical_interval", "sharp dissonance", "concept"), doc
+    )
+    assert (a, rule) == ("link", "specializes-same-sort-musical_interval")
+    assert (edges[0].dst, edges[0].dst_type) == ("sharp dissonance", "musical_interval")
+    for st, dt in (
+        ("compositional_technique", "concept"),
+        ("musical_interval", "method"),
+    ):
+        a, _, _ = review.decide(item("x", st, "y", dt), doc)
+        assert a == "open", (st, dt)
+
+
 def test_computings_misfits_become_its_relations() -> None:
     """A document "covering" a program, a library or a symbol is the
     manual of it (``describes``: a subtype of device or component counts);
